@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>שעון נוכחות</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Heebo:wght@300;400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #F1ECDE;
+    --paper-alt: #E9E2CC;
+    --ink: #1F2E26;
+    --ink-soft: #3A473C;
+    --line: #C9BFA5;
+    --brass: #B8813A;
+    --brass-dark: #8F5F24;
+    --clock-bg: #142019;
+    --clock-digit: #E8B84B;
+    --danger: #A23E30;
+    --muted: #7A7360;
+    --white: #FBFAF5;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Heebo', sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  .display{ font-family:'Fraunces', serif; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  .wrap{ max-width:1000px; margin:0 auto; padding:28px 20px 60px; }
+
+  header.topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:14px; margin-bottom:28px;
+  }
+  header.topbar .brand{
+    font-family:'Fraunces', serif; font-weight:700; font-size:26px; letter-spacing:.3px;
+    display:flex; align-items:center; gap:10px;
+  }
+  header.topbar .brand .stamp{
+    width:30px;height:30px;border-radius:50%;border:2px solid var(--brass);
+    display:flex;align-items:center;justify-content:center;color:var(--brass-dark);
+    font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;transform:rotate(-8deg);
+  }
+  .subtitle{ color:var(--muted); font-size:14px; margin-top:2px;}
+  .btn{
+    font-family:'Heebo',sans-serif; font-weight:500; font-size:14px;
+    border:none; cursor:pointer; padding:10px 18px; border-radius:3px;
+    background:var(--ink); color:var(--paper); transition:transform .08s ease, background .15s ease;
+  }
+  .btn:hover{ background:var(--ink-soft); }
+  .btn:active{ transform:scale(.97); }
+  .btn.brass{ background:var(--brass); color:var(--white); }
+  .btn.brass:hover{ background:var(--brass-dark); }
+  .btn.ghost{ background:transparent; color:var(--ink); border:1.5px solid var(--ink); }
+  .btn.ghost:hover{ background:var(--ink); color:var(--paper); }
+  .btn.danger{ background:transparent; color:var(--danger); border:1.5px solid var(--danger); padding:6px 12px; font-size:13px;}
+  .btn.danger:hover{ background:var(--danger); color:var(--white); }
+  .btn.small{ padding:6px 14px; font-size:13px; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+
+  .card{
+    background:var(--white); border:1px solid var(--line); border-radius:6px;
+    padding:26px; margin-bottom:22px;
+  }
+  .card h2, .card h3{ font-family:'Fraunces',serif; margin-top:0; }
+
+  /* Landing / login */
+  .center-stage{
+    min-height:70vh; display:flex; align-items:center; justify-content:center;
+  }
+  .login-card{
+    background:var(--white); border:1px solid var(--line); border-radius:8px;
+    padding:40px 36px; width:100%; max-width:380px; text-align:center;
+    box-shadow: 0 2px 0 var(--line);
+  }
+  .login-card .stamp-lg{
+    width:56px;height:56px;border-radius:50%;border:2.5px solid var(--brass);
+    display:flex;align-items:center;justify-content:center;color:var(--brass-dark);
+    font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;
+    margin:0 auto 16px; transform:rotate(-6deg);
+  }
+  .login-card h1{ font-family:'Fraunces',serif; font-size:24px; margin:0 0 6px; }
+  .login-card p.hint{ color:var(--muted); font-size:14px; margin-bottom:24px; }
+  .role-pick{ display:flex; flex-direction:column; gap:12px; }
+
+  input, select{
+    font-family:'Heebo',sans-serif; font-size:15px; padding:10px 12px;
+    border:1.5px solid var(--line); border-radius:4px; background:var(--paper);
+    color:var(--ink); width:100%;
+  }
+  input:focus, select:focus{ outline:2px solid var(--brass); outline-offset:1px; border-color:var(--brass); }
+  label{ display:block; font-size:13px; color:var(--muted); margin-bottom:5px; margin-top:14px; }
+  .field:first-of-type label{ margin-top:0; }
+  form .actions{ margin-top:22px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;}
+
+  .error-msg{ color:var(--danger); font-size:13.5px; margin-top:10px; min-height:18px; }
+
+  /* Dashboard layout */
+  .tabs{ display:flex; gap:8px; margin-bottom:22px; border-bottom:1.5px solid var(--line); }
+  .tab{
+    padding:10px 18px; cursor:pointer; font-size:14.5px; color:var(--muted);
+    border-bottom:2.5px solid transparent; margin-bottom:-1.5px; font-weight:500;
+  }
+  .tab.active{ color:var(--ink); border-bottom-color:var(--brass); }
+
+  table{ width:100%; border-collapse:collapse; font-size:14.5px; }
+  th{ text-align:right; font-weight:500; color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.4px; padding:8px 10px; border-bottom:1.5px solid var(--ink); }
+  td{ padding:11px 10px; border-bottom:1px solid var(--line); }
+  tr.total-row td{ font-weight:700; border-top:2px solid var(--ink); border-bottom:none; }
+  .table-scroll{ overflow-x:auto; }
+
+  .readout{
+    background:var(--clock-bg); border-radius:8px; padding:22px 26px;
+    display:flex; gap:36px; flex-wrap:wrap; margin-bottom:24px;
+  }
+  .readout .digit-block{ text-align:center; }
+  .readout .digit-block .num{
+    font-family:'IBM Plex Mono',monospace; font-size:34px; color:var(--clock-digit);
+    letter-spacing:1px; font-weight:600;
+  }
+  .readout .digit-block .lbl{ color:#B7AD8F; font-size:12px; margin-top:4px; letter-spacing:.5px; }
+
+  .emp-row-form{ display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+  .emp-row-form .field{ flex:1; min-width:120px; }
+
+  .pill{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:500; }
+  .pill.hourly{ background:#E4EEE6; color:#2F5233; }
+  .pill.fixed{ background:#EFE3D0; color:var(--brass-dark); }
+
+  .list-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 4px; border-bottom:1px solid var(--line);
+  }
+  .list-item:last-child{ border-bottom:none; }
+  .list-item .name{ font-weight:600; }
+  .list-item .meta{ color:var(--muted); font-size:13px; margin-top:2px; }
+
+  .row-actions{ display:flex; gap:8px; }
+
+  .empty-state{ text-align:center; padding:40px 20px; color:var(--muted); }
+
+  .top-actions{ display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px;}
+
+  select.month-picker, input.month-picker{ width:auto; }
+
+  @media (max-width:600px){
+    .wrap{ padding:18px 12px 40px; }
+    .readout{ gap:20px; padding:18px; }
+    .readout .digit-block .num{ font-size:26px; }
+    .login-card{ padding:30px 22px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <div>
+      <div class="brand"><span class="stamp">שע</span> שעון נוכחות</div>
+      <div class="subtitle" id="headerSubtitle">רישום שעות עבודה ושכר</div>
+    </div>
+    <div id="headerActions"></div>
+  </header>
+  <div id="app"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCJY3Pv_p7zF-DoCXhT3xgUuA-fSKElO_k",
+  authDomain: "employee-management-syst-c4352.firebaseapp.com",
+  projectId: "employee-management-syst-c4352",
+  storageBucket: "employee-management-syst-c4352.firebasestorage.app",
+  messagingSenderId: "763367931471",
+  appId: "1:763367931471:web:91d5d30def81db0c15743a"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+
+const app = document.getElementById('app');
+const headerActions = document.getElementById('headerActions');
+const headerSubtitle = document.getElementById('headerSubtitle');
+
+let state = {
+  view: 'landing',
+  employees: [],
+  adminPass: '1234',
+  currentEmployee: null,
+  isAdmin: false,
+  loading: true,
+};
+
+const monthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+function currentMonthStr(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+function monthLabel(ym){
+  const [y,m] = ym.split('-');
+  return monthNames[parseInt(m,10)-1] + ' ' + y;
+}
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function fmtMoney(n){
+  return '₪' + n.toLocaleString('he-IL', {minimumFractionDigits:0, maximumFractionDigits:2});
+}
+function fmtHours(n){
+  return n.toLocaleString('he-IL', {minimumFractionDigits:0, maximumFractionDigits:2});
+}
+function uid(){ return Math.random().toString(36).slice(2,10); }
+
+// ---------- session persistence (survives page refresh) ----------
+function saveSession(session){
+  try{ localStorage.setItem('timesheet_session', JSON.stringify(session)); }catch(e){}
+}
+function loadSession(){
+  try{
+    const s = localStorage.getItem('timesheet_session');
+    return s ? JSON.parse(s) : null;
+  }catch(e){ return null; }
+}
+function clearSession(){
+  try{ localStorage.removeItem('timesheet_session'); }catch(e){}
+}
+
+// ---------- storage helpers (Firestore) ----------
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout:' + label)), ms))
+  ]);
+}
+async function loadEmployees(){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'employees')), 12000, 'loadEmployees');
+    return snap.exists() ? (snap.data().list || []) : [];
+  }catch(e){ console.error('loadEmployees error', e); return []; }
+}
+async function saveEmployees(list){
+  try{
+    await withTimeout(setDoc(doc(db, 'meta', 'employees'), { list }), 12000, 'saveEmployees');
+    return true;
+  }catch(e){ console.error('saveEmployees error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
+async function loadAdminPass(){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'settings')), 12000, 'loadAdminPass');
+    return (snap.exists() && snap.data().adminPass) ? snap.data().adminPass : '1234';
+  }catch(e){ console.error('loadAdminPass error', e); return '1234'; }
+}
+async function saveAdminPass(pass){
+  try{
+    await withTimeout(setDoc(doc(db, 'meta', 'settings'), { adminPass: pass }, { merge: true }), 12000, 'saveAdminPass');
+    return true;
+  }catch(e){ console.error('saveAdminPass error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
+async function loadHours(empId){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'hours', empId)), 12000, 'loadHours');
+    return snap.exists() ? snap.data() : {};
+  }catch(e){ console.error('loadHours error', e); return {}; }
+}
+async function saveHours(empId, data){
+  try{
+    await withTimeout(setDoc(doc(db, 'hours', empId), data), 12000, 'saveHours');
+    return true;
+  }catch(e){ console.error('saveHours error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
+
+function calcPay(emp, hoursTotal){
+  if(emp.payType === 'fixed'){ return emp.rate; }
+  return hoursTotal * emp.rate;
+}
+function computeHoursFromRange(start, end){
+  if(!start || !end) return null;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let startMin = sh*60 + sm;
+  let endMin = eh*60 + em;
+  if(endMin <= startMin) endMin += 24*60; // crosses midnight
+  const diffHours = (endMin - startMin) / 60;
+  return Math.round(diffHours * 100) / 100;
+}
+
+// ---------- init ----------
+async function init(){
+  app.innerHTML = '<div class="empty-state">טוען...</div>';
+  state.employees = await loadEmployees();
+  state.adminPass = await loadAdminPass();
+  state.loading = false;
+
+  const session = loadSession();
+  if(session && session.role === 'admin'){
+    state.isAdmin = true;
+    renderAdminDashboard('summary');
+    return;
+  }
+  if(session && session.role === 'employee'){
+    const emp = state.employees.find(x => x.id === session.empId);
+    if(emp){ renderEmployeeDashboard(emp); return; }
+    clearSession();
+  }
+  renderLanding();
+}
+
+function setHeader(subtitle, actionsHtml){
+  headerSubtitle.textContent = subtitle;
+  headerActions.innerHTML = actionsHtml || '';
+}
+
+// ---------- LANDING ----------
+function renderLanding(){
+  state.view = 'landing';
+  setHeader('רישום שעות עבודה ושכר', '');
+  app.innerHTML = `
+    <div class="center-stage">
+      <div class="login-card">
+        <div class="stamp-lg">שע</div>
+        <h1>ברוכים הבאים</h1>
+        <p class="hint">איך תרצו להיכנס?</p>
+        <div class="role-pick">
+          <button class="btn brass" id="btnAdmin">כניסת מנהל</button>
+          <button class="btn ghost" id="btnEmp">כניסת עובד</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('btnAdmin').onclick = renderAdminLogin;
+  document.getElementById('btnEmp').onclick = renderEmployeeLogin;
+}
+
+// ---------- ADMIN LOGIN ----------
+function renderAdminLogin(){
+  setHeader('כניסת מנהל', '');
+  app.innerHTML = `
+    <div class="center-stage">
+      <div class="login-card">
+        <h1>כניסת מנהל</h1>
+        <p class="hint">הזינו את סיסמת הניהול</p>
+        <form id="adminLoginForm">
+          <div class="field">
+            <label>סיסמה</label>
+            <input type="password" id="adminPassInput" autocomplete="off" />
+          </div>
+          <div class="error-msg" id="adminErr"></div>
+          <div class="actions">
+            <button type="submit" class="btn brass">כניסה</button>
+            <button type="button" class="btn ghost" id="backBtn">חזרה</button>
+          </div>
+        </form>
+        <p class="hint" style="margin-top:18px; font-size:12.5px;">סיסמת ברירת מחדל: 1234 (ניתן לשנות בפאנל הניהול)</p>
+      </div>
+    </div>
+  `;
+  document.getElementById('backBtn').onclick = renderLanding;
+  document.getElementById('adminLoginForm').onsubmit = (e) => {
+    e.preventDefault();
+    const val = document.getElementById('adminPassInput').value;
+    if(val === state.adminPass){
+      state.isAdmin = true;
+      saveSession({ role: 'admin' });
+      renderAdminDashboard('summary');
+    }else{
+      document.getElementById('adminErr').textContent = 'סיסמה שגויה';
+    }
+  };
+}
+
+// ---------- EMPLOYEE LOGIN ----------
+function renderEmployeeLogin(){
+  setHeader('כניסת עובד', '');
+  const options = state.employees.map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+  app.innerHTML = `
+    <div class="center-stage">
+      <div class="login-card">
+        <h1>כניסת עובד</h1>
+        <p class="hint">בחרו את שמכם והזינו קוד אישי</p>
+        ${state.employees.length === 0 ? '<p class="hint">עדיין לא נוספו עובדים על ידי המנהל.</p>' : `
+        <form id="empLoginForm">
+          <div class="field">
+            <label>שם עובד</label>
+            <select id="empSelect">${options}</select>
+          </div>
+          <div class="field">
+            <label>קוד אישי (PIN)</label>
+            <input type="password" id="empPinInput" inputmode="numeric" autocomplete="off" />
+          </div>
+          <div class="error-msg" id="empErr"></div>
+          <div class="actions">
+            <button type="submit" class="btn brass">כניסה</button>
+            <button type="button" class="btn ghost" id="backBtn">חזרה</button>
+          </div>
+        </form>
+        `}
+        ${state.employees.length === 0 ? '<div class="actions"><button class="btn ghost" id="backBtn2">חזרה</button></div>' : ''}
+      </div>
+    </div>
+  `;
+  const back = document.getElementById('backBtn') || document.getElementById('backBtn2');
+  if(back) back.onclick = renderLanding;
+  const form = document.getElementById('empLoginForm');
+  if(form){
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const empId = document.getElementById('empSelect').value;
+      const pin = document.getElementById('empPinInput').value;
+      const emp = state.employees.find(x => x.id === empId);
+      if(emp && emp.pin === pin){
+        saveSession({ role: 'employee', empId: emp.id });
+        renderEmployeeDashboard(emp);
+      }else{
+        document.getElementById('empErr').textContent = 'קוד אישי שגוי';
+      }
+    };
+  }
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- ADMIN DASHBOARD ----------
+function renderAdminDashboard(tab){
+  setHeader('פאנל ניהול', '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
+  app.innerHTML = `
+    <div class="tabs">
+      <div class="tab" data-tab="summary">סיכום חודשי</div>
+      <div class="tab" data-tab="employees">ניהול עובדים</div>
+      <div class="tab" data-tab="settings">הגדרות</div>
+    </div>
+    <div id="tabContent"></div>
+  `;
+  document.querySelectorAll('.tab').forEach(t => {
+    if(t.dataset.tab === tab) t.classList.add('active');
+    t.onclick = () => renderAdminDashboard(t.dataset.tab);
+  });
+  document.getElementById('logoutBtn').onclick = () => { state.isAdmin = false; clearSession(); renderLanding(); };
+
+  if(tab === 'summary') renderAdminSummary();
+  else if(tab === 'employees') renderAdminEmployees();
+  else renderAdminSettings();
+}
+
+async function renderAdminSummary(){
+  const content = document.getElementById('tabContent');
+  const month = state._adminMonth || currentMonthStr();
+  content.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
+
+  const rows = [];
+  for(const emp of state.employees){
+    const hoursData = await loadHours(emp.id);
+    const entries = hoursData[month] || [];
+    const totalHours = entries.reduce((s,e) => s + Number(e.hours || 0), 0);
+    const pay = calcPay(emp, totalHours);
+    rows.push({emp, totalHours, pay});
+  }
+  const grandHours = rows.reduce((s,r) => s + r.totalHours, 0);
+  const grandPay = rows.reduce((s,r) => s + r.pay, 0);
+
+  content.innerHTML = `
+    <div class="top-actions">
+      <input type="month" class="month-picker" id="monthPicker" value="${month}" />
+      <span class="subtitle">${monthLabel(month)}</span>
+    </div>
+    ${state.employees.length === 0 ? '<div class="card"><div class="empty-state">אין עדיין עובדים במערכת. עברו לטאב "ניהול עובדים" כדי להוסיף.</div></div>' : `
+    <div class="card">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>עובד</th><th>סוג שכר</th><th>סה"כ שעות</th><th>סה"כ לתשלום</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${escapeHtml(r.emp.name)}</td>
+                <td>${r.emp.payType === 'hourly' ? `<span class="pill hourly">שעתי · ${fmtMoney(r.emp.rate)}/שעה</span>` : `<span class="pill fixed">חודשי קבוע</span>`}</td>
+                <td class="mono">${fmtHours(r.totalHours)}</td>
+                <td class="mono">${fmtMoney(r.pay)}</td>
+              </tr>
+            `).join('')}
+            <tr class="total-row">
+              <td colspan="2">סה"כ לכל העובדים</td>
+              <td class="mono">${fmtHours(grandHours)}</td>
+              <td class="mono">${fmtMoney(grandPay)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    `}
+  `;
+  document.getElementById('monthPicker').onchange = (e) => {
+    state._adminMonth = e.target.value;
+    renderAdminSummary();
+  };
+}
+
+function renderAdminEmployees(){
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `
+    <div class="card">
+      <h3>הוספת עובד חדש</h3>
+      <form id="addEmpForm">
+        <div class="emp-row-form">
+          <div class="field"><label>שם מלא</label><input type="text" id="newName" required /></div>
+          <div class="field"><label>שם משתמש</label><input type="text" id="newUsername" required /></div>
+          <div class="field"><label>קוד אישי (PIN)</label><input type="text" id="newPin" inputmode="numeric" maxlength="6" required /></div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field">
+            <label>סוג שכר</label>
+            <select id="newPayType">
+              <option value="hourly">שכר שעתי</option>
+              <option value="fixed">שכר חודשי קבוע</option>
+            </select>
+          </div>
+          <div class="field">
+            <label id="rateLabel">תעריף לשעה (₪)</label>
+            <input type="number" id="newRate" min="0" step="0.5" required />
+          </div>
+        </div>
+        <div class="error-msg" id="addEmpErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">הוסף עובד</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h3>רשימת עובדים</h3>
+      <div id="empList">
+        ${state.employees.length === 0 ? '<div class="empty-state">עדיין לא נוספו עובדים.</div>' : ''}
+      </div>
+    </div>
+  `;
+  document.getElementById('newPayType').onchange = (e) => {
+    document.getElementById('rateLabel').textContent = e.target.value === 'hourly' ? 'תעריף לשעה (₪)' : 'שכר חודשי (₪)';
+  };
+  renderEmpList();
+
+  document.getElementById('addEmpForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('newName').value.trim();
+    const username = document.getElementById('newUsername').value.trim();
+    const pin = document.getElementById('newPin').value.trim();
+    const payType = document.getElementById('newPayType').value;
+    const rate = Number(document.getElementById('newRate').value);
+    const errEl = document.getElementById('addEmpErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+
+    if(state.employees.some(x => x.username === username)){
+      errEl.textContent = 'שם המשתמש כבר קיים, בחרו שם אחר';
+      return;
+    }
+    const newEmp = { id: uid(), name, username, pin, payType, rate };
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const updated = [...state.employees, newEmp];
+    const ok = await saveEmployees(updated);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'הוסף עובד';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state.employees = updated;
+    renderAdminEmployees();
+  };
+}
+
+function renderEmpList(){
+  const listEl = document.getElementById('empList');
+  if(!listEl || state.employees.length === 0) return;
+  listEl.innerHTML = state.employees.map(emp => `
+    <div class="list-item">
+      <div>
+        <div class="name">${escapeHtml(emp.name)}</div>
+        <div class="meta">
+          משתמש: ${escapeHtml(emp.username)} ·
+          ${emp.payType === 'hourly' ? `<span class="pill hourly">שעתי · ${fmtMoney(emp.rate)}/שעה</span>` : `<span class="pill fixed">קבוע · ${fmtMoney(emp.rate)}/חודש</span>`}
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn ghost small" data-edit="${emp.id}">עריכה</button>
+        <button class="btn danger" data-del="${emp.id}">מחיקה</button>
+      </div>
+    </div>
+  `).join('');
+
+  listEl.querySelectorAll('[data-del]').forEach(btn => {
+    btn.onclick = async () => {
+      if(!confirm('למחוק את העובד? כל נתוני השעות שלו יישארו במערכת אך לא יהיו נגישים דרך הכניסה.')) return;
+      state.employees = state.employees.filter(x => x.id !== btn.dataset.del);
+      await saveEmployees(state.employees);
+      renderAdminEmployees();
+    };
+  });
+  listEl.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.onclick = () => renderEditEmployee(btn.dataset.edit);
+  });
+}
+
+function renderEditEmployee(empId){
+  const emp = state.employees.find(x => x.id === empId);
+  if(!emp) return;
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `
+    <div class="card">
+      <h3>עריכת עובד: ${escapeHtml(emp.name)}</h3>
+      <form id="editEmpForm">
+        <div class="emp-row-form">
+          <div class="field"><label>שם מלא</label><input type="text" id="editName" value="${escapeHtml(emp.name)}" required /></div>
+          <div class="field"><label>שם משתמש</label><input type="text" id="editUsername" value="${escapeHtml(emp.username)}" required /></div>
+          <div class="field"><label>קוד אישי (PIN)</label><input type="text" id="editPin" value="${escapeHtml(emp.pin)}" inputmode="numeric" maxlength="6" required /></div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field">
+            <label>סוג שכר</label>
+            <select id="editPayType">
+              <option value="hourly" ${emp.payType==='hourly'?'selected':''}>שכר שעתי</option>
+              <option value="fixed" ${emp.payType==='fixed'?'selected':''}>שכר חודשי קבוע</option>
+            </select>
+          </div>
+          <div class="field">
+            <label id="editRateLabel">${emp.payType==='hourly' ? 'תעריף לשעה (₪)' : 'שכר חודשי (₪)'}</label>
+            <input type="number" id="editRate" min="0" step="0.5" value="${emp.rate}" required />
+          </div>
+        </div>
+        <div class="error-msg" id="editEmpErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">שמירת שינויים</button>
+          <button type="button" class="btn ghost" id="cancelEdit">ביטול</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.getElementById('editPayType').onchange = (e) => {
+    document.getElementById('editRateLabel').textContent = e.target.value === 'hourly' ? 'תעריף לשעה (₪)' : 'שכר חודשי (₪)';
+  };
+  document.getElementById('cancelEdit').onclick = () => renderAdminDashboard('employees');
+  document.getElementById('editEmpForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('editUsername').value.trim();
+    const errEl = document.getElementById('editEmpErr');
+    if(state.employees.some(x => x.username === username && x.id !== emp.id)){
+      errEl.textContent = 'שם המשתמש כבר קיים';
+      return;
+    }
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const updatedEmp = {
+      ...emp,
+      name: document.getElementById('editName').value.trim(),
+      username,
+      pin: document.getElementById('editPin').value.trim(),
+      payType: document.getElementById('editPayType').value,
+      rate: Number(document.getElementById('editRate').value),
+    };
+    const updatedList = state.employees.map(x => x.id === emp.id ? updatedEmp : x);
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const ok = await saveEmployees(updatedList);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'שמירת שינויים';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state.employees = updatedList;
+    renderAdminDashboard('employees');
+  };
+}
+
+function renderAdminSettings(){
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `
+    <div class="card">
+      <h3>שינוי סיסמת מנהל</h3>
+      <form id="changePassForm">
+        <div class="field"><label>סיסמה נוכחית</label><input type="password" id="curPass" required /></div>
+        <div class="field"><label>סיסמה חדשה</label><input type="password" id="newPass" required /></div>
+        <div class="error-msg" id="passErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">עדכון סיסמה</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h3>הערת אבטחה</h3>
+      <p class="hint" style="font-size:13.5px;">
+        המערכת שומרת נתונים במסד נתונים אמיתי (Firebase), אבל כרגע היא פועלת ב"מצב בדיקה" (test mode) –
+        כלומר אין הגבלת הרשאות אמיתית מצד השרת, וההגנה היחידה היא הסיסמה/PIN בממשק עצמו.
+        חשוב לדעת: מצב הבדיקה של Firebase פג אוטומטית אחרי כ-30 יום, ואז הכתיבה לנתונים תיפסק עד שיוגדרו
+        כללי אבטחה (Security Rules) קבועים. מומלץ לשתף את קובץ האתר רק עם אנשי הצוות ולא לפרסם אותו publicly.
+      </p>
+    </div>
+  `;
+  document.getElementById('changePassForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const cur = document.getElementById('curPass').value;
+    const np = document.getElementById('newPass').value;
+    const errEl = document.getElementById('passErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if(cur !== state.adminPass){ errEl.style.color=''; errEl.textContent = 'הסיסמה הנוכחית שגויה'; return; }
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const ok = await saveAdminPass(np);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'עדכון סיסמה';
+    if(ok !== true){ errEl.style.color=''; errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state.adminPass = np;
+    errEl.style.color = '#2F5233';
+    errEl.textContent = 'הסיסמה עודכנה בהצלחה';
+  };
+}
+
+// ---------- EMPLOYEE DASHBOARD ----------
+async function renderEmployeeDashboard(emp){
+  state.currentEmployee = emp;
+  setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
+  const month = state._empMonth || currentMonthStr();
+  app.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
+
+  const hoursData = await loadHours(emp.id);
+  const entries = (hoursData[month] || []).slice().sort((a,b) => a.date.localeCompare(b.date));
+  const totalHours = entries.reduce((s,e) => s + Number(e.hours || 0), 0);
+  const pay = calcPay(emp, totalHours);
+
+  app.innerHTML = `
+    <div class="top-actions">
+      <input type="month" class="month-picker" id="empMonthPicker" value="${month}" />
+      <span class="subtitle">${monthLabel(month)} · ${emp.payType === 'hourly' ? 'שכר שעתי · ' + fmtMoney(emp.rate) + ' לשעה' : 'שכר חודשי קבוע'}</span>
+    </div>
+    <div class="readout">
+      <div class="digit-block"><div class="num mono">${fmtHours(totalHours)}</div><div class="lbl">סה"כ שעות החודש</div></div>
+      <div class="digit-block"><div class="num mono">${fmtMoney(pay)}</div><div class="lbl">סה"כ לתשלום</div></div>
+    </div>
+    <div class="card">
+      <h3>הוספת רישום שעות</h3>
+      <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">הזינו שעת התחלה ושעת סיום — המערכת תחשב לבד כמה שעות עבדתם.</p>
+      <form id="addHoursForm">
+        <div class="emp-row-form">
+          <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${todayStr()}" required /></div>
+          <div class="field"><label>משעה</label><input type="time" id="hoursStart" required /></div>
+          <div class="field"><label>עד שעה</label><input type="time" id="hoursEnd" required /></div>
+        </div>
+        <div class="mono" id="computedHoursPreview" style="margin-top:12px; font-size:15px; color:var(--brass-dark);"></div>
+        <div class="error-msg" id="addHoursErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">הוספה</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h3>רישומי החודש</h3>
+      <div id="entriesList">
+        ${entries.length === 0 ? '<div class="empty-state">אין עדיין רישומי שעות לחודש זה.</div>' : `
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>תאריך</th><th>טווח שעות</th><th>סה"כ שעות</th><th></th></tr></thead>
+            <tbody>
+              ${entries.map(e => `
+                <tr>
+                  <td>${e.date}</td>
+                  <td class="mono">${e.start && e.end ? (e.start + ' – ' + e.end) : '—'}</td>
+                  <td class="mono">${fmtHours(Number(e.hours))}</td>
+                  <td><button class="btn danger" data-del-entry="${e.id}">מחיקה</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        `}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('logoutBtn').onclick = () => { state.currentEmployee = null; clearSession(); renderLanding(); };
+  document.getElementById('empMonthPicker').onchange = (e) => {
+    state._empMonth = e.target.value;
+    renderEmployeeDashboard(emp);
+  };
+
+  const startInput = document.getElementById('hoursStart');
+  const endInput = document.getElementById('hoursEnd');
+  const preview = document.getElementById('computedHoursPreview');
+  function updatePreview(){
+    const h = computeHoursFromRange(startInput.value, endInput.value);
+    preview.textContent = h !== null ? ('סה"כ: ' + fmtHours(h) + ' שעות') : '';
+  }
+  startInput.oninput = updatePreview;
+  endInput.oninput = updatePreview;
+
+  document.getElementById('addHoursForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const date = document.getElementById('hoursDate').value;
+    const start = startInput.value;
+    const end = endInput.value;
+    const errEl = document.getElementById('addHoursErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const hoursVal = computeHoursFromRange(start, end);
+    if(!date || hoursVal === null || hoursVal <= 0){ errEl.textContent = 'יש להזין תאריך, שעת התחלה ושעת סיום תקינים'; return; }
+    if(hoursVal > 24){ errEl.textContent = 'טווח השעות ארוך מ-24 שעות, בדקו את השעות שהוזנו'; return; }
+    const entryMonth = date.slice(0,7);
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const fresh = await loadHours(emp.id);
+    if(!fresh[entryMonth]) fresh[entryMonth] = [];
+    fresh[entryMonth].push({ id: uid(), date, start, end, hours: hoursVal });
+    const ok = await saveHours(emp.id, fresh);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'הוספה';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    if(entryMonth !== month){ state._empMonth = entryMonth; }
+    renderEmployeeDashboard(emp);
+  };
+  document.querySelectorAll('[data-del-entry]').forEach(btn => {
+    btn.onclick = async () => {
+      const fresh = await loadHours(emp.id);
+      fresh[month] = (fresh[month] || []).filter(e => e.id !== btn.dataset.delEntry);
+      await saveHours(emp.id, fresh);
+      renderEmployeeDashboard(emp);
+    };
+  });
+}
+
+init();
+</script>
+</body>
+</html>
