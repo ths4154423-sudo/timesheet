@@ -751,6 +751,8 @@ async function renderEmployeeDashboard(emp, editingId){
       <form id="addHoursForm">
         <div class="emp-row-form">
           <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${editingEntry ? editingEntry.date : todayStr()}" required /></div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
           <div class="field"><label>משעה</label><input type="time" id="hoursStart" value="${editingEntry ? editingEntry.start || '' : ''}" required /></div>
           <div class="field"><label>עד שעה</label><input type="time" id="hoursEnd" value="${editingEntry ? editingEntry.end || '' : ''}" required /></div>
         </div>
@@ -797,6 +799,7 @@ async function renderEmployeeDashboard(emp, editingId){
     renderEmployeeDashboard(emp);
   };
 
+  const dateInput = document.getElementById('hoursDate');
   const startInput = document.getElementById('hoursStart');
   const endInput = document.getElementById('hoursEnd');
   const preview = document.getElementById('computedHoursPreview');
@@ -807,6 +810,7 @@ async function renderEmployeeDashboard(emp, editingId){
   startInput.oninput = updatePreview;
   endInput.oninput = updatePreview;
   updatePreview();
+  dateInput.onchange = () => { startInput.focus(); if(startInput.showPicker){ try{ startInput.showPicker(); }catch(e){} } };
 
   const cancelBtn = document.getElementById('cancelEditHours');
   if(cancelBtn) cancelBtn.onclick = () => renderEmployeeDashboard(emp);
