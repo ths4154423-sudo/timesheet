@@ -173,6 +173,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { initializeFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCJY3Pv_p7zF-DoCXhT3xgUuA-fSKElO_k",
@@ -189,6 +190,7 @@ const db = initializeFirestore(fbApp, {
   experimentalForceLongPolling: true,
   useFetchStreams: false,
 });
+const auth = getAuth(fbApp);
 
 const app = document.getElementById('app');
 const headerActions = document.getElementById('headerActions');
@@ -197,7 +199,7 @@ const headerSubtitle = document.getElementById('headerSubtitle');
 let state = {
   view: 'landing',
   employees: [],
-  adminPass: '1234',
+  adminEmail: null,
   currentEmployee: null,
   isAdmin: false,
   loading: true,
@@ -258,31 +260,6 @@ async function saveEmployees(list){
     return true;
   }catch(e){ console.error('saveEmployees error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
 }
-async function loadAdminPass(){
-  try{
-    const snap = await withTimeout(getDoc(doc(db, 'meta', 'settings')), 12000, 'loadAdminPass');
-    return (snap.exists() && snap.data().adminPass) ? snap.data().adminPass : '1234';
-  }catch(e){ console.error('loadAdminPass error', e); return '1234'; }
-}
-async function saveAdminPass(pass){
-  try{
-    await withTimeout(setDoc(doc(db, 'meta', 'settings'), { adminPass: pass }, { merge: true }), 12000, 'saveAdminPass');
-    return true;
-  }catch(e){ console.error('saveAdminPass error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
-}
-async function loadRecovery(){
-  try{
-    const snap = await withTimeout(getDoc(doc(db, 'meta', 'settings')), 12000, 'loadRecovery');
-    const data = snap.exists() ? snap.data() : {};
-    return { question: data.recoveryQuestion || '', answer: data.recoveryAnswer || '' };
-  }catch(e){ console.error('loadRecovery error', e); return { question: '', answer: '' }; }
-}
-async function saveRecovery(question, answer){
-  try{
-    await withTimeout(setDoc(doc(db, 'meta', 'settings'), { recoveryQuestion: question, recoveryAnswer: answer }, { merge: true }), 12000, 'saveRecovery');
-    return true;
-  }catch(e){ console.error('saveRecovery error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
-}
 async function loadHours(empId){
   try{
     const snap = await withTimeout(getDoc(doc(db, 'hours', empId)), 12000, 'loadHours');
@@ -312,27 +289,29 @@ function computeHoursFromRange(start, end){
 }
 
 // ---------- init ----------
+let authReady = false;
 async function init(){
   app.innerHTML = '<div class="empty-state">טוען...</div>';
   state.employees = await loadEmployees();
-  state.adminPass = await loadAdminPass();
-  const recovery = await loadRecovery();
-  state.recoveryQuestion = recovery.question;
-  state.recoveryAnswer = recovery.answer;
   state.loading = false;
 
-  const session = loadSession();
-  if(session && session.role === 'admin'){
-    state.isAdmin = true;
-    renderAdminDashboard('summary');
-    return;
-  }
-  if(session && session.role === 'employee'){
-    const emp = state.employees.find(x => x.id === session.empId);
-    if(emp){ renderEmployeeDashboard(emp); return; }
-    clearSession();
-  }
-  renderLanding();
+  onAuthStateChanged(auth, (user) => {
+    if(authReady) return; // only handle the initial resolution; explicit sign-in/out render themselves
+    authReady = true;
+    if(user){
+      state.isAdmin = true;
+      state.adminEmail = user.email;
+      renderAdminDashboard('summary');
+      return;
+    }
+    const session = loadSession();
+    if(session && session.role === 'employee'){
+      const emp = state.employees.find(x => x.id === session.empId);
+      if(emp){ renderEmployeeDashboard(emp); return; }
+      clearSession();
+    }
+    renderLanding();
+  });
 }
 
 function setHeader(subtitle, actionsHtml){
@@ -368,11 +347,15 @@ function renderAdminLogin(){
     <div class="center-stage">
       <div class="login-card">
         <h1>כניסת מנהל</h1>
-        <p class="hint">הזינו את סיסמת הניהול</p>
+        <p class="hint">הזינו את פרטי ההתחברות</p>
         <form id="adminLoginForm">
           <div class="field">
+            <label>אימייל</label>
+            <input type="email" id="adminEmailInput" autocomplete="username" required />
+          </div>
+          <div class="field">
             <label>סיסמה</label>
-            <input type="password" id="adminPassInput" autocomplete="off" />
+            <input type="password" id="adminPassInput" autocomplete="current-password" required />
           </div>
           <div class="error-msg" id="adminErr"></div>
           <div class="actions">
@@ -386,58 +369,50 @@ function renderAdminLogin(){
   `;
   document.getElementById('backBtn').onclick = renderLanding;
   document.getElementById('forgotPassLink').onclick = (e) => { e.preventDefault(); renderForgotPassword(); };
-  document.getElementById('adminLoginForm').onsubmit = (e) => {
+  document.getElementById('adminLoginForm').onsubmit = async (e) => {
     e.preventDefault();
-    const val = document.getElementById('adminPassInput').value;
-    if(val === state.adminPass){
+    const email = document.getElementById('adminEmailInput').value.trim();
+    const pass = document.getElementById('adminPassInput').value;
+    const errEl = document.getElementById('adminErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'מתחבר...';
+    try{
+      await signInWithEmailAndPassword(auth, email, pass);
       state.isAdmin = true;
-      saveSession({ role: 'admin' });
+      state.adminEmail = email;
       renderAdminDashboard('summary');
-    }else{
-      document.getElementById('adminErr').textContent = 'סיסמה שגויה';
+    }catch(err){
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'כניסה';
+      console.error('admin sign-in error', err);
+      const code = err && err.code;
+      if(code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found'){
+        errEl.textContent = 'אימייל או סיסמה שגויים';
+      }else{
+        errEl.textContent = 'שגיאת התחברות: ' + (code || (err && err.message) || 'לא ידועה');
+      }
     }
   };
 }
 
-// ---------- FORGOT PASSWORD ----------
+// ---------- FORGOT PASSWORD (real email reset via Firebase Auth) ----------
 function renderForgotPassword(){
   setHeader('שחזור סיסמה', '');
-  if(!state.recoveryQuestion){
-    app.innerHTML = `
-      <div class="center-stage">
-        <div class="login-card">
-          <h1>שחזור סיסמה</h1>
-          <p class="hint">
-            לא הוגדרה שאלת שחזור עדיין, ולכן לא ניתן לשחזר את הסיסמה דרך האתר.
-          </p>
-          <p class="hint" style="font-size:13px;">
-            אפשר לאפס את הסיסמה ישירות דרך Firebase: כנסו ל-Firebase Console ← Firestore Database ←
-            אוסף (collection) בשם <b>meta</b> ← מסמך (document) בשם <b>settings</b> ← ערכו את השדה
-            <b>adminPass</b> לסיסמה החדשה הרצויה.
-          </p>
-          <div class="actions">
-            <button type="button" class="btn ghost" id="backToLogin">חזרה לכניסת מנהל</button>
-          </div>
-        </div>
-      </div>
-    `;
-    document.getElementById('backToLogin').onclick = renderAdminLogin;
-    return;
-  }
-
   app.innerHTML = `
     <div class="center-stage">
       <div class="login-card">
         <h1>שחזור סיסמה</h1>
-        <p class="hint">${escapeHtml(state.recoveryQuestion)}</p>
-        <form id="recoveryForm">
+        <p class="hint">הזינו את כתובת האימייל של המנהל — נשלח אליה קישור לאיפוס סיסמה.</p>
+        <form id="resetEmailForm">
           <div class="field">
-            <label>תשובה</label>
-            <input type="text" id="recoveryAnswerInput" autocomplete="off" />
+            <label>אימייל</label>
+            <input type="email" id="resetEmailInput" autocomplete="username" required />
           </div>
-          <div class="error-msg" id="recoveryErr"></div>
+          <div class="error-msg" id="resetEmailErr"></div>
           <div class="actions">
-            <button type="submit" class="btn brass">אימות</button>
+            <button type="submit" class="btn brass">שליחת קישור איפוס</button>
             <button type="button" class="btn ghost" id="backToLogin">חזרה</button>
           </div>
         </form>
@@ -445,52 +420,27 @@ function renderForgotPassword(){
     </div>
   `;
   document.getElementById('backToLogin').onclick = renderAdminLogin;
-  document.getElementById('recoveryForm').onsubmit = (e) => {
+  document.getElementById('resetEmailForm').onsubmit = async (e) => {
     e.preventDefault();
-    const given = document.getElementById('recoveryAnswerInput').value.trim().toLowerCase();
-    const correct = (state.recoveryAnswer || '').trim().toLowerCase();
-    if(given && given === correct){
-      renderResetPassword();
-    }else{
-      document.getElementById('recoveryErr').textContent = 'התשובה אינה נכונה';
-    }
-  };
-}
-
-function renderResetPassword(){
-  setHeader('קביעת סיסמה חדשה', '');
-  app.innerHTML = `
-    <div class="center-stage">
-      <div class="login-card">
-        <h1>קביעת סיסמה חדשה</h1>
-        <p class="hint">התשובה אומתה — כעת אפשר לקבוע סיסמת מנהל חדשה.</p>
-        <form id="setNewPassForm">
-          <div class="field">
-            <label>סיסמה חדשה</label>
-            <input type="password" id="brandNewPass" autocomplete="off" required />
-          </div>
-          <div class="error-msg" id="setNewPassErr"></div>
-          <div class="actions">
-            <button type="submit" class="btn brass">שמירת סיסמה</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  `;
-  document.getElementById('setNewPassForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const np = document.getElementById('brandNewPass').value;
-    const errEl = document.getElementById('setNewPassErr');
+    const email = document.getElementById('resetEmailInput').value.trim();
+    const errEl = document.getElementById('resetEmailErr');
     const submitBtn = e.target.querySelector('button[type="submit"]');
-    if(!np){ errEl.textContent = 'יש להזין סיסמה'; return; }
+    errEl.style.color = '';
+    errEl.textContent = '';
     submitBtn.disabled = true;
-    submitBtn.textContent = 'שומר...';
-    const ok = await saveAdminPass(np);
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'שמירת סיסמה';
-    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
-    state.adminPass = np;
-    renderAdminLogin();
+    submitBtn.textContent = 'שולח...';
+    try{
+      await sendPasswordResetEmail(auth, email);
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'שליחת קישור איפוס';
+      errEl.style.color = '#2F5233';
+      errEl.textContent = 'אם הכתובת רשומה במערכת, נשלח אליה מייל עם קישור לאיפוס הסיסמה. בדקו גם בתיקיית הספאם.';
+    }catch(err){
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'שליחת קישור איפוס';
+      console.error('password reset error', err);
+      errEl.textContent = 'שגיאה בשליחה: ' + ((err && err.code) || (err && err.message) || 'לא ידועה');
+    }
   };
 }
 
@@ -562,7 +512,11 @@ function renderAdminDashboard(tab){
     if(t.dataset.tab === tab) t.classList.add('active');
     t.onclick = () => renderAdminDashboard(t.dataset.tab);
   });
-  document.getElementById('logoutBtn').onclick = () => { state.isAdmin = false; clearSession(); renderLanding(); };
+  document.getElementById('logoutBtn').onclick = async () => {
+    state.isAdmin = false;
+    try{ await signOut(auth); }catch(e){ console.error('sign-out error', e); }
+    renderLanding();
+  };
 
   if(tab === 'summary') renderAdminSummary();
   else if(tab === 'employees') renderAdminEmployees();
@@ -828,9 +782,10 @@ function renderAdminSettings(){
   content.innerHTML = `
     <div class="card">
       <h3>שינוי סיסמת מנהל</h3>
+      <p class="hint" style="font-size:13px; margin-top:-6px;">מחוברים כ: ${escapeHtml(state.adminEmail || '')}</p>
       <form id="changePassForm">
-        <div class="field"><label>סיסמה נוכחית</label><input type="password" id="curPass" required /></div>
-        <div class="field"><label>סיסמה חדשה</label><input type="password" id="newPass" required /></div>
+        <div class="field"><label>סיסמה נוכחית</label><input type="password" id="curPass" autocomplete="current-password" required /></div>
+        <div class="field"><label>סיסמה חדשה</label><input type="password" id="newPass" autocomplete="new-password" required /></div>
         <div class="error-msg" id="passErr"></div>
         <div class="actions" style="justify-content:flex-start;">
           <button type="submit" class="btn brass">עדכון סיסמה</button>
@@ -840,27 +795,17 @@ function renderAdminSettings(){
     <div class="card">
       <h3>שחזור סיסמה במקרה ששכחתם</h3>
       <p class="hint" style="font-size:13.5px; margin-top:-6px;">
-        הגדירו שאלה אישית ותשובה — אם תשכחו את סיסמת המנהל, תוכלו ללחוץ "שכחת סיסמה?" במסך הכניסה,
-        לענות נכון על השאלה, ולקבוע סיסמה חדשה בעצמכם.
+        אם תשכחו את הסיסמה, לחצו "שכחת סיסמה?" במסך הכניסה — יישלח מייל אמיתי לכתובת
+        <b>${escapeHtml(state.adminEmail || '')}</b> עם קישור לקביעת סיסמה חדשה. אין צורך בהגדרה נוספת.
       </p>
-      <p class="hint" style="font-size:13px; ${state.recoveryQuestion ? 'color:#2F5233;' : ''}">
-        ${state.recoveryQuestion ? 'סטטוס: מוגדר ✓' : 'סטטוס: לא הוגדר עדיין'}
-      </p>
-      <form id="recoverySetupForm">
-        <div class="field"><label>שאלת שחזור</label><input type="text" id="recQuestion" value="${escapeHtml(state.recoveryQuestion || '')}" placeholder="לדוגמה: מה שם החיה הראשונה שהייתה לי?" required /></div>
-        <div class="field"><label>תשובה</label><input type="text" id="recAnswer" value="${escapeHtml(state.recoveryAnswer || '')}" required /></div>
-        <div class="error-msg" id="recoverySetupErr"></div>
-        <div class="actions" style="justify-content:flex-start;">
-          <button type="submit" class="btn brass">שמירת שאלת שחזור</button>
-        </div>
-      </form>
     </div>
     <div class="card">
       <h3>הערת אבטחה</h3>
       <p class="hint" style="font-size:13.5px;">
-        המערכת שומרת נתונים במסד נתונים אמיתי (Firebase), אבל כרגע היא פועלת ב"מצב בדיקה" (test mode) –
-        כלומר אין הגבלת הרשאות אמיתית מצד השרת, וההגנה היחידה היא הסיסמה/PIN בממשק עצמו.
-        חשוב לדעת: מצב הבדיקה של Firebase פג אוטומטית אחרי כ-30 יום, ואז הכתיבה לנתונים תיפסק עד שיוגדרו
+        פרטי העובדים והשעות שמורים במסד נתונים אמיתי (Firebase Firestore), הפועל כרגע ב"מצב בדיקה" (test mode) –
+        כלומר אין הגבלת הרשאות אמיתית מצד השרת מעבר להתחברות עצמה. כניסת המנהל מוגנת כעת באמצעות
+        Firebase Authentication אמיתי (אימייל+סיסמה), אך כניסת העובדים עדיין מבוססת קוד PIN בממשק בלבד.
+        חשוב לדעת: מצב הבדיקה של Firestore פג אוטומטית אחרי כ-30 יום, ואז הכתיבה לנתונים תיפסק עד שיוגדרו
         כללי אבטחה (Security Rules) קבועים. מומלץ לשתף את קובץ האתר רק עם אנשי הצוות ולא לפרסם אותו publicly.
       </p>
     </div>
@@ -871,33 +816,29 @@ function renderAdminSettings(){
     const np = document.getElementById('newPass').value;
     const errEl = document.getElementById('passErr');
     const submitBtn = e.target.querySelector('button[type="submit"]');
-    if(cur !== state.adminPass){ errEl.style.color=''; errEl.textContent = 'הסיסמה הנוכחית שגויה'; return; }
+    errEl.style.color = '';
+    errEl.textContent = '';
     submitBtn.disabled = true;
     submitBtn.textContent = 'שומר...';
-    const ok = await saveAdminPass(np);
+    try{
+      const user = auth.currentUser;
+      const credential = EmailAuthProvider.credential(user.email, cur);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, np);
+      errEl.style.color = '#2F5233';
+      errEl.textContent = 'הסיסמה עודכנה בהצלחה';
+      e.target.reset();
+    }catch(err){
+      console.error('change password error', err);
+      const code = err && err.code;
+      if(code === 'auth/invalid-credential' || code === 'auth/wrong-password'){
+        errEl.textContent = 'הסיסמה הנוכחית שגויה';
+      }else{
+        errEl.textContent = 'שגיאה: ' + (code || (err && err.message) || 'לא ידועה');
+      }
+    }
     submitBtn.disabled = false;
     submitBtn.textContent = 'עדכון סיסמה';
-    if(ok !== true){ errEl.style.color=''; errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
-    state.adminPass = np;
-    errEl.style.color = '#2F5233';
-    errEl.textContent = 'הסיסמה עודכנה בהצלחה';
-  };
-  document.getElementById('recoverySetupForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const q = document.getElementById('recQuestion').value.trim();
-    const a = document.getElementById('recAnswer').value.trim();
-    const errEl = document.getElementById('recoverySetupErr');
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'שומר...';
-    const ok = await saveRecovery(q, a);
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'שמירת שאלת שחזור';
-    if(ok !== true){ errEl.style.color=''; errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
-    state.recoveryQuestion = q;
-    state.recoveryAnswer = a;
-    errEl.style.color = '#2F5233';
-    errEl.textContent = 'שאלת השחזור נשמרה בהצלחה';
   };
 }
 
