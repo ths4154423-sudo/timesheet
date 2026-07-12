@@ -172,7 +172,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCJY3Pv_p7zF-DoCXhT3xgUuA-fSKElO_k",
@@ -183,7 +183,12 @@ const firebaseConfig = {
   appId: "1:763367931471:web:91d5d30def81db0c15743a"
 };
 const fbApp = initializeApp(firebaseConfig);
-const db = getFirestore(fbApp);
+// Force long-polling: many corporate networks/firewalls/antivirus block the
+// streaming connection Firestore uses by default, causing writes to hang forever.
+const db = initializeFirestore(fbApp, {
+  experimentalForceLongPolling: true,
+  useFetchStreams: false,
+});
 
 const app = document.getElementById('app');
 const headerActions = document.getElementById('headerActions');
@@ -719,7 +724,7 @@ function renderAdminSettings(){
 }
 
 // ---------- EMPLOYEE DASHBOARD ----------
-async function renderEmployeeDashboard(emp){
+async function renderEmployeeDashboard(emp, editingId){
   state.currentEmployee = emp;
   setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
   const month = state._empMonth || currentMonthStr();
@@ -729,6 +734,7 @@ async function renderEmployeeDashboard(emp){
   const entries = (hoursData[month] || []).slice().sort((a,b) => a.date.localeCompare(b.date));
   const totalHours = entries.reduce((s,e) => s + Number(e.hours || 0), 0);
   const pay = calcPay(emp, totalHours);
+  const editingEntry = editingId ? entries.find(e => e.id === editingId) : null;
 
   app.innerHTML = `
     <div class="top-actions">
@@ -740,18 +746,19 @@ async function renderEmployeeDashboard(emp){
       <div class="digit-block"><div class="num mono">${fmtMoney(pay)}</div><div class="lbl">סה"כ לתשלום</div></div>
     </div>
     <div class="card">
-      <h3>הוספת רישום שעות</h3>
+      <h3>${editingEntry ? 'עריכת רישום שעות' : 'הוספת רישום שעות'}</h3>
       <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">הזינו שעת התחלה ושעת סיום — המערכת תחשב לבד כמה שעות עבדתם.</p>
       <form id="addHoursForm">
         <div class="emp-row-form">
-          <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${todayStr()}" required /></div>
-          <div class="field"><label>משעה</label><input type="time" id="hoursStart" required /></div>
-          <div class="field"><label>עד שעה</label><input type="time" id="hoursEnd" required /></div>
+          <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${editingEntry ? editingEntry.date : todayStr()}" required /></div>
+          <div class="field"><label>משעה</label><input type="time" id="hoursStart" value="${editingEntry ? editingEntry.start || '' : ''}" required /></div>
+          <div class="field"><label>עד שעה</label><input type="time" id="hoursEnd" value="${editingEntry ? editingEntry.end || '' : ''}" required /></div>
         </div>
         <div class="mono" id="computedHoursPreview" style="margin-top:12px; font-size:15px; color:var(--brass-dark);"></div>
         <div class="error-msg" id="addHoursErr"></div>
         <div class="actions" style="justify-content:flex-start;">
-          <button type="submit" class="btn brass">הוספה</button>
+          <button type="submit" class="btn brass">${editingEntry ? 'עדכון שינויים' : 'הוספה'}</button>
+          ${editingEntry ? '<button type="button" class="btn ghost" id="cancelEditHours">ביטול</button>' : ''}
         </div>
       </form>
     </div>
@@ -768,7 +775,12 @@ async function renderEmployeeDashboard(emp){
                   <td>${e.date}</td>
                   <td class="mono">${e.start && e.end ? (e.start + ' – ' + e.end) : '—'}</td>
                   <td class="mono">${fmtHours(Number(e.hours))}</td>
-                  <td><button class="btn danger" data-del-entry="${e.id}">מחיקה</button></td>
+                  <td>
+                    <div class="row-actions">
+                      <button class="btn ghost small" data-edit-entry="${e.id}">עריכה</button>
+                      <button class="btn danger" data-del-entry="${e.id}">מחיקה</button>
+                    </div>
+                  </td>
                 </tr>
               `).join('')}
             </tbody>
@@ -794,6 +806,10 @@ async function renderEmployeeDashboard(emp){
   }
   startInput.oninput = updatePreview;
   endInput.oninput = updatePreview;
+  updatePreview();
+
+  const cancelBtn = document.getElementById('cancelEditHours');
+  if(cancelBtn) cancelBtn.onclick = () => renderEmployeeDashboard(emp);
 
   document.getElementById('addHoursForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -811,15 +827,28 @@ async function renderEmployeeDashboard(emp){
     submitBtn.disabled = true;
     submitBtn.textContent = 'שומר...';
     const fresh = await loadHours(emp.id);
-    if(!fresh[entryMonth]) fresh[entryMonth] = [];
-    fresh[entryMonth].push({ id: uid(), date, start, end, hours: hoursVal });
+
+    if(editingEntry){
+      // remove the old entry from whichever month it was in (it may change if the date changed)
+      const oldMonth = editingEntry.date.slice(0,7);
+      if(fresh[oldMonth]) fresh[oldMonth] = fresh[oldMonth].filter(x => x.id !== editingEntry.id);
+      if(!fresh[entryMonth]) fresh[entryMonth] = [];
+      fresh[entryMonth].push({ id: editingEntry.id, date, start, end, hours: hoursVal });
+    } else {
+      if(!fresh[entryMonth]) fresh[entryMonth] = [];
+      fresh[entryMonth].push({ id: uid(), date, start, end, hours: hoursVal });
+    }
+
     const ok = await saveHours(emp.id, fresh);
     submitBtn.disabled = false;
-    submitBtn.textContent = 'הוספה';
+    submitBtn.textContent = editingEntry ? 'עדכון שינויים' : 'הוספה';
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
     if(entryMonth !== month){ state._empMonth = entryMonth; }
     renderEmployeeDashboard(emp);
   };
+  document.querySelectorAll('[data-edit-entry]').forEach(btn => {
+    btn.onclick = () => renderEmployeeDashboard(emp, btn.dataset.editEntry);
+  });
   document.querySelectorAll('[data-del-entry]').forEach(btn => {
     btn.onclick = async () => {
       const fresh = await loadHours(emp.id);
