@@ -624,6 +624,23 @@ async function renderAdminSummary(){
 function renderAdminEmployees(){
   const content = document.getElementById('tabContent');
   content.innerHTML = `
+    <div style="text-align:right; margin-bottom:16px;">
+      <button class="btn brass" id="goToAddEmp">+ הוסף עובד חדש</button>
+    </div>
+    <div class="card">
+      <h3>רשימת עובדים</h3>
+      <div id="empList">
+        ${state.employees.length === 0 ? '<div class="empty-state">עדיין לא נוספו עובדים.</div>' : ''}
+      </div>
+    </div>
+  `;
+  document.getElementById('goToAddEmp').onclick = renderAddEmployeePage;
+  renderEmpList();
+}
+
+function renderAddEmployeePage(){
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `
     <div class="card">
       <h3>הוספת עובד חדש</h3>
       <form id="addEmpForm">
@@ -653,20 +670,15 @@ function renderAdminEmployees(){
         <div class="error-msg" id="addEmpErr"></div>
         <div class="actions" style="justify-content:flex-start;">
           <button type="submit" class="btn brass">הוסף עובד</button>
+          <button type="button" class="btn ghost" id="cancelAddEmp">ביטול</button>
         </div>
       </form>
-    </div>
-    <div class="card">
-      <h3>רשימת עובדים</h3>
-      <div id="empList">
-        ${state.employees.length === 0 ? '<div class="empty-state">עדיין לא נוספו עובדים.</div>' : ''}
-      </div>
     </div>
   `;
   document.getElementById('newPayType').onchange = (e) => {
     document.getElementById('rateLabel').textContent = e.target.value === 'hourly' ? 'תעריף לשעה (₪)' : 'שכר חודשי (₪)';
   };
-  renderEmpList();
+  document.getElementById('cancelAddEmp').onclick = () => renderAdminDashboard('employees');
 
   document.getElementById('addEmpForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -696,7 +708,7 @@ function renderAdminEmployees(){
     submitBtn.textContent = 'הוסף עובד';
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
     state.employees = updated;
-    renderAdminEmployees();
+    renderAdminDashboard('employees');
   };
 }
 
