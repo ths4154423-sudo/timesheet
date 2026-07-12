@@ -270,6 +270,19 @@ async function saveAdminPass(pass){
     return true;
   }catch(e){ console.error('saveAdminPass error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
 }
+async function loadRecovery(){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'settings')), 12000, 'loadRecovery');
+    const data = snap.exists() ? snap.data() : {};
+    return { question: data.recoveryQuestion || '', answer: data.recoveryAnswer || '' };
+  }catch(e){ console.error('loadRecovery error', e); return { question: '', answer: '' }; }
+}
+async function saveRecovery(question, answer){
+  try{
+    await withTimeout(setDoc(doc(db, 'meta', 'settings'), { recoveryQuestion: question, recoveryAnswer: answer }, { merge: true }), 12000, 'saveRecovery');
+    return true;
+  }catch(e){ console.error('saveRecovery error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
 async function loadHours(empId){
   try{
     const snap = await withTimeout(getDoc(doc(db, 'hours', empId)), 12000, 'loadHours');
@@ -303,6 +316,9 @@ async function init(){
   app.innerHTML = '<div class="empty-state">טוען...</div>';
   state.employees = await loadEmployees();
   state.adminPass = await loadAdminPass();
+  const recovery = await loadRecovery();
+  state.recoveryQuestion = recovery.question;
+  state.recoveryAnswer = recovery.answer;
   state.loading = false;
 
   const session = loadSession();
@@ -364,11 +380,12 @@ function renderAdminLogin(){
             <button type="button" class="btn ghost" id="backBtn">חזרה</button>
           </div>
         </form>
-        <p class="hint" style="margin-top:18px; font-size:12.5px;">סיסמת ברירת מחדל: 1234 (ניתן לשנות בפאנל הניהול)</p>
+        <p class="hint" style="margin-top:16px;"><a href="#" id="forgotPassLink" style="color:var(--brass-dark); text-decoration:underline;">שכחת סיסמה?</a></p>
       </div>
     </div>
   `;
   document.getElementById('backBtn').onclick = renderLanding;
+  document.getElementById('forgotPassLink').onclick = (e) => { e.preventDefault(); renderForgotPassword(); };
   document.getElementById('adminLoginForm').onsubmit = (e) => {
     e.preventDefault();
     const val = document.getElementById('adminPassInput').value;
@@ -379,6 +396,101 @@ function renderAdminLogin(){
     }else{
       document.getElementById('adminErr').textContent = 'סיסמה שגויה';
     }
+  };
+}
+
+// ---------- FORGOT PASSWORD ----------
+function renderForgotPassword(){
+  setHeader('שחזור סיסמה', '');
+  if(!state.recoveryQuestion){
+    app.innerHTML = `
+      <div class="center-stage">
+        <div class="login-card">
+          <h1>שחזור סיסמה</h1>
+          <p class="hint">
+            לא הוגדרה שאלת שחזור עדיין, ולכן לא ניתן לשחזר את הסיסמה דרך האתר.
+          </p>
+          <p class="hint" style="font-size:13px;">
+            אפשר לאפס את הסיסמה ישירות דרך Firebase: כנסו ל-Firebase Console ← Firestore Database ←
+            אוסף (collection) בשם <b>meta</b> ← מסמך (document) בשם <b>settings</b> ← ערכו את השדה
+            <b>adminPass</b> לסיסמה החדשה הרצויה.
+          </p>
+          <div class="actions">
+            <button type="button" class="btn ghost" id="backToLogin">חזרה לכניסת מנהל</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById('backToLogin').onclick = renderAdminLogin;
+    return;
+  }
+
+  app.innerHTML = `
+    <div class="center-stage">
+      <div class="login-card">
+        <h1>שחזור סיסמה</h1>
+        <p class="hint">${escapeHtml(state.recoveryQuestion)}</p>
+        <form id="recoveryForm">
+          <div class="field">
+            <label>תשובה</label>
+            <input type="text" id="recoveryAnswerInput" autocomplete="off" />
+          </div>
+          <div class="error-msg" id="recoveryErr"></div>
+          <div class="actions">
+            <button type="submit" class="btn brass">אימות</button>
+            <button type="button" class="btn ghost" id="backToLogin">חזרה</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.getElementById('backToLogin').onclick = renderAdminLogin;
+  document.getElementById('recoveryForm').onsubmit = (e) => {
+    e.preventDefault();
+    const given = document.getElementById('recoveryAnswerInput').value.trim().toLowerCase();
+    const correct = (state.recoveryAnswer || '').trim().toLowerCase();
+    if(given && given === correct){
+      renderResetPassword();
+    }else{
+      document.getElementById('recoveryErr').textContent = 'התשובה אינה נכונה';
+    }
+  };
+}
+
+function renderResetPassword(){
+  setHeader('קביעת סיסמה חדשה', '');
+  app.innerHTML = `
+    <div class="center-stage">
+      <div class="login-card">
+        <h1>קביעת סיסמה חדשה</h1>
+        <p class="hint">התשובה אומתה — כעת אפשר לקבוע סיסמת מנהל חדשה.</p>
+        <form id="setNewPassForm">
+          <div class="field">
+            <label>סיסמה חדשה</label>
+            <input type="password" id="brandNewPass" autocomplete="off" required />
+          </div>
+          <div class="error-msg" id="setNewPassErr"></div>
+          <div class="actions">
+            <button type="submit" class="btn brass">שמירת סיסמה</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.getElementById('setNewPassForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const np = document.getElementById('brandNewPass').value;
+    const errEl = document.getElementById('setNewPassErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if(!np){ errEl.textContent = 'יש להזין סיסמה'; return; }
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const ok = await saveAdminPass(np);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'שמירת סיסמה';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state.adminPass = np;
+    renderAdminLogin();
   };
 }
 
@@ -521,6 +633,11 @@ function renderAdminEmployees(){
           <div class="field"><label>קוד אישי (PIN)</label><input type="text" id="newPin" inputmode="numeric" maxlength="6" required /></div>
         </div>
         <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field"><label>טלפון</label><input type="tel" id="newPhone" required /></div>
+          <div class="field"><label>אימייל</label><input type="email" id="newEmail" required /></div>
+          <div class="field"><label>כתובת מגורים (לא חובה)</label><input type="text" id="newAddress" /></div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
           <div class="field">
             <label>סוג שכר</label>
             <select id="newPayType">
@@ -556,6 +673,9 @@ function renderAdminEmployees(){
     const name = document.getElementById('newName').value.trim();
     const username = document.getElementById('newUsername').value.trim();
     const pin = document.getElementById('newPin').value.trim();
+    const phone = document.getElementById('newPhone').value.trim();
+    const email = document.getElementById('newEmail').value.trim();
+    const address = document.getElementById('newAddress').value.trim();
     const payType = document.getElementById('newPayType').value;
     const rate = Number(document.getElementById('newRate').value);
     const errEl = document.getElementById('addEmpErr');
@@ -565,7 +685,7 @@ function renderAdminEmployees(){
       errEl.textContent = 'שם המשתמש כבר קיים, בחרו שם אחר';
       return;
     }
-    const newEmp = { id: uid(), name, username, pin, payType, rate };
+    const newEmp = { id: uid(), name, username, pin, phone, email, address, payType, rate };
     errEl.style.color = '';
     errEl.textContent = '';
     submitBtn.disabled = true;
@@ -590,6 +710,9 @@ function renderEmpList(){
         <div class="meta">
           משתמש: ${escapeHtml(emp.username)} ·
           ${emp.payType === 'hourly' ? `<span class="pill hourly">שעתי · ${fmtMoney(emp.rate)}/שעה</span>` : `<span class="pill fixed">קבוע · ${fmtMoney(emp.rate)}/חודש</span>`}
+        </div>
+        <div class="meta" style="margin-top:4px;">
+          ${emp.phone ? '📞 ' + escapeHtml(emp.phone) : ''}${emp.phone && emp.email ? ' · ' : ''}${emp.email ? '✉️ ' + escapeHtml(emp.email) : ''}${emp.address ? ' · 🏠 ' + escapeHtml(emp.address) : ''}
         </div>
       </div>
       <div class="row-actions">
@@ -624,6 +747,11 @@ function renderEditEmployee(empId){
           <div class="field"><label>שם מלא</label><input type="text" id="editName" value="${escapeHtml(emp.name)}" required /></div>
           <div class="field"><label>שם משתמש</label><input type="text" id="editUsername" value="${escapeHtml(emp.username)}" required /></div>
           <div class="field"><label>קוד אישי (PIN)</label><input type="text" id="editPin" value="${escapeHtml(emp.pin)}" inputmode="numeric" maxlength="6" required /></div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field"><label>טלפון</label><input type="tel" id="editPhone" value="${escapeHtml(emp.phone || '')}" required /></div>
+          <div class="field"><label>אימייל</label><input type="email" id="editEmail" value="${escapeHtml(emp.email || '')}" required /></div>
+          <div class="field"><label>כתובת מגורים (לא חובה)</label><input type="text" id="editAddress" value="${escapeHtml(emp.address || '')}" /></div>
         </div>
         <div class="emp-row-form" style="margin-top:14px;">
           <div class="field">
@@ -664,6 +792,9 @@ function renderEditEmployee(empId){
       name: document.getElementById('editName').value.trim(),
       username,
       pin: document.getElementById('editPin').value.trim(),
+      phone: document.getElementById('editPhone').value.trim(),
+      email: document.getElementById('editEmail').value.trim(),
+      address: document.getElementById('editAddress').value.trim(),
       payType: document.getElementById('editPayType').value,
       rate: Number(document.getElementById('editRate').value),
     };
@@ -695,6 +826,24 @@ function renderAdminSettings(){
       </form>
     </div>
     <div class="card">
+      <h3>שחזור סיסמה במקרה ששכחתם</h3>
+      <p class="hint" style="font-size:13.5px; margin-top:-6px;">
+        הגדירו שאלה אישית ותשובה — אם תשכחו את סיסמת המנהל, תוכלו ללחוץ "שכחת סיסמה?" במסך הכניסה,
+        לענות נכון על השאלה, ולקבוע סיסמה חדשה בעצמכם.
+      </p>
+      <p class="hint" style="font-size:13px; ${state.recoveryQuestion ? 'color:#2F5233;' : ''}">
+        ${state.recoveryQuestion ? 'סטטוס: מוגדר ✓' : 'סטטוס: לא הוגדר עדיין'}
+      </p>
+      <form id="recoverySetupForm">
+        <div class="field"><label>שאלת שחזור</label><input type="text" id="recQuestion" value="${escapeHtml(state.recoveryQuestion || '')}" placeholder="לדוגמה: מה שם החיה הראשונה שהייתה לי?" required /></div>
+        <div class="field"><label>תשובה</label><input type="text" id="recAnswer" value="${escapeHtml(state.recoveryAnswer || '')}" required /></div>
+        <div class="error-msg" id="recoverySetupErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">שמירת שאלת שחזור</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
       <h3>הערת אבטחה</h3>
       <p class="hint" style="font-size:13.5px;">
         המערכת שומרת נתונים במסד נתונים אמיתי (Firebase), אבל כרגע היא פועלת ב"מצב בדיקה" (test mode) –
@@ -720,6 +869,23 @@ function renderAdminSettings(){
     state.adminPass = np;
     errEl.style.color = '#2F5233';
     errEl.textContent = 'הסיסמה עודכנה בהצלחה';
+  };
+  document.getElementById('recoverySetupForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const q = document.getElementById('recQuestion').value.trim();
+    const a = document.getElementById('recAnswer').value.trim();
+    const errEl = document.getElementById('recoverySetupErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const ok = await saveRecovery(q, a);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'שמירת שאלת שחזור';
+    if(ok !== true){ errEl.style.color=''; errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state.recoveryQuestion = q;
+    state.recoveryAnswer = a;
+    errEl.style.color = '#2F5233';
+    errEl.textContent = 'שאלת השחזור נשמרה בהצלחה';
   };
 }
 
