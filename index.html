@@ -558,14 +558,14 @@ function renderEmployeeLogin(){
         <h1>כניסת עובד</h1>
         <p class="hint">בחרו את שמכם והזינו קוד אישי</p>
         ${state.employees.length === 0 ? '<p class="hint">עדיין לא נוספו עובדים על ידי המנהל.</p>' : `
-        <form id="empLoginForm">
+        <form id="empLoginForm" autocomplete="off">
           <div class="field">
             <label>שם עובד</label>
             <select id="empSelect">${options}</select>
           </div>
           <div class="field">
             <label>קוד אישי (PIN)</label>
-            <input type="password" id="empPinInput" inputmode="numeric" autocomplete="off" />
+            <input type="text" id="empPinInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" name="employee-pin-code" data-lpignore="true" style="-webkit-text-security: disc; text-security: disc;" />
           </div>
           <div class="error-msg" id="empErr"></div>
           <div class="actions">
@@ -982,7 +982,7 @@ async function renderEmployeeDashboard(emp, editingId){
         <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">לחצו כשאתם מגיעים לעבודה — את שעת הסיום תעדכנו בנפרד בסוף היום.</p>
         <form id="clockInForm">
           <div class="emp-row-form">
-            <div class="field"><label>שעת הגעה</label><input type="time" id="clockInTime" value="${nowTimeStr()}" required /></div>
+            <div class="field"><label>שעת הגעה</label><input type="time" id="clockInTime" value="09:00" required /></div>
           </div>
           <div class="error-msg" id="clockInErr"></div>
           <div class="actions" style="justify-content:flex-start;">
