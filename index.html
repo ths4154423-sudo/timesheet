@@ -966,6 +966,7 @@ async function renderEmployeeDashboard(emp, editingId){
   const lastBreak = onBreak ? openEntry.breaks[openEntry.breaks.length - 1] : null;
 
   app.innerHTML = `
+    ${editingEntry ? '' : `
     <div class="top-actions">
       <input type="month" class="month-picker" id="empMonthPicker" value="${month}" />
       <span class="subtitle">${monthLabel(month)} · ${emp.payType === 'hourly' ? 'שכר שעתי · ' + fmtMoney(emp.rate) + ' לשעה' : 'שכר חודשי קבוע'}</span>
@@ -1032,6 +1033,7 @@ async function renderEmployeeDashboard(emp, editingId){
       <div class="error-msg" id="excelErr"></div>
       <div id="excelPreviewArea"></div>
     </div>
+    `}
 
     <div class="card">
       <h3>${editingEntry ? 'עריכת רישום שעות' : 'הוספה ידנית / תיקון רישום'}</h3>
@@ -1052,6 +1054,7 @@ async function renderEmployeeDashboard(emp, editingId){
         </div>
       </form>
     </div>
+    ${editingEntry ? '' : `
     <div class="card">
       <h3>רישומי החודש</h3>
       <div id="entriesList">
@@ -1083,13 +1086,17 @@ async function renderEmployeeDashboard(emp, editingId){
         `}
       </div>
     </div>
+    `}
   `;
 
   document.getElementById('logoutBtn').onclick = () => { state.currentEmployee = null; clearSession(); renderLanding(); };
-  document.getElementById('empMonthPicker').onchange = (e) => {
-    state._empMonth = e.target.value;
-    renderEmployeeDashboard(emp);
-  };
+  const empMonthPicker = document.getElementById('empMonthPicker');
+  if(empMonthPicker){
+    empMonthPicker.onchange = (e) => {
+      state._empMonth = e.target.value;
+      renderEmployeeDashboard(emp);
+    };
+  }
 
   // ---- clock-in ----
   const clockInForm = document.getElementById('clockInForm');
