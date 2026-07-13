@@ -287,6 +287,26 @@ function computeHoursFromRange(start, end){
   const diffHours = (endMin - startMin) / 60;
   return Math.round(diffHours * 100) / 100;
 }
+function nowTimeStr(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+// Net worked hours for an entry, subtracting any completed breaks. Returns null if the entry is still open (no end time yet).
+function computeEntryHours(entry){
+  if(!entry.end) return null;
+  const gross = computeHoursFromRange(entry.start, entry.end);
+  if(gross === null) return null;
+  const breaksHours = (entry.breaks || []).reduce((s,b) => {
+    if(!b.end) return s;
+    const h = computeHoursFromRange(b.start, b.end);
+    return s + (h || 0);
+  }, 0);
+  return Math.max(0, Math.round((gross - breaksHours) * 100) / 100);
+}
+function findOpenEntryToday(entries){
+  const t = todayStr();
+  return entries.find(e => e.date === t && !e.end) || null;
+}
 
 // ---------- init ----------
 let authReady = false;
@@ -532,7 +552,7 @@ async function renderAdminSummary(){
   for(const emp of state.employees){
     const hoursData = await loadHours(emp.id);
     const entries = hoursData[month] || [];
-    const totalHours = entries.reduce((s,e) => s + Number(e.hours || 0), 0);
+    const totalHours = entries.reduce((s,e) => s + (computeEntryHours(e) || 0), 0);
     const pay = calcPay(emp, totalHours);
     rows.push({emp, totalHours, pay});
   }
@@ -851,9 +871,15 @@ async function renderEmployeeDashboard(emp, editingId){
 
   const hoursData = await loadHours(emp.id);
   const entries = (hoursData[month] || []).slice().sort((a,b) => a.date.localeCompare(b.date));
-  const totalHours = entries.reduce((s,e) => s + Number(e.hours || 0), 0);
+  const totalHours = entries.reduce((s,e) => s + (computeEntryHours(e) || 0), 0);
   const pay = calcPay(emp, totalHours);
   const editingEntry = editingId ? entries.find(e => e.id === editingId) : null;
+
+  const todayMonth = currentMonthStr();
+  const todayEntries = hoursData[todayMonth] || [];
+  const openEntry = findOpenEntryToday(todayEntries);
+  const onBreak = !!(openEntry && openEntry.breaks && openEntry.breaks.length && !openEntry.breaks[openEntry.breaks.length - 1].end);
+  const lastBreak = onBreak ? openEntry.breaks[openEntry.breaks.length - 1] : null;
 
   app.innerHTML = `
     <div class="top-actions">
@@ -864,9 +890,57 @@ async function renderEmployeeDashboard(emp, editingId){
       <div class="digit-block"><div class="num mono">${fmtHours(totalHours)}</div><div class="lbl">סה"כ שעות החודש</div></div>
       <div class="digit-block"><div class="num mono">${fmtMoney(pay)}</div><div class="lbl">סה"כ לתשלום</div></div>
     </div>
+
     <div class="card">
-      <h3>${editingEntry ? 'עריכת רישום שעות' : 'הוספת רישום שעות'}</h3>
-      <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">הזינו שעת התחלה ושעת סיום — המערכת תחשב לבד כמה שעות עבדתם.</p>
+      <h3>כרטיס נוכחות היום</h3>
+      ${!openEntry ? `
+        <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">לחצו כשאתם מגיעים לעבודה — את שעת הסיום תעדכנו בנפרד בסוף היום.</p>
+        <form id="clockInForm">
+          <div class="emp-row-form">
+            <div class="field"><label>שעת הגעה</label><input type="time" id="clockInTime" value="${nowTimeStr()}" required /></div>
+          </div>
+          <div class="error-msg" id="clockInErr"></div>
+          <div class="actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn brass">🟢 התחלת יום עבודה</button>
+          </div>
+        </form>
+      ` : `
+        <p class="hint" style="margin-top:-6px; font-size:14px;">
+          ${onBreak ? `⏸️ בהפסקה מאז <b class="mono">${lastBreak.start}</b>` : `🟢 בעבודה מאז <b class="mono">${openEntry.start}</b>`}
+        </p>
+        ${(openEntry.breaks && openEntry.breaks.length) ? `
+          <div class="table-scroll" style="margin:12px 0;">
+            <table>
+              <thead><tr><th>הפסקה</th><th>משך</th></tr></thead>
+              <tbody>
+                ${openEntry.breaks.map(b => `<tr><td class="mono">${b.start} – ${b.end || 'מתמשכת'}</td><td class="mono">${b.end ? fmtHours(computeHoursFromRange(b.start,b.end)) + ' שעות' : '—'}</td></tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : ''}
+        <div class="actions" style="justify-content:flex-start; margin-top:10px;">
+          ${onBreak
+            ? '<button type="button" class="btn brass" id="endBreakBtn">▶️ סיום הפסקה</button>'
+            : '<button type="button" class="btn ghost" id="startBreakBtn">☕ התחלת הפסקה</button>'
+          }
+        </div>
+        ${!onBreak ? `
+          <form id="clockOutForm" style="margin-top:18px; border-top:1px solid var(--line); padding-top:16px;">
+            <div class="emp-row-form">
+              <div class="field"><label>שעת סיום</label><input type="time" id="clockOutTime" value="${nowTimeStr()}" required /></div>
+            </div>
+            <div class="error-msg" id="clockOutErr"></div>
+            <div class="actions" style="justify-content:flex-start;">
+              <button type="submit" class="btn brass">🔴 סיום יום עבודה</button>
+            </div>
+          </form>
+        ` : ''}
+      `}
+    </div>
+
+    <div class="card">
+      <h3>${editingEntry ? 'עריכת רישום שעות' : 'הוספה ידנית / תיקון רישום'}</h3>
+      <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">לתיקון רישום ישן או הוספת יום שלם בבת אחת — הזינו תאריך, שעת התחלה ושעת סיום.</p>
       <form id="addHoursForm">
         <div class="emp-row-form">
           <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${editingEntry ? editingEntry.date : todayStr()}" required /></div>
@@ -889,13 +963,17 @@ async function renderEmployeeDashboard(emp, editingId){
         ${entries.length === 0 ? '<div class="empty-state">אין עדיין רישומי שעות לחודש זה.</div>' : `
         <div class="table-scroll">
           <table>
-            <thead><tr><th>תאריך</th><th>טווח שעות</th><th>סה"כ שעות</th><th></th></tr></thead>
+            <thead><tr><th>תאריך</th><th>טווח שעות</th><th>הפסקות</th><th>סה"כ שעות</th><th></th></tr></thead>
             <tbody>
-              ${entries.map(e => `
+              ${entries.map(e => {
+                const h = computeEntryHours(e);
+                const breaksCount = (e.breaks || []).filter(b => b.end).length;
+                return `
                 <tr>
                   <td>${e.date}</td>
-                  <td class="mono">${e.start && e.end ? (e.start + ' – ' + e.end) : '—'}</td>
-                  <td class="mono">${fmtHours(Number(e.hours))}</td>
+                  <td class="mono">${e.start ? (e.start + ' – ' + (e.end || '...')) : '—'}</td>
+                  <td class="mono">${breaksCount > 0 ? breaksCount + ' הפסקות' : '—'}</td>
+                  <td class="mono">${h !== null ? fmtHours(h) : '<span class="pill hourly">בעבודה</span>'}</td>
                   <td>
                     <div class="row-actions">
                       <button class="btn ghost small" data-edit-entry="${e.id}">עריכה</button>
@@ -903,7 +981,7 @@ async function renderEmployeeDashboard(emp, editingId){
                     </div>
                   </td>
                 </tr>
-              `).join('')}
+              `;}).join('')}
             </tbody>
           </table>
         </div>
@@ -917,6 +995,97 @@ async function renderEmployeeDashboard(emp, editingId){
     state._empMonth = e.target.value;
     renderEmployeeDashboard(emp);
   };
+
+  // ---- clock-in ----
+  const clockInForm = document.getElementById('clockInForm');
+  if(clockInForm){
+    clockInForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const startTime = document.getElementById('clockInTime').value;
+      const errEl = document.getElementById('clockInErr');
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if(!startTime){ errEl.textContent = 'יש להזין שעת הגעה'; return; }
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'שומר...';
+      const fresh = await loadHours(emp.id);
+      const tm = currentMonthStr();
+      if(!fresh[tm]) fresh[tm] = [];
+      if(findOpenEntryToday(fresh[tm])){ errEl.textContent = 'כבר קיים יום עבודה פתוח להיום'; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
+      fresh[tm].push({ id: uid(), date: todayStr(), start: startTime, end: null, breaks: [] });
+      const ok = await saveHours(emp.id, fresh);
+      if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
+      if(month !== tm) state._empMonth = tm;
+      renderEmployeeDashboard(emp);
+    };
+  }
+
+  // ---- start break ----
+  const startBreakBtn = document.getElementById('startBreakBtn');
+  if(startBreakBtn){
+    startBreakBtn.onclick = async () => {
+      startBreakBtn.disabled = true;
+      startBreakBtn.textContent = 'שומר...';
+      const fresh = await loadHours(emp.id);
+      const tm = currentMonthStr();
+      const list = fresh[tm] || [];
+      const entry = list.find(x => x.id === openEntry.id);
+      if(entry){
+        if(!entry.breaks) entry.breaks = [];
+        entry.breaks.push({ id: uid(), start: nowTimeStr(), end: null });
+      }
+      const ok = await saveHours(emp.id, fresh);
+      if(ok !== true){ alert('שגיאה בשמירה: ' + ok); startBreakBtn.disabled=false; startBreakBtn.textContent='☕ התחלת הפסקה'; return; }
+      renderEmployeeDashboard(emp);
+    };
+  }
+
+  // ---- end break ----
+  const endBreakBtn = document.getElementById('endBreakBtn');
+  if(endBreakBtn){
+    endBreakBtn.onclick = async () => {
+      endBreakBtn.disabled = true;
+      endBreakBtn.textContent = 'שומר...';
+      const fresh = await loadHours(emp.id);
+      const tm = currentMonthStr();
+      const list = fresh[tm] || [];
+      const entry = list.find(x => x.id === openEntry.id);
+      if(entry && entry.breaks && entry.breaks.length){
+        entry.breaks[entry.breaks.length - 1].end = nowTimeStr();
+      }
+      const ok = await saveHours(emp.id, fresh);
+      if(ok !== true){ alert('שגיאה בשמירה: ' + ok); endBreakBtn.disabled=false; endBreakBtn.textContent='▶️ סיום הפסקה'; return; }
+      renderEmployeeDashboard(emp);
+    };
+  }
+
+  // ---- clock-out ----
+  const clockOutForm = document.getElementById('clockOutForm');
+  if(clockOutForm){
+    clockOutForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const endTime = document.getElementById('clockOutTime').value;
+      const errEl = document.getElementById('clockOutErr');
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if(!endTime){ errEl.textContent = 'יש להזין שעת סיום'; return; }
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'שומר...';
+      const fresh = await loadHours(emp.id);
+      const tm = currentMonthStr();
+      const list = fresh[tm] || [];
+      const entry = list.find(x => x.id === openEntry.id);
+      if(!entry){ errEl.textContent = 'הרישום לא נמצא, נסו לרענן'; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
+      const h = computeHoursFromRange(entry.start, endTime);
+      if(h === null || h <= 0){ errEl.textContent = 'שעת הסיום חייבת להיות אחרי שעת ההתחלה'; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
+      // auto-close a dangling open break at clock-out time, just in case
+      if(entry.breaks && entry.breaks.length && !entry.breaks[entry.breaks.length-1].end){
+        entry.breaks[entry.breaks.length-1].end = endTime;
+      }
+      entry.end = endTime;
+      const ok = await saveHours(emp.id, fresh);
+      if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
+      renderEmployeeDashboard(emp);
+    };
+  }
 
   const dateInput = document.getElementById('hoursDate');
   const startInput = document.getElementById('hoursStart');
@@ -956,10 +1125,10 @@ async function renderEmployeeDashboard(emp, editingId){
       const oldMonth = editingEntry.date.slice(0,7);
       if(fresh[oldMonth]) fresh[oldMonth] = fresh[oldMonth].filter(x => x.id !== editingEntry.id);
       if(!fresh[entryMonth]) fresh[entryMonth] = [];
-      fresh[entryMonth].push({ id: editingEntry.id, date, start, end, hours: hoursVal });
+      fresh[entryMonth].push({ id: editingEntry.id, date, start, end, breaks: editingEntry.breaks || [] });
     } else {
       if(!fresh[entryMonth]) fresh[entryMonth] = [];
-      fresh[entryMonth].push({ id: uid(), date, start, end, hours: hoursVal });
+      fresh[entryMonth].push({ id: uid(), date, start, end, breaks: [] });
     }
 
     const ok = await saveHours(emp.id, fresh);
