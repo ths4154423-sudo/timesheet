@@ -982,7 +982,7 @@ async function renderEmployeeDashboard(emp, editingId){
         <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">לחצו כשאתם מגיעים לעבודה — את שעת הסיום תעדכנו בנפרד בסוף היום.</p>
         <form id="clockInForm">
           <div class="emp-row-form">
-            <div class="field"><label>שעת הגעה</label><input type="time" id="clockInTime" value="09:00" required /></div>
+            <div class="field"><label>שעת הגעה</label><input type="time" id="clockInTime" value="${nowTimeStr()}" required /></div>
           </div>
           <div class="error-msg" id="clockInErr"></div>
           <div class="actions" style="justify-content:flex-start;">
