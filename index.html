@@ -131,6 +131,14 @@
   .emp-row-form .field{ flex:1; min-width:120px; }
 
   .pill{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:500; }
+  .avatar{ width:44px; height:44px; border-radius:50%; object-fit:cover; border:2px solid var(--brass); flex-shrink:0; }
+  .avatar-placeholder{
+    width:44px; height:44px; border-radius:50%; border:2px solid var(--brass);
+    background:var(--paper-alt); color:var(--brass-dark); display:flex; align-items:center; justify-content:center;
+    font-family:'Fraunces',serif; font-weight:700; font-size:17px; flex-shrink:0;
+  }
+  .avatar.small, .avatar-placeholder.small{ width:32px; height:32px; font-size:13px; }
+  .avatar-row{ display:flex; align-items:center; gap:12px; }
   .pill.hourly{ background:#E4EEE6; color:#2F5233; }
   .pill.fixed{ background:#EFE3D0; color:var(--brass-dark); }
 
@@ -601,6 +609,41 @@ function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+function avatarHtml(emp, size){
+  const sizeClass = size === 'small' ? ' small' : '';
+  if(emp.photo){
+    return `<img class="avatar${sizeClass}" src="${emp.photo}" alt="${escapeHtml(emp.name)}" />`;
+  }
+  const initial = (emp.name || '?').trim().charAt(0).toUpperCase();
+  return `<div class="avatar-placeholder${sizeClass}">${escapeHtml(initial)}</div>`;
+}
+
+function resizeImageFile(file, maxSize, quality){
+  maxSize = maxSize || 160;
+  quality = quality || 0.7;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        const scale = Math.min(1, maxSize / Math.max(w, h));
+        w = Math.max(1, Math.round(w * scale));
+        h = Math.max(1, Math.round(h * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('לא ניתן לקרוא את קובץ התמונה'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('לא ניתן לקרוא את קובץ התמונה'));
+    reader.readAsDataURL(file);
+  });
+}
+
 // ---------- ADMIN DASHBOARD ----------
 function renderAdminDashboard(tab){
   setHeader('פאנל ניהול', '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
@@ -725,6 +768,9 @@ function renderAddEmployeePage(){
             <input type="number" id="newRate" min="0" step="0.5" required />
           </div>
         </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field"><label>תמונת פרופיל (לא חובה)</label><input type="file" id="newPhoto" accept="image/*" /></div>
+        </div>
         <div class="error-msg" id="addEmpErr"></div>
         <div class="actions" style="justify-content:flex-start;">
           <button type="submit" class="btn brass">הוסף עובד</button>
@@ -748,6 +794,7 @@ function renderAddEmployeePage(){
     const address = document.getElementById('newAddress').value.trim();
     const payType = document.getElementById('newPayType').value;
     const rate = Number(document.getElementById('newRate').value);
+    const photoFile = document.getElementById('newPhoto').files[0];
     const errEl = document.getElementById('addEmpErr');
     const submitBtn = e.target.querySelector('button[type="submit"]');
 
@@ -755,11 +802,16 @@ function renderAddEmployeePage(){
       errEl.textContent = 'שם המשתמש כבר קיים, בחרו שם אחר';
       return;
     }
-    const newEmp = { id: uid(), name, username, pin, phone, email, address, payType, rate };
     errEl.style.color = '';
     errEl.textContent = '';
     submitBtn.disabled = true;
     submitBtn.textContent = 'שומר...';
+    let photo = null;
+    if(photoFile){
+      try{ photo = await resizeImageFile(photoFile); }
+      catch(err){ errEl.textContent = 'שגיאה בקריאת התמונה'; submitBtn.disabled=false; submitBtn.textContent='הוסף עובד'; return; }
+    }
+    const newEmp = { id: uid(), name, username, pin, phone, email, address, photo, payType, rate };
     const updated = [...state.employees, newEmp];
     const ok = await saveEmployees(updated);
     submitBtn.disabled = false;
@@ -775,14 +827,17 @@ function renderEmpList(){
   if(!listEl || state.employees.length === 0) return;
   listEl.innerHTML = state.employees.map(emp => `
     <div class="list-item">
-      <div>
-        <div class="name">${escapeHtml(emp.name)}</div>
-        <div class="meta">
-          משתמש: ${escapeHtml(emp.username)} ·
-          ${emp.payType === 'hourly' ? `<span class="pill hourly">שעתי · ${fmtMoney(emp.rate)}/שעה</span>` : `<span class="pill fixed">קבוע · ${fmtMoney(emp.rate)}/חודש</span>`}
-        </div>
-        <div class="meta" style="margin-top:4px;">
-          ${emp.phone ? '📞 ' + escapeHtml(emp.phone) : ''}${emp.phone && emp.email ? ' · ' : ''}${emp.email ? '✉️ ' + escapeHtml(emp.email) : ''}${emp.address ? ' · 🏠 ' + escapeHtml(emp.address) : ''}
+      <div class="avatar-row">
+        ${avatarHtml(emp, 'small')}
+        <div>
+          <div class="name">${escapeHtml(emp.name)}</div>
+          <div class="meta">
+            משתמש: ${escapeHtml(emp.username)} ·
+            ${emp.payType === 'hourly' ? `<span class="pill hourly">שעתי · ${fmtMoney(emp.rate)}/שעה</span>` : `<span class="pill fixed">קבוע · ${fmtMoney(emp.rate)}/חודש</span>`}
+          </div>
+          <div class="meta" style="margin-top:4px;">
+            ${emp.phone ? '📞 ' + escapeHtml(emp.phone) : ''}${emp.phone && emp.email ? ' · ' : ''}${emp.email ? '✉️ ' + escapeHtml(emp.email) : ''}${emp.address ? ' · 🏠 ' + escapeHtml(emp.address) : ''}
+          </div>
         </div>
       </div>
       <div class="row-actions">
@@ -836,6 +891,14 @@ function renderEditEmployee(empId){
             <input type="number" id="editRate" min="0" step="0.5" value="${emp.rate}" required />
           </div>
         </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field" style="flex:0 0 auto;">
+            <label>תמונת פרופיל</label>
+            ${avatarHtml(emp)}
+          </div>
+          <div class="field"><label>${emp.photo ? 'החלפת תמונה' : 'הוספת תמונה'} (לא חובה)</label><input type="file" id="editPhoto" accept="image/*" /></div>
+          ${emp.photo ? '<div class="field" style="flex:0 0 auto; align-self:flex-end;"><label>&nbsp;</label><button type="button" class="btn danger" id="removePhotoBtn">הסרת תמונה</button></div>' : ''}
+        </div>
         <div class="error-msg" id="editEmpErr"></div>
         <div class="actions" style="justify-content:flex-start;">
           <button type="submit" class="btn brass">שמירת שינויים</button>
@@ -848,6 +911,15 @@ function renderEditEmployee(empId){
     document.getElementById('editRateLabel').textContent = e.target.value === 'hourly' ? 'תעריף לשעה (₪)' : 'שכר חודשי (₪)';
   };
   document.getElementById('cancelEdit').onclick = () => renderAdminDashboard('employees');
+  let removePhotoFlag = false;
+  const removePhotoBtn = document.getElementById('removePhotoBtn');
+  if(removePhotoBtn){
+    removePhotoBtn.onclick = () => {
+      removePhotoFlag = true;
+      removePhotoBtn.textContent = 'התמונה תוסר בשמירה ✓';
+      removePhotoBtn.disabled = true;
+    };
+  }
   document.getElementById('editEmpForm').onsubmit = async (e) => {
     e.preventDefault();
     const username = document.getElementById('editUsername').value.trim();
@@ -857,6 +929,17 @@ function renderEditEmployee(empId){
       return;
     }
     const submitBtn = e.target.querySelector('button[type="submit"]');
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const photoFile = document.getElementById('editPhoto').files[0];
+    let photo = emp.photo || null;
+    if(removePhotoFlag) photo = null;
+    if(photoFile){
+      try{ photo = await resizeImageFile(photoFile); }
+      catch(err){ errEl.textContent = 'שגיאה בקריאת התמונה'; submitBtn.disabled=false; submitBtn.textContent='שמירת שינויים'; return; }
+    }
     const updatedEmp = {
       ...emp,
       name: document.getElementById('editName').value.trim(),
@@ -865,13 +948,11 @@ function renderEditEmployee(empId){
       phone: document.getElementById('editPhone').value.trim(),
       email: document.getElementById('editEmail').value.trim(),
       address: document.getElementById('editAddress').value.trim(),
+      photo,
       payType: document.getElementById('editPayType').value,
       rate: Number(document.getElementById('editRate').value),
     };
     const updatedList = state.employees.map(x => x.id === emp.id ? updatedEmp : x);
-    errEl.textContent = '';
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'שומר...';
     const ok = await saveEmployees(updatedList);
     submitBtn.disabled = false;
     submitBtn.textContent = 'שמירת שינויים';
@@ -967,6 +1048,10 @@ async function renderEmployeeDashboard(emp, editingId){
 
   app.innerHTML = `
     ${editingEntry ? '' : `
+    <div class="avatar-row" style="margin-bottom:16px;">
+      ${avatarHtml(emp)}
+      <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
+    </div>
     <div class="top-actions">
       <input type="month" class="month-picker" id="empMonthPicker" value="${month}" />
       <span class="subtitle">${monthLabel(month)} · ${emp.payType === 'hourly' ? 'שכר שעתי · ' + fmtMoney(emp.rate) + ' לשעה' : 'שכר חודשי קבוע'}</span>
