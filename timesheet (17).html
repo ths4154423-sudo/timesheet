@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>שעון נוכחות</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Heebo:wght@300;400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #F1ECDE;
+    --paper-alt: #E9E2CC;
+    --ink: #1F2E26;
+    --ink-soft: #3A473C;
+    --line: #C9BFA5;
+    --brass: #B8813A;
+    --brass-dark: #8F5F24;
+    --clock-bg: #142019;
+    --clock-digit: #E8B84B;
+    --danger: #A23E30;
+    --muted: #7A7360;
+    --white: #FBFAF5;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Heebo', sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  .display{ font-family:'Fraunces', serif; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  .wrap{ max-width:1000px; margin:0 auto; padding:28px 20px 60px; }
+
+  header.topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:14px; margin-bottom:28px;
+  }
+  header.topbar .brand{
+    font-family:'Fraunces', serif; font-weight:700; font-size:26px; letter-spacing:.3px;
+    display:flex; align-items:center; gap:10px;
+  }
+  header.topbar .brand .stamp{
+    width:30px;height:30px;border-radius:50%;border:2px solid var(--brass);
+    display:flex;align-items:center;justify-content:center;color:var(--brass-dark);
+    font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;transform:rotate(-8deg);
+  }
+  .subtitle{ color:var(--muted); font-size:14px; margin-top:2px;}
+  .btn{
+    font-family:'Heebo',sans-serif; font-weight:500; font-size:14px;
+    border:none; cursor:pointer; padding:10px 18px; border-radius:3px;
+    background:var(--ink); color:var(--paper); transition:transform .08s ease, background .15s ease;
+  }
+  .btn:hover{ background:var(--ink-soft); }
+  .btn:active{ transform:scale(.97); }
+  .btn.brass{ background:var(--brass); color:var(--white); }
+  .btn.brass:hover{ background:var(--brass-dark); }
+  .btn.ghost{ background:transparent; color:var(--ink); border:1.5px solid var(--ink); }
+  .btn.ghost:hover{ background:var(--ink); color:var(--paper); }
+  .btn.danger{ background:transparent; color:var(--danger); border:1.5px solid var(--danger); padding:6px 12px; font-size:13px;}
+  .btn.danger:hover{ background:var(--danger); color:var(--white); }
+  .btn.small{ padding:6px 14px; font-size:13px; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+
+  .card{
+    background:var(--white); border:1px solid var(--line); border-radius:6px;
+    padding:26px; margin-bottom:22px;
+  }
+  .card h2, .card h3{ font-family:'Fraunces',serif; margin-top:0; }
+
+  /* Landing / login */
+  .center-stage{
+    min-height:70vh; display:flex; align-items:center; justify-content:center;
+  }
+  .login-card{
+    background:var(--white); border:1px solid var(--line); border-radius:8px;
+    padding:40px 36px; width:100%; max-width:380px; text-align:center;
+    box-shadow: 0 2px 0 var(--line);
+  }
+  .login-card .stamp-lg{
+    width:56px;height:56px;border-radius:50%;border:2.5px solid var(--brass);
+    display:flex;align-items:center;justify-content:center;color:var(--brass-dark);
+    font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;
+    margin:0 auto 16px; transform:rotate(-6deg);
+  }
+  .login-card h1{ font-family:'Fraunces',serif; font-size:24px; margin:0 0 6px; }
+  .login-card p.hint{ color:var(--muted); font-size:14px; margin-bottom:24px; }
+  .role-pick{ display:flex; flex-direction:column; gap:12px; }
+
+  input, select{
+    font-family:'Heebo',sans-serif; font-size:15px; padding:10px 12px;
+    border:1.5px solid var(--line); border-radius:4px; background:var(--paper);
+    color:var(--ink); width:100%;
+  }
+  input:focus, select:focus{ outline:2px solid var(--brass); outline-offset:1px; border-color:var(--brass); }
+  label{ display:block; font-size:13px; color:var(--muted); margin-bottom:5px; margin-top:14px; }
+  .field:first-of-type label{ margin-top:0; }
+  form .actions{ margin-top:22px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;}
+
+  .error-msg{ color:var(--danger); font-size:13.5px; margin-top:10px; min-height:18px; }
+
+  /* Dashboard layout */
+  .tabs{ display:flex; gap:8px; margin-bottom:22px; border-bottom:1.5px solid var(--line); }
+  .tab{
+    padding:10px 18px; cursor:pointer; font-size:14.5px; color:var(--muted);
+    border-bottom:2.5px solid transparent; margin-bottom:-1.5px; font-weight:500;
+  }
+  .tab.active{ color:var(--ink); border-bottom-color:var(--brass); }
+
+  table{ width:100%; border-collapse:collapse; font-size:14.5px; }
+  th{ text-align:right; font-weight:500; color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.4px; padding:8px 10px; border-bottom:1.5px solid var(--ink); }
+  td{ padding:11px 10px; border-bottom:1px solid var(--line); }
+  tr.total-row td{ font-weight:700; border-top:2px solid var(--ink); border-bottom:none; }
+  .table-scroll{ overflow-x:auto; }
+
+  .readout{
+    background:var(--clock-bg); border-radius:8px; padding:22px 26px;
+    display:flex; gap:36px; flex-wrap:wrap; margin-bottom:24px;
+  }
+  .readout .digit-block{ text-align:center; }
+  .readout .digit-block .num{
+    font-family:'IBM Plex Mono',monospace; font-size:34px; color:var(--clock-digit);
+    letter-spacing:1px; font-weight:600;
+  }
+  .readout .digit-block .lbl{ color:#B7AD8F; font-size:12px; margin-top:4px; letter-spacing:.5px; }
+
+  .emp-row-form{ display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+  .emp-row-form .field{ flex:1; min-width:120px; }
+
+  .pill{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:500; }
+  .avatar{ width:44px; height:44px; border-radius:50%; object-fit:cover; border:2px solid var(--brass); flex-shrink:0; }
+  .avatar-placeholder{
+    width:44px; height:44px; border-radius:50%; border:2px solid var(--brass);
+    background:var(--paper-alt); color:var(--brass-dark); display:flex; align-items:center; justify-content:center;
+    font-family:'Fraunces',serif; font-weight:700; font-size:17px; flex-shrink:0;
+  }
+  .avatar.small, .avatar-placeholder.small{ width:32px; height:32px; font-size:13px; }
+  .avatar-row{ display:flex; align-items:center; gap:12px; }
+  .pill.hourly{ background:#E4EEE6; color:#2F5233; }
+  .pill.fixed{ background:#EFE3D0; color:var(--brass-dark); }
+
+  .list-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 4px; border-bottom:1px solid var(--line);
+  }
+  .list-item:last-child{ border-bottom:none; }
+  .list-item .name{ font-weight:600; }
+  .list-item .meta{ color:var(--muted); font-size:13px; margin-top:2px; }
+
+  .row-actions{ display:flex; gap:8px; }
+
+  .empty-state{ text-align:center; padding:40px 20px; color:var(--muted); }
+
+  .top-actions{ display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px;}
+
+  select.month-picker, input.month-picker{ width:auto; }
+
+  @media (max-width:600px){
+    .wrap{ padding:18px 12px 40px; }
+    .readout{ gap:20px; padding:18px; }
+    .readout .digit-block .num{ font-size:26px; }
+    .login-card{ padding:30px 22px; }
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <div>
+      <div class="brand"><span class="stamp">שע</span> שעון נוכחות</div>
+      <div class="subtitle" id="headerSubtitle">רישום שעות עבודה ושכר</div>
+    </div>
+    <div id="headerActions"></div>
+  </header>
+  <div id="app"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { initializeFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCJY3Pv_p7zF-DoCXhT3xgUuA-fSKElO_k",
+  authDomain: "employee-management-syst-c4352.firebaseapp.com",
+  projectId: "employee-management-syst-c4352",
+  storageBucket: "employee-management-syst-c4352.firebasestorage.app",
+  messagingSenderId: "763367931471",
+  appId: "1:763367931471:web:91d5d30def81db0c15743a"
+};
+const fbApp = initializeApp(firebaseConfig);
+// Force long-polling: many corporate networks/firewalls/antivirus block the
+// streaming connection Firestore uses by default, causing writes to hang forever.
+const db = initializeFirestore(fbApp, {
+  experimentalForceLongPolling: true,
+  useFetchStreams: false,
+});
+const auth = getAuth(fbApp);
+
+const app = document.getElementById('app');
+const headerActions = document.getElementById('headerActions');
+const headerSubtitle = document.getElementById('headerSubtitle');
+
+let state = {
+  view: 'landing',
+  employees: [],
+  adminEmail: null,
+  currentEmployee: null,
+  isAdmin: false,
+  loading: true,
+};
+
+const monthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+function currentMonthStr(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+function monthLabel(ym){
+  const [y,m] = ym.split('-');
+  return monthNames[parseInt(m,10)-1] + ' ' + y;
+}
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function fmtMoney(n){
+  return '₪' + n.toLocaleString('he-IL', {minimumFractionDigits:0, maximumFractionDigits:2});
+}
+function fmtHours(n){
+  return n.toLocaleString('he-IL', {minimumFractionDigits:0, maximumFractionDigits:2});
+}
+function uid(){ return Math.random().toString(36).slice(2,10); }
+
+// ---------- session persistence (survives page refresh) ----------
+function saveSession(session){
+  try{ localStorage.setItem('timesheet_session', JSON.stringify(session)); }catch(e){}
+}
+function loadSession(){
+  try{
+    const s = localStorage.getItem('timesheet_session');
+    return s ? JSON.parse(s) : null;
+  }catch(e){ return null; }
+}
+function clearSession(){
+  try{ localStorage.removeItem('timesheet_session'); }catch(e){}
+}
+
+// ---------- storage helpers (Firestore) ----------
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout:' + label)), ms))
+  ]);
+}
+async function loadEmployees(){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'employees')), 12000, 'loadEmployees');
+    return snap.exists() ? (snap.data().list || []) : [];
+  }catch(e){ console.error('loadEmployees error', e); return []; }
+}
+async function saveEmployees(list){
+  try{
+    await withTimeout(setDoc(doc(db, 'meta', 'employees'), { list }), 12000, 'saveEmployees');
+    return true;
+  }catch(e){ console.error('saveEmployees error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
+async function loadHours(empId){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'hours', empId)), 12000, 'loadHours');
+    return snap.exists() ? snap.data() : {};
+  }catch(e){ console.error('loadHours error', e); return {}; }
+}
+async function saveHours(empId, data){
+  try{
+    await withTimeout(setDoc(doc(db, 'hours', empId), data), 12000, 'saveHours');
+    return true;
+  }catch(e){ console.error('saveHours error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
+
+function calcPay(emp, hoursTotal){
+  if(emp.payType === 'fixed'){ return emp.rate; }
+  return hoursTotal * emp.rate;
+}
+function computeHoursFromRange(start, end){
+  if(!start || !end) return null;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let startMin = sh*60 + sm;
+  let endMin = eh*60 + em;
+  if(endMin <= startMin) endMin += 24*60; // crosses midnight
+  const diffHours = (endMin - startMin) / 60;
+  return Math.round(diffHours * 100) / 100;
+}
+function nowTimeStr(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+// Net worked hours for an entry, subtracting any completed breaks. Returns null if the entry is still open (no end time yet).
+function computeEntryHours(entry){
+  if(!entry.end) return null;
+  const gross = computeHoursFromRange(entry.start, entry.end);
+  if(gross === null) return null;
+  const breaksHours = (entry.breaks || []).reduce((s,b) => {
+    if(!b.end) return s;
+    const h = computeHoursFromRange(b.start, b.end);
+    return s + (h || 0);
+  }, 0);
+  return Math.max(0, Math.round((gross - breaksHours) * 100) / 100);
+}
+function findOpenEntryToday(entries){
+  const t = todayStr();
+  return entries.find(e => e.date === t && !e.end) || null;
+}
+
+// ---------- Excel import helpers ----------
+function parseCellDate(value){
+  if(value === null || value === undefined || value === '') return null;
+  if(value instanceof Date){
+    return value.getFullYear() + '-' + String(value.getMonth()+1).padStart(2,'0') + '-' + String(value.getDate()).padStart(2,'0');
+  }
+  if(typeof value === 'number'){
+    try{
+      const info = XLSX.SSF.parse_date_code(value);
+      if(!info) return null;
+      return info.y + '-' + String(info.m).padStart(2,'0') + '-' + String(info.d).padStart(2,'0');
+    }catch(e){ return null; }
+  }
+  if(typeof value === 'string'){
+    const s = value.trim();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if(m) return m[1] + '-' + m[2].padStart(2,'0') + '-' + m[3].padStart(2,'0');
+    m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if(m) return m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
+    return null;
+  }
+  return null;
+}
+function parseCellTime(value){
+  if(value === null || value === undefined || value === '') return null;
+  if(value instanceof Date){
+    return String(value.getHours()).padStart(2,'0') + ':' + String(value.getMinutes()).padStart(2,'0');
+  }
+  if(typeof value === 'number'){
+    const totalMinutes = Math.round(value * 24 * 60);
+    const h = Math.floor(totalMinutes / 60) % 24;
+    const m = totalMinutes % 60;
+    return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+  }
+  if(typeof value === 'string'){
+    const s = value.trim();
+    const m = s.match(/^(\d{1,2}):(\d{2})/);
+    if(m) return m[1].padStart(2,'0') + ':' + m[2];
+    return null;
+  }
+  return null;
+}
+async function parseExcelFile(file){
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
+  if(!rows || rows.length === 0) return { rows: [], error: 'הקובץ ריק' };
+
+  let startRow = 0, dateCol = 0, startCol = 1, endCol = 2;
+  const looksLikeData = parseCellDate(rows[0][0]) !== null;
+  if(!looksLikeData){
+    const header = rows[0].map(h => (h === null || h === undefined) ? '' : h.toString().trim().toLowerCase());
+    const findCol = (keywords) => header.findIndex(h => keywords.some(k => h.includes(k)));
+    const dc = findCol(['תאריך','date']);
+    const sc = findCol(['משעה','התחלה','start']);
+    const ec = findCol(['עד','סיום','end']);
+    if(dc >= 0) dateCol = dc;
+    if(sc >= 0) startCol = sc;
+    if(ec >= 0) endCol = ec;
+    startRow = 1;
+  }
+
+  const results = [];
+  for(let i = startRow; i < rows.length; i++){
+    const row = rows[i];
+    if(!row || row.every(c => c === null || c === '')) continue;
+    const date = parseCellDate(row[dateCol]);
+    const start = parseCellTime(row[startCol]);
+    const end = parseCellTime(row[endCol]);
+    let error = null;
+    let hours = null;
+    if(!date) error = 'תאריך לא תקין';
+    else if(!start || !end) error = 'שעה לא תקינה';
+    else {
+      hours = computeHoursFromRange(start, end);
+      if(hours === null || hours <= 0) error = 'טווח שעות לא תקין';
+    }
+    results.push({ rowNum: i + 1, date, start, end, hours, error });
+  }
+  return { rows: results, error: null };
+}
+
+// ---------- init ----------
+let authReady = false;
+async function init(){
+  app.innerHTML = '<div class="empty-state">טוען...</div>';
+  state.employees = await loadEmployees();
+  state.loading = false;
+
+  onAuthStateChanged(auth, (user) => {
+    if(authReady) return; // only handle the initial resolution; explicit sign-in/out render themselves
+    authReady = true;
+    if(user){
+      state.isAdmin = true;
+      state.adminEmail = user.email;
+      renderAdminDashboard('summary');
+      return;
+    }
+    const session = loadSession();
+    if(session && session.role === 'employee'){
+      const emp = state.employees.find(x => x.id === session.empId);
+      if(emp){ renderEmployeeDashboard(emp); return; }
+      clearSession();
+    }
+    renderLanding();
+  });
+}
+
+function setHeader(subtitle, actionsHtml){
+  headerSubtitle.textContent = subtitle;
+  headerActions.innerHTML = actionsHtml || '';
+}
+
+// ---------- LANDING ----------
+function renderLanding(){
+  state.view = 'landing';
+  setHeader('רישום שעות עבודה ושכר', '');
+  app.innerHTML = `
+    <div class="center-stage">
+      <div class="login-card">
+        <div class="stamp-lg">שע</div>
+        <h1>ברוכים הבאים</h1>
+        <p class="hint">איך תרצו להיכנס?</p>
+        <div class="role-pick">
+          <button class="btn brass" id="btnAdmin">כניסת מנהל</button>
+          <button class="btn ghost" id="btnEmp">כניסת עובד</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('btnAdmin').onclick = renderAdminLogin;
+  document.getElementById('btnEmp').onclick = renderEmployeeLogin;
+}
+
+// ---------- ADMIN LOGIN ----------
+function renderAdminLogin(){
+  setHeader('כניסת מנהל', '');
+  app.innerHTML = `
+    <div class="center-stage">
+      <div class="login-card">
+        <h1>כניסת מנהל</h1>
+        <p class="hint">הזינו את פרטי ההתחברות</p>
+        <form id="adminLoginForm">
+          <div class="field">
+            <label>אימייל</label>
+            <input type="email" id="adminEmailInput" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label>סיסמה</label>
+            <input type="password" id="adminPassInput" autocomplete="current-password" required />
+          </div>
+          <div class="error-msg" id="adminErr"></div>
+          <div class="actions">
+            <button type="submit" class="btn brass">כניסה</button>
+            <button type="button" class="btn ghost" id="backBtn">חזרה</button>
+          </div>
+        </form>
+        <p class="hint" style="margin-top:16px;"><a href="#" id="forgotPassLink" style="color:var(--brass-dark); text-decoration:underline;">שכחת סיסמה?</a></p>
+      </div>
+    </div>
+  `;
+  document.getElementById('backBtn').onclick = renderLanding;
+  document.getElementById('forgotPassLink').onclick = (e) => { e.preventDefault(); renderForgotPassword(); };
+  document.getElementById('adminLoginForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('adminEmailInput').value.trim();
+    const pass = document.getElementById('adminPassInput').value;
+    const errEl = document.getElementById('adminErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'מתחבר...';
+    try{
+      await signInWithEmailAndPassword(auth, email, pass);
+      state.isAdmin = true;
+      state.adminEmail = email;
+      renderAdminDashboard('summary');
+    }catch(err){
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'כניסה';
+      console.error('admin sign-in error', err);
+      const code = err && err.code;
+      if(code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found'){
+        errEl.textContent = 'אימייל או סיסמה שגויים';
+      }else{
+        errEl.textContent = 'שגיאת התחברות: ' + (code || (err && err.message) || 'לא ידועה');
+      }
+    }
+  };
+}
+
+// ---------- FORGOT PASSWORD (real email reset via Firebase Auth) ----------
+function renderForgotPassword(){
+  setHeader('שחזור סיסמה', '');
+  app.innerHTML = `
+    <div class="center-stage">
+      <div class="login-card">
+        <h1>שחזור סיסמה</h1>
+        <p class="hint">הזינו את כתובת האימייל של המנהל — נשלח אליה קישור לאיפוס סיסמה.</p>
+        <form id="resetEmailForm">
+          <div class="field">
+            <label>אימייל</label>
+            <input type="email" id="resetEmailInput" autocomplete="username" required />
+          </div>
+          <div class="error-msg" id="resetEmailErr"></div>
+          <div class="actions">
+            <button type="submit" class="btn brass">שליחת קישור איפוס</button>
+            <button type="button" class="btn ghost" id="backToLogin">חזרה</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.getElementById('backToLogin').onclick = renderAdminLogin;
+  document.getElementById('resetEmailForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('resetEmailInput').value.trim();
+    const errEl = document.getElementById('resetEmailErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שולח...';
+    try{
+      await sendPasswordResetEmail(auth, email);
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'שליחת קישור איפוס';
+      errEl.style.color = '#2F5233';
+      errEl.textContent = 'אם הכתובת רשומה במערכת, נשלח אליה מייל עם קישור לאיפוס הסיסמה. בדקו גם בתיקיית הספאם.';
+    }catch(err){
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'שליחת קישור איפוס';
+      console.error('password reset error', err);
+      errEl.textContent = 'שגיאה בשליחה: ' + ((err && err.code) || (err && err.message) || 'לא ידועה');
+    }
+  };
+}
+
+// ---------- EMPLOYEE LOGIN ----------
+function renderEmployeeLogin(){
+  setHeader('כניסת עובד', '');
+  const options = state.employees.map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+  app.innerHTML = `
+    <div class="center-stage">
+      <div class="login-card">
+        <h1>כניסת עובד</h1>
+        <p class="hint">בחרו את שמכם והזינו קוד אישי</p>
+        ${state.employees.length === 0 ? '<p class="hint">עדיין לא נוספו עובדים על ידי המנהל.</p>' : `
+        <form id="empLoginForm" autocomplete="off">
+          <div class="field">
+            <label>שם עובד</label>
+            <select id="empSelect">${options}</select>
+          </div>
+          <div class="field">
+            <label>קוד אישי (PIN)</label>
+            <input type="text" id="empPinInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" name="employee-pin-code" data-lpignore="true" style="-webkit-text-security: disc; text-security: disc;" />
+          </div>
+          <div class="error-msg" id="empErr"></div>
+          <div class="actions">
+            <button type="submit" class="btn brass">כניסה</button>
+            <button type="button" class="btn ghost" id="backBtn">חזרה</button>
+          </div>
+        </form>
+        `}
+        ${state.employees.length === 0 ? '<div class="actions"><button class="btn ghost" id="backBtn2">חזרה</button></div>' : ''}
+      </div>
+    </div>
+  `;
+  const back = document.getElementById('backBtn') || document.getElementById('backBtn2');
+  if(back) back.onclick = renderLanding;
+  const form = document.getElementById('empLoginForm');
+  if(form){
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const empId = document.getElementById('empSelect').value;
+      const pin = document.getElementById('empPinInput').value;
+      const emp = state.employees.find(x => x.id === empId);
+      if(emp && emp.pin === pin){
+        saveSession({ role: 'employee', empId: emp.id });
+        renderEmployeeDashboard(emp);
+      }else{
+        document.getElementById('empErr').textContent = 'קוד אישי שגוי';
+      }
+    };
+  }
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function avatarHtml(emp, size){
+  const sizeClass = size === 'small' ? ' small' : '';
+  if(emp.photo){
+    return `<img class="avatar${sizeClass}" src="${emp.photo}" alt="${escapeHtml(emp.name)}" />`;
+  }
+  const initial = (emp.name || '?').trim().charAt(0).toUpperCase();
+  return `<div class="avatar-placeholder${sizeClass}">${escapeHtml(initial)}</div>`;
+}
+
+function resizeImageFile(file, maxSize, quality){
+  maxSize = maxSize || 160;
+  quality = quality || 0.7;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        const scale = Math.min(1, maxSize / Math.max(w, h));
+        w = Math.max(1, Math.round(w * scale));
+        h = Math.max(1, Math.round(h * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('לא ניתן לקרוא את קובץ התמונה'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('לא ניתן לקרוא את קובץ התמונה'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// ---------- ADMIN DASHBOARD ----------
+function renderAdminDashboard(tab){
+  setHeader('פאנל ניהול', '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
+  app.innerHTML = `
+    <div class="tabs">
+      <div class="tab" data-tab="summary">סיכום חודשי</div>
+      <div class="tab" data-tab="employees">ניהול עובדים</div>
+      <div class="tab" data-tab="settings">הגדרות</div>
+    </div>
+    <div id="tabContent"></div>
+  `;
+  document.querySelectorAll('.tab').forEach(t => {
+    if(t.dataset.tab === tab) t.classList.add('active');
+    t.onclick = () => renderAdminDashboard(t.dataset.tab);
+  });
+  document.getElementById('logoutBtn').onclick = async () => {
+    state.isAdmin = false;
+    try{ await signOut(auth); }catch(e){ console.error('sign-out error', e); }
+    renderLanding();
+  };
+
+  if(tab === 'summary') renderAdminSummary();
+  else if(tab === 'employees') renderAdminEmployees();
+  else renderAdminSettings();
+}
+
+async function renderAdminSummary(){
+  const content = document.getElementById('tabContent');
+  const month = state._adminMonth || currentMonthStr();
+  content.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
+
+  const rows = [];
+  for(const emp of state.employees){
+    const hoursData = await loadHours(emp.id);
+    const entries = hoursData[month] || [];
+    const totalHours = entries.reduce((s,e) => s + (computeEntryHours(e) || 0), 0);
+    const pay = calcPay(emp, totalHours);
+    rows.push({emp, totalHours, pay});
+  }
+  const grandHours = rows.reduce((s,r) => s + r.totalHours, 0);
+  const grandPay = rows.reduce((s,r) => s + r.pay, 0);
+
+  content.innerHTML = `
+    <div class="top-actions">
+      <input type="month" class="month-picker" id="monthPicker" value="${month}" />
+      <span class="subtitle">${monthLabel(month)}</span>
+    </div>
+    ${state.employees.length === 0 ? '<div class="card"><div class="empty-state">אין עדיין עובדים במערכת. עברו לטאב "ניהול עובדים" כדי להוסיף.</div></div>' : `
+    <div class="card">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>עובד</th><th>סוג שכר</th><th>סה"כ שעות</th><th>סה"כ לתשלום</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${escapeHtml(r.emp.name)}</td>
+                <td>${r.emp.payType === 'hourly' ? `<span class="pill hourly">שעתי · ${fmtMoney(r.emp.rate)}/שעה</span>` : `<span class="pill fixed">חודשי קבוע</span>`}</td>
+                <td class="mono">${fmtHours(r.totalHours)}</td>
+                <td class="mono">${fmtMoney(r.pay)}</td>
+              </tr>
+            `).join('')}
+            <tr class="total-row">
+              <td colspan="2">סה"כ לכל העובדים</td>
+              <td class="mono">${fmtHours(grandHours)}</td>
+              <td class="mono">${fmtMoney(grandPay)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    `}
+  `;
+  document.getElementById('monthPicker').onchange = (e) => {
+    state._adminMonth = e.target.value;
+    renderAdminSummary();
+  };
+}
+
+function renderAdminEmployees(){
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `
+    <div style="text-align:right; margin-bottom:16px;">
+      <button class="btn brass" id="goToAddEmp">+ הוסף עובד חדש</button>
+    </div>
+    <div class="card">
+      <h3>רשימת עובדים</h3>
+      <div id="empList">
+        ${state.employees.length === 0 ? '<div class="empty-state">עדיין לא נוספו עובדים.</div>' : ''}
+      </div>
+    </div>
+  `;
+  document.getElementById('goToAddEmp').onclick = renderAddEmployeePage;
+  renderEmpList();
+}
+
+function renderAddEmployeePage(){
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `
+    <div class="card">
+      <h3>הוספת עובד חדש</h3>
+      <form id="addEmpForm">
+        <div class="emp-row-form">
+          <div class="field"><label>שם מלא</label><input type="text" id="newName" required /></div>
+          <div class="field"><label>שם משתמש</label><input type="text" id="newUsername" required /></div>
+          <div class="field"><label>קוד אישי (PIN)</label><input type="text" id="newPin" inputmode="numeric" maxlength="6" required /></div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field"><label>טלפון</label><input type="tel" id="newPhone" required /></div>
+          <div class="field"><label>אימייל</label><input type="email" id="newEmail" required /></div>
+          <div class="field"><label>כתובת מגורים (לא חובה)</label><input type="text" id="newAddress" /></div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field">
+            <label>סוג שכר</label>
+            <select id="newPayType">
+              <option value="hourly">שכר שעתי</option>
+              <option value="fixed">שכר חודשי קבוע</option>
+            </select>
+          </div>
+          <div class="field">
+            <label id="rateLabel">תעריף לשעה (₪)</label>
+            <input type="number" id="newRate" min="0" step="0.5" required />
+          </div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field"><label>תמונת פרופיל (לא חובה)</label><input type="file" id="newPhoto" accept="image/*" /></div>
+        </div>
+        <div class="error-msg" id="addEmpErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">הוסף עובד</button>
+          <button type="button" class="btn ghost" id="cancelAddEmp">ביטול</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.getElementById('newPayType').onchange = (e) => {
+    document.getElementById('rateLabel').textContent = e.target.value === 'hourly' ? 'תעריף לשעה (₪)' : 'שכר חודשי (₪)';
+  };
+  document.getElementById('cancelAddEmp').onclick = () => renderAdminDashboard('employees');
+
+  document.getElementById('addEmpForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('newName').value.trim();
+    const username = document.getElementById('newUsername').value.trim();
+    const pin = document.getElementById('newPin').value.trim();
+    const phone = document.getElementById('newPhone').value.trim();
+    const email = document.getElementById('newEmail').value.trim();
+    const address = document.getElementById('newAddress').value.trim();
+    const payType = document.getElementById('newPayType').value;
+    const rate = Number(document.getElementById('newRate').value);
+    const photoFile = document.getElementById('newPhoto').files[0];
+    const errEl = document.getElementById('addEmpErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+
+    if(state.employees.some(x => x.username === username)){
+      errEl.textContent = 'שם המשתמש כבר קיים, בחרו שם אחר';
+      return;
+    }
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    let photo = null;
+    if(photoFile){
+      try{ photo = await resizeImageFile(photoFile); }
+      catch(err){ errEl.textContent = 'שגיאה בקריאת התמונה'; submitBtn.disabled=false; submitBtn.textContent='הוסף עובד'; return; }
+    }
+    const newEmp = { id: uid(), name, username, pin, phone, email, address, photo, payType, rate };
+    const updated = [...state.employees, newEmp];
+    const ok = await saveEmployees(updated);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'הוסף עובד';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state.employees = updated;
+    renderAdminDashboard('employees');
+  };
+}
+
+function renderEmpList(){
+  const listEl = document.getElementById('empList');
+  if(!listEl || state.employees.length === 0) return;
+  listEl.innerHTML = state.employees.map(emp => `
+    <div class="list-item">
+      <div class="avatar-row">
+        ${avatarHtml(emp, 'small')}
+        <div>
+          <div class="name">${escapeHtml(emp.name)}</div>
+          <div class="meta">
+            משתמש: ${escapeHtml(emp.username)} ·
+            ${emp.payType === 'hourly' ? `<span class="pill hourly">שעתי · ${fmtMoney(emp.rate)}/שעה</span>` : `<span class="pill fixed">קבוע · ${fmtMoney(emp.rate)}/חודש</span>`}
+          </div>
+          <div class="meta" style="margin-top:4px;">
+            ${emp.phone ? '📞 ' + escapeHtml(emp.phone) : ''}${emp.phone && emp.email ? ' · ' : ''}${emp.email ? '✉️ ' + escapeHtml(emp.email) : ''}${emp.address ? ' · 🏠 ' + escapeHtml(emp.address) : ''}
+          </div>
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn ghost small" data-edit="${emp.id}">עריכה</button>
+        <button class="btn danger" data-del="${emp.id}">מחיקה</button>
+      </div>
+    </div>
+  `).join('');
+
+  listEl.querySelectorAll('[data-del]').forEach(btn => {
+    btn.onclick = async () => {
+      if(!confirm('למחוק את העובד? כל נתוני השעות שלו יישארו במערכת אך לא יהיו נגישים דרך הכניסה.')) return;
+      state.employees = state.employees.filter(x => x.id !== btn.dataset.del);
+      await saveEmployees(state.employees);
+      renderAdminEmployees();
+    };
+  });
+  listEl.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.onclick = () => renderEditEmployee(btn.dataset.edit);
+  });
+}
+
+function renderEditEmployee(empId){
+  const emp = state.employees.find(x => x.id === empId);
+  if(!emp) return;
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `
+    <div class="card">
+      <h3>עריכת עובד: ${escapeHtml(emp.name)}</h3>
+      <form id="editEmpForm">
+        <div class="emp-row-form">
+          <div class="field"><label>שם מלא</label><input type="text" id="editName" value="${escapeHtml(emp.name)}" required /></div>
+          <div class="field"><label>שם משתמש</label><input type="text" id="editUsername" value="${escapeHtml(emp.username)}" required /></div>
+          <div class="field"><label>קוד אישי (PIN)</label><input type="text" id="editPin" value="${escapeHtml(emp.pin)}" inputmode="numeric" maxlength="6" required /></div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field"><label>טלפון</label><input type="tel" id="editPhone" value="${escapeHtml(emp.phone || '')}" required /></div>
+          <div class="field"><label>אימייל</label><input type="email" id="editEmail" value="${escapeHtml(emp.email || '')}" required /></div>
+          <div class="field"><label>כתובת מגורים (לא חובה)</label><input type="text" id="editAddress" value="${escapeHtml(emp.address || '')}" /></div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field">
+            <label>סוג שכר</label>
+            <select id="editPayType">
+              <option value="hourly" ${emp.payType==='hourly'?'selected':''}>שכר שעתי</option>
+              <option value="fixed" ${emp.payType==='fixed'?'selected':''}>שכר חודשי קבוע</option>
+            </select>
+          </div>
+          <div class="field">
+            <label id="editRateLabel">${emp.payType==='hourly' ? 'תעריף לשעה (₪)' : 'שכר חודשי (₪)'}</label>
+            <input type="number" id="editRate" min="0" step="0.5" value="${emp.rate}" required />
+          </div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field" style="flex:0 0 auto;">
+            <label>תמונת פרופיל</label>
+            ${avatarHtml(emp)}
+          </div>
+          <div class="field"><label>${emp.photo ? 'החלפת תמונה' : 'הוספת תמונה'} (לא חובה)</label><input type="file" id="editPhoto" accept="image/*" /></div>
+          ${emp.photo ? '<div class="field" style="flex:0 0 auto; align-self:flex-end;"><label>&nbsp;</label><button type="button" class="btn danger" id="removePhotoBtn">הסרת תמונה</button></div>' : ''}
+        </div>
+        <div class="error-msg" id="editEmpErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">שמירת שינויים</button>
+          <button type="button" class="btn ghost" id="cancelEdit">ביטול</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.getElementById('editPayType').onchange = (e) => {
+    document.getElementById('editRateLabel').textContent = e.target.value === 'hourly' ? 'תעריף לשעה (₪)' : 'שכר חודשי (₪)';
+  };
+  document.getElementById('cancelEdit').onclick = () => renderAdminDashboard('employees');
+  let removePhotoFlag = false;
+  const removePhotoBtn = document.getElementById('removePhotoBtn');
+  if(removePhotoBtn){
+    removePhotoBtn.onclick = () => {
+      removePhotoFlag = true;
+      removePhotoBtn.textContent = 'התמונה תוסר בשמירה ✓';
+      removePhotoBtn.disabled = true;
+    };
+  }
+  document.getElementById('editEmpForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('editUsername').value.trim();
+    const errEl = document.getElementById('editEmpErr');
+    if(state.employees.some(x => x.username === username && x.id !== emp.id)){
+      errEl.textContent = 'שם המשתמש כבר קיים';
+      return;
+    }
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const photoFile = document.getElementById('editPhoto').files[0];
+    let photo = emp.photo || null;
+    if(removePhotoFlag) photo = null;
+    if(photoFile){
+      try{ photo = await resizeImageFile(photoFile); }
+      catch(err){ errEl.textContent = 'שגיאה בקריאת התמונה'; submitBtn.disabled=false; submitBtn.textContent='שמירת שינויים'; return; }
+    }
+    const updatedEmp = {
+      ...emp,
+      name: document.getElementById('editName').value.trim(),
+      username,
+      pin: document.getElementById('editPin').value.trim(),
+      phone: document.getElementById('editPhone').value.trim(),
+      email: document.getElementById('editEmail').value.trim(),
+      address: document.getElementById('editAddress').value.trim(),
+      photo,
+      payType: document.getElementById('editPayType').value,
+      rate: Number(document.getElementById('editRate').value),
+    };
+    const updatedList = state.employees.map(x => x.id === emp.id ? updatedEmp : x);
+    const ok = await saveEmployees(updatedList);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'שמירת שינויים';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state.employees = updatedList;
+    renderAdminDashboard('employees');
+  };
+}
+
+function renderAdminSettings(){
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `
+    <div class="card">
+      <h3>שינוי סיסמת מנהל</h3>
+      <p class="hint" style="font-size:13px; margin-top:-6px;">מחוברים כ: ${escapeHtml(state.adminEmail || '')}</p>
+      <form id="changePassForm">
+        <div class="field"><label>סיסמה נוכחית</label><input type="password" id="curPass" autocomplete="current-password" required /></div>
+        <div class="field"><label>סיסמה חדשה</label><input type="password" id="newPass" autocomplete="new-password" required /></div>
+        <div class="error-msg" id="passErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">עדכון סיסמה</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h3>שחזור סיסמה במקרה ששכחתם</h3>
+      <p class="hint" style="font-size:13.5px; margin-top:-6px;">
+        אם תשכחו את הסיסמה, לחצו "שכחת סיסמה?" במסך הכניסה — יישלח מייל אמיתי לכתובת
+        <b>${escapeHtml(state.adminEmail || '')}</b> עם קישור לקביעת סיסמה חדשה. אין צורך בהגדרה נוספת.
+      </p>
+    </div>
+    <div class="card">
+      <h3>הערת אבטחה</h3>
+      <p class="hint" style="font-size:13.5px;">
+        פרטי העובדים והשעות שמורים במסד נתונים אמיתי (Firebase Firestore), הפועל כרגע ב"מצב בדיקה" (test mode) –
+        כלומר אין הגבלת הרשאות אמיתית מצד השרת מעבר להתחברות עצמה. כניסת המנהל מוגנת כעת באמצעות
+        Firebase Authentication אמיתי (אימייל+סיסמה), אך כניסת העובדים עדיין מבוססת קוד PIN בממשק בלבד.
+        חשוב לדעת: מצב הבדיקה של Firestore פג אוטומטית אחרי כ-30 יום, ואז הכתיבה לנתונים תיפסק עד שיוגדרו
+        כללי אבטחה (Security Rules) קבועים. מומלץ לשתף את קובץ האתר רק עם אנשי הצוות ולא לפרסם אותו publicly.
+      </p>
+    </div>
+  `;
+  document.getElementById('changePassForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const cur = document.getElementById('curPass').value;
+    const np = document.getElementById('newPass').value;
+    const errEl = document.getElementById('passErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    try{
+      const user = auth.currentUser;
+      const credential = EmailAuthProvider.credential(user.email, cur);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, np);
+      errEl.style.color = '#2F5233';
+      errEl.textContent = 'הסיסמה עודכנה בהצלחה';
+      e.target.reset();
+    }catch(err){
+      console.error('change password error', err);
+      const code = err && err.code;
+      if(code === 'auth/invalid-credential' || code === 'auth/wrong-password'){
+        errEl.textContent = 'הסיסמה הנוכחית שגויה';
+      }else{
+        errEl.textContent = 'שגיאה: ' + (code || (err && err.message) || 'לא ידועה');
+      }
+    }
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'עדכון סיסמה';
+  };
+}
+
+// ---------- EMPLOYEE DASHBOARD ----------
+async function renderEmployeeDashboard(emp, editingId){
+  state.currentEmployee = emp;
+  setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
+  const month = state._empMonth || currentMonthStr();
+  app.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
+
+  const hoursData = await loadHours(emp.id);
+  const entries = (hoursData[month] || []).slice().sort((a,b) => a.date.localeCompare(b.date));
+  const totalHours = entries.reduce((s,e) => s + (computeEntryHours(e) || 0), 0);
+  const pay = calcPay(emp, totalHours);
+  const editingEntry = editingId ? entries.find(e => e.id === editingId) : null;
+
+  const todayMonth = currentMonthStr();
+  const todayEntries = hoursData[todayMonth] || [];
+  const openEntry = findOpenEntryToday(todayEntries);
+  const onBreak = !!(openEntry && openEntry.breaks && openEntry.breaks.length && !openEntry.breaks[openEntry.breaks.length - 1].end);
+  const lastBreak = onBreak ? openEntry.breaks[openEntry.breaks.length - 1] : null;
+
+  app.innerHTML = `
+    ${editingEntry ? '' : `
+    <div class="avatar-row" style="margin-bottom:16px;">
+      ${avatarHtml(emp)}
+      <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
+    </div>
+    <div class="top-actions">
+      <input type="month" class="month-picker" id="empMonthPicker" value="${month}" />
+      <span class="subtitle">${monthLabel(month)} · ${emp.payType === 'hourly' ? 'שכר שעתי · ' + fmtMoney(emp.rate) + ' לשעה' : 'שכר חודשי קבוע'}</span>
+    </div>
+    <div class="readout">
+      <div class="digit-block"><div class="num mono">${fmtHours(totalHours)}</div><div class="lbl">סה"כ שעות החודש</div></div>
+      <div class="digit-block"><div class="num mono">${fmtMoney(pay)}</div><div class="lbl">סה"כ לתשלום</div></div>
+    </div>
+
+    <div class="card">
+      <h3>כרטיס נוכחות היום</h3>
+      ${!openEntry ? `
+        <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">לחצו כשאתם מגיעים לעבודה — את שעת הסיום תעדכנו בנפרד בסוף היום.</p>
+        <form id="clockInForm">
+          <div class="emp-row-form">
+            <div class="field"><label>שעת הגעה</label><input type="time" id="clockInTime" value="${nowTimeStr()}" required /></div>
+          </div>
+          <div class="error-msg" id="clockInErr"></div>
+          <div class="actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn brass">🟢 התחלת יום עבודה</button>
+          </div>
+        </form>
+      ` : `
+        <p class="hint" style="margin-top:-6px; font-size:14px;">
+          ${onBreak ? `⏸️ בהפסקה מאז <b class="mono">${lastBreak.start}</b>` : `🟢 בעבודה מאז <b class="mono">${openEntry.start}</b>`}
+        </p>
+        ${(openEntry.breaks && openEntry.breaks.length) ? `
+          <div class="table-scroll" style="margin:12px 0;">
+            <table>
+              <thead><tr><th>הפסקה</th><th>משך</th></tr></thead>
+              <tbody>
+                ${openEntry.breaks.map(b => `<tr><td class="mono">${b.start} – ${b.end || 'מתמשכת'}</td><td class="mono">${b.end ? fmtHours(computeHoursFromRange(b.start,b.end)) + ' שעות' : '—'}</td></tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : ''}
+        <div class="actions" style="justify-content:flex-start; margin-top:10px;">
+          ${onBreak
+            ? '<button type="button" class="btn brass" id="endBreakBtn">▶️ סיום הפסקה</button>'
+            : '<button type="button" class="btn ghost" id="startBreakBtn">☕ התחלת הפסקה</button>'
+          }
+        </div>
+        ${!onBreak ? `
+          <form id="clockOutForm" style="margin-top:18px; border-top:1px solid var(--line); padding-top:16px;">
+            <div class="emp-row-form">
+              <div class="field"><label>שעת סיום</label><input type="time" id="clockOutTime" value="${nowTimeStr()}" required /></div>
+            </div>
+            <div class="error-msg" id="clockOutErr"></div>
+            <div class="actions" style="justify-content:flex-start;">
+              <button type="submit" class="btn brass">🔴 סיום יום עבודה</button>
+            </div>
+          </form>
+        ` : ''}
+      `}
+    </div>
+
+    <div class="card">
+      <h3>ייבוא שעות מקובץ אקסל</h3>
+      <p class="hint" style="margin-top:-6px; margin-bottom:14px; font-size:13px;">
+        העלו קובץ אקסל (.xlsx) עם שלוש עמודות: <b>תאריך</b>, <b>משעה</b>, <b>עד שעה</b> (מומלץ עם שורת כותרות ראשונה).
+        המערכת תקרא את הקובץ ותוסיף את כל השעות בבת אחת, במקום מילוי ידני שורה-שורה.
+      </p>
+      <input type="file" id="excelFileInput" accept=".xlsx,.xls" />
+      <div class="error-msg" id="excelErr"></div>
+      <div id="excelPreviewArea"></div>
+    </div>
+    `}
+
+    <div class="card">
+      <h3>${editingEntry ? 'עריכת רישום שעות' : 'הוספה ידנית / תיקון רישום'}</h3>
+      <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">לתיקון רישום ישן או הוספת יום שלם בבת אחת — הזינו תאריך, שעת התחלה ושעת סיום.</p>
+      <form id="addHoursForm">
+        <div class="emp-row-form">
+          <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${editingEntry ? editingEntry.date : todayStr()}" required /></div>
+        </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field"><label>משעה</label><input type="time" id="hoursStart" value="${editingEntry ? editingEntry.start || '' : ''}" required /></div>
+          <div class="field"><label>עד שעה</label><input type="time" id="hoursEnd" value="${editingEntry ? editingEntry.end || '' : ''}" required /></div>
+        </div>
+        <div class="mono" id="computedHoursPreview" style="margin-top:12px; font-size:15px; color:var(--brass-dark);"></div>
+        <div class="error-msg" id="addHoursErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">${editingEntry ? 'עדכון שינויים' : 'הוספה'}</button>
+          ${editingEntry ? '<button type="button" class="btn ghost" id="cancelEditHours">ביטול</button>' : ''}
+        </div>
+      </form>
+    </div>
+    ${editingEntry ? '' : `
+    <div class="card">
+      <h3>רישומי החודש</h3>
+      <div id="entriesList">
+        ${entries.length === 0 ? '<div class="empty-state">אין עדיין רישומי שעות לחודש זה.</div>' : `
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>תאריך</th><th>טווח שעות</th><th>הפסקות</th><th>סה"כ שעות</th><th></th></tr></thead>
+            <tbody>
+              ${entries.map(e => {
+                const h = computeEntryHours(e);
+                const breaksCount = (e.breaks || []).filter(b => b.end).length;
+                return `
+                <tr>
+                  <td>${e.date}</td>
+                  <td class="mono">${e.start ? (e.start + ' – ' + (e.end || '...')) : '—'}</td>
+                  <td class="mono">${breaksCount > 0 ? breaksCount + ' הפסקות' : '—'}</td>
+                  <td class="mono">${h !== null ? fmtHours(h) : '<span class="pill hourly">בעבודה</span>'}</td>
+                  <td>
+                    <div class="row-actions">
+                      <button class="btn ghost small" data-edit-entry="${e.id}">עריכה</button>
+                      <button class="btn danger" data-del-entry="${e.id}">מחיקה</button>
+                    </div>
+                  </td>
+                </tr>
+              `;}).join('')}
+            </tbody>
+          </table>
+        </div>
+        `}
+      </div>
+    </div>
+    `}
+  `;
+
+  document.getElementById('logoutBtn').onclick = () => { state.currentEmployee = null; clearSession(); renderLanding(); };
+  const empMonthPicker = document.getElementById('empMonthPicker');
+  if(empMonthPicker){
+    empMonthPicker.onchange = (e) => {
+      state._empMonth = e.target.value;
+      renderEmployeeDashboard(emp);
+    };
+  }
+
+  // ---- clock-in ----
+  const clockInForm = document.getElementById('clockInForm');
+  if(clockInForm){
+    clockInForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const startTime = document.getElementById('clockInTime').value;
+      const errEl = document.getElementById('clockInErr');
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if(!startTime){ errEl.textContent = 'יש להזין שעת הגעה'; return; }
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'שומר...';
+      const fresh = await loadHours(emp.id);
+      const tm = currentMonthStr();
+      if(!fresh[tm]) fresh[tm] = [];
+      if(findOpenEntryToday(fresh[tm])){ errEl.textContent = 'כבר קיים יום עבודה פתוח להיום'; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
+      fresh[tm].push({ id: uid(), date: todayStr(), start: startTime, end: null, breaks: [] });
+      const ok = await saveHours(emp.id, fresh);
+      if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
+      if(month !== tm) state._empMonth = tm;
+      renderEmployeeDashboard(emp);
+    };
+  }
+
+  // ---- start break ----
+  const startBreakBtn = document.getElementById('startBreakBtn');
+  if(startBreakBtn){
+    startBreakBtn.onclick = async () => {
+      startBreakBtn.disabled = true;
+      startBreakBtn.textContent = 'שומר...';
+      const fresh = await loadHours(emp.id);
+      const tm = currentMonthStr();
+      const list = fresh[tm] || [];
+      const entry = list.find(x => x.id === openEntry.id);
+      if(entry){
+        if(!entry.breaks) entry.breaks = [];
+        entry.breaks.push({ id: uid(), start: nowTimeStr(), end: null });
+      }
+      const ok = await saveHours(emp.id, fresh);
+      if(ok !== true){ alert('שגיאה בשמירה: ' + ok); startBreakBtn.disabled=false; startBreakBtn.textContent='☕ התחלת הפסקה'; return; }
+      renderEmployeeDashboard(emp);
+    };
+  }
+
+  // ---- end break ----
+  const endBreakBtn = document.getElementById('endBreakBtn');
+  if(endBreakBtn){
+    endBreakBtn.onclick = async () => {
+      endBreakBtn.disabled = true;
+      endBreakBtn.textContent = 'שומר...';
+      const fresh = await loadHours(emp.id);
+      const tm = currentMonthStr();
+      const list = fresh[tm] || [];
+      const entry = list.find(x => x.id === openEntry.id);
+      if(entry && entry.breaks && entry.breaks.length){
+        entry.breaks[entry.breaks.length - 1].end = nowTimeStr();
+      }
+      const ok = await saveHours(emp.id, fresh);
+      if(ok !== true){ alert('שגיאה בשמירה: ' + ok); endBreakBtn.disabled=false; endBreakBtn.textContent='▶️ סיום הפסקה'; return; }
+      renderEmployeeDashboard(emp);
+    };
+  }
+
+  // ---- clock-out ----
+  const clockOutForm = document.getElementById('clockOutForm');
+  if(clockOutForm){
+    clockOutForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const endTime = document.getElementById('clockOutTime').value;
+      const errEl = document.getElementById('clockOutErr');
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if(!endTime){ errEl.textContent = 'יש להזין שעת סיום'; return; }
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'שומר...';
+      const fresh = await loadHours(emp.id);
+      const tm = currentMonthStr();
+      const list = fresh[tm] || [];
+      const entry = list.find(x => x.id === openEntry.id);
+      if(!entry){ errEl.textContent = 'הרישום לא נמצא, נסו לרענן'; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
+      const h = computeHoursFromRange(entry.start, endTime);
+      if(h === null || h <= 0){ errEl.textContent = 'שעת הסיום חייבת להיות אחרי שעת ההתחלה'; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
+      // auto-close a dangling open break at clock-out time, just in case
+      if(entry.breaks && entry.breaks.length && !entry.breaks[entry.breaks.length-1].end){
+        entry.breaks[entry.breaks.length-1].end = endTime;
+      }
+      entry.end = endTime;
+      const ok = await saveHours(emp.id, fresh);
+      if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
+      renderEmployeeDashboard(emp);
+    };
+  }
+
+  // ---- excel import ----
+  const excelFileInput = document.getElementById('excelFileInput');
+  const excelErr = document.getElementById('excelErr');
+  const excelPreviewArea = document.getElementById('excelPreviewArea');
+  if(excelFileInput){
+    excelFileInput.onchange = async () => {
+      const file = excelFileInput.files[0];
+      excelErr.textContent = '';
+      excelPreviewArea.innerHTML = '';
+      if(!file) return;
+      excelPreviewArea.innerHTML = '<p class="hint">קורא את הקובץ...</p>';
+      let parsed;
+      try{
+        parsed = await parseExcelFile(file);
+      }catch(err){
+        console.error('excel parse error', err);
+        excelPreviewArea.innerHTML = '';
+        excelErr.textContent = 'לא ניתן לקרוא את הקובץ — ודאו שזהו קובץ אקסל תקין (.xlsx)';
+        return;
+      }
+      if(parsed.error){
+        excelPreviewArea.innerHTML = '';
+        excelErr.textContent = parsed.error;
+        return;
+      }
+      const validRows = parsed.rows.filter(r => !r.error);
+      const invalidRows = parsed.rows.filter(r => r.error);
+      if(parsed.rows.length === 0){
+        excelPreviewArea.innerHTML = '<p class="hint">לא נמצאו שורות נתונים בקובץ.</p>';
+        return;
+      }
+      excelPreviewArea.innerHTML = `
+        <p class="hint" style="margin-top:14px;">
+          נמצאו <b style="color:#2F5233;">${validRows.length} רישומים תקינים</b>
+          ${invalidRows.length ? ` ו-<b style="color:var(--danger);">${invalidRows.length} שורות עם שגיאה</b>` : ''}.
+        </p>
+        <div class="table-scroll" style="max-height:260px; overflow-y:auto;">
+          <table>
+            <thead><tr><th>שורה</th><th>תאריך</th><th>משעה</th><th>עד שעה</th><th>סה"כ שעות</th></tr></thead>
+            <tbody>
+              ${parsed.rows.map(r => `
+                <tr style="${r.error ? 'color:var(--danger);' : ''}">
+                  <td>${r.rowNum}</td>
+                  <td class="mono">${r.date || '—'}</td>
+                  <td class="mono">${r.start || '—'}</td>
+                  <td class="mono">${r.end || '—'}</td>
+                  <td class="mono">${r.error ? r.error : fmtHours(r.hours)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="actions" style="justify-content:flex-start; margin-top:14px;">
+          <button type="button" class="btn brass" id="confirmExcelImport" ${validRows.length === 0 ? 'disabled' : ''}>ייבוא ${validRows.length} רישומים</button>
+        </div>
+      `;
+      const confirmBtn = document.getElementById('confirmExcelImport');
+      if(confirmBtn){
+        confirmBtn.onclick = async () => {
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = 'מייבא...';
+          const fresh = await loadHours(emp.id);
+          for(const r of validRows){
+            const m = r.date.slice(0,7);
+            if(!fresh[m]) fresh[m] = [];
+            fresh[m].push({ id: uid(), date: r.date, start: r.start, end: r.end, breaks: [] });
+          }
+          const ok = await saveHours(emp.id, fresh);
+          if(ok !== true){
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'ייבוא ' + validRows.length + ' רישומים';
+            excelErr.textContent = 'שגיאה בשמירה: ' + ok;
+            return;
+          }
+          const lastMonth = validRows[validRows.length - 1].date.slice(0,7);
+          state._empMonth = lastMonth;
+          renderEmployeeDashboard(emp);
+        };
+      }
+    };
+  }
+
+
+  const dateInput = document.getElementById('hoursDate');
+  const startInput = document.getElementById('hoursStart');
+  const endInput = document.getElementById('hoursEnd');
+  const preview = document.getElementById('computedHoursPreview');
+  function updatePreview(){
+    const h = computeHoursFromRange(startInput.value, endInput.value);
+    preview.textContent = h !== null ? ('סה"כ: ' + fmtHours(h) + ' שעות') : '';
+  }
+  startInput.oninput = updatePreview;
+  endInput.oninput = updatePreview;
+  updatePreview();
+  dateInput.onchange = () => { startInput.focus(); if(startInput.showPicker){ try{ startInput.showPicker(); }catch(e){} } };
+
+  const cancelBtn = document.getElementById('cancelEditHours');
+  if(cancelBtn) cancelBtn.onclick = () => renderEmployeeDashboard(emp);
+
+  document.getElementById('addHoursForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const date = document.getElementById('hoursDate').value;
+    const start = startInput.value;
+    const end = endInput.value;
+    const errEl = document.getElementById('addHoursErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const hoursVal = computeHoursFromRange(start, end);
+    if(!date || hoursVal === null || hoursVal <= 0){ errEl.textContent = 'יש להזין תאריך, שעת התחלה ושעת סיום תקינים'; return; }
+    if(hoursVal > 24){ errEl.textContent = 'טווח השעות ארוך מ-24 שעות, בדקו את השעות שהוזנו'; return; }
+    const entryMonth = date.slice(0,7);
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const fresh = await loadHours(emp.id);
+
+    if(editingEntry){
+      // remove the old entry from whichever month it was in (it may change if the date changed)
+      const oldMonth = editingEntry.date.slice(0,7);
+      if(fresh[oldMonth]) fresh[oldMonth] = fresh[oldMonth].filter(x => x.id !== editingEntry.id);
+      if(!fresh[entryMonth]) fresh[entryMonth] = [];
+      fresh[entryMonth].push({ id: editingEntry.id, date, start, end, breaks: editingEntry.breaks || [] });
+    } else {
+      if(!fresh[entryMonth]) fresh[entryMonth] = [];
+      fresh[entryMonth].push({ id: uid(), date, start, end, breaks: [] });
+    }
+
+    const ok = await saveHours(emp.id, fresh);
+    submitBtn.disabled = false;
+    submitBtn.textContent = editingEntry ? 'עדכון שינויים' : 'הוספה';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    if(entryMonth !== month){ state._empMonth = entryMonth; }
+    renderEmployeeDashboard(emp);
+  };
+  document.querySelectorAll('[data-edit-entry]').forEach(btn => {
+    btn.onclick = () => renderEmployeeDashboard(emp, btn.dataset.editEntry);
+  });
+  document.querySelectorAll('[data-del-entry]').forEach(btn => {
+    btn.onclick = async () => {
+      const fresh = await loadHours(emp.id);
+      fresh[month] = (fresh[month] || []).filter(e => e.id !== btn.dataset.delEntry);
+      await saveHours(emp.id, fresh);
+      renderEmployeeDashboard(emp);
+    };
+  });
+}
+
+init();
+</script>
+</body>
+</html>
