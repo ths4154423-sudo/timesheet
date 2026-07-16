@@ -145,6 +145,18 @@
   }
   .avatar.small, .avatar-placeholder.small{ width:32px; height:32px; font-size:13px; }
   .avatar-row{ display:flex; align-items:center; gap:12px; }
+  @keyframes hourglass-flip{
+    0%, 35%{ transform:rotate(0deg); }
+    50%, 85%{ transform:rotate(180deg); }
+    100%{ transform:rotate(360deg); }
+  }
+  .hourglass-spin{
+    display:inline-block;
+    font-size:30px;
+    animation: hourglass-flip 4s ease-in-out infinite;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.15));
+  }
+  .timer-row{ display:flex; align-items:center; gap:16px; margin-bottom:14px; }
   .pill.hourly{ background:#E4EEE6; color:#2F5233; }
   .pill.fixed{ background:#EFE3D0; color:var(--brass-dark); }
 
@@ -286,6 +298,18 @@ async function saveHours(empId, data){
     await withTimeout(setDoc(doc(db, 'hours', empId), data), 12000, 'saveHours');
     return true;
   }catch(e){ console.error('saveHours error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
+async function loadAnnouncement(){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'announcement')), 12000, 'loadAnnouncement');
+    return snap.exists() ? snap.data() : { image: null, caption: '' };
+  }catch(e){ console.error('loadAnnouncement error', e); return { image: null, caption: '' }; }
+}
+async function saveAnnouncement(image, caption){
+  try{
+    await withTimeout(setDoc(doc(db, 'meta', 'announcement'), { image, caption }), 12000, 'saveAnnouncement');
+    return true;
+  }catch(e){ console.error('saveAnnouncement error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
 }
 
 function calcPay(emp, hoursTotal){
@@ -993,8 +1017,10 @@ function renderEditEmployee(empId){
   };
 }
 
-function renderAdminSettings(){
+async function renderAdminSettings(){
   const content = document.getElementById('tabContent');
+  content.innerHTML = `<div class="empty-state">טוען...</div>`;
+  const announcement = await loadAnnouncement();
   content.innerHTML = `
     <div class="card">
       <h3>שינוי סיסמת מנהל</h3>
@@ -1016,6 +1042,22 @@ function renderAdminSettings(){
       </p>
     </div>
     <div class="card">
+      <h3>הודעה לעובדים</h3>
+      <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
+        תמונה וכיתוב שיוצגו לכל עובד בראש הדף שלו כשהוא נכנס למערכת. אפשר למלא רק תמונה, רק כיתוב, או את שניהם.
+      </p>
+      ${announcement.image ? `<img src="${announcement.image}" style="max-width:100%; max-height:220px; border-radius:6px; margin-bottom:12px; display:block;" />` : ''}
+      <form id="announcementForm">
+        <div class="field"><label>${announcement.image ? 'החלפת תמונה' : 'העלאת תמונה'} (לא חובה)</label><input type="file" id="announcementImage" accept="image/*" /></div>
+        ${announcement.image ? '<div class="actions" style="justify-content:flex-start; margin-top:8px;"><button type="button" class="btn danger" id="removeAnnouncementImg">הסרת תמונה</button></div>' : ''}
+        <div class="field" style="margin-top:14px;"><label>כיתוב</label><textarea id="announcementCaption" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:10px 12px; border:1.5px solid var(--line); border-radius:4px; background:var(--paper); color:var(--ink);">${escapeHtml(announcement.caption || '')}</textarea></div>
+        <div class="error-msg" id="announcementErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">שמירת הודעה</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
       <h3>הערת אבטחה</h3>
       <p class="hint" style="font-size:13.5px;">
         פרטי העובדים והשעות שמורים במסד נתונים אמיתי (Firebase Firestore), הפועל כרגע ב"מצב בדיקה" (test mode) –
@@ -1026,6 +1068,39 @@ function renderAdminSettings(){
       </p>
     </div>
   `;
+  let removeAnnouncementFlag = false;
+  const removeAnnouncementBtn = document.getElementById('removeAnnouncementImg');
+  if(removeAnnouncementBtn){
+    removeAnnouncementBtn.onclick = () => {
+      removeAnnouncementFlag = true;
+      removeAnnouncementBtn.textContent = 'התמונה תוסר בשמירה ✓';
+      removeAnnouncementBtn.disabled = true;
+    };
+  }
+  document.getElementById('announcementForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('announcementErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const caption = document.getElementById('announcementCaption').value.trim();
+    const imageFile = document.getElementById('announcementImage').files[0];
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    let image = announcement.image || null;
+    if(removeAnnouncementFlag) image = null;
+    if(imageFile){
+      try{ image = await resizeImageFile(imageFile, 640, 0.75); }
+      catch(err){ errEl.textContent = 'שגיאה בקריאת התמונה'; submitBtn.disabled=false; submitBtn.textContent='שמירת הודעה'; return; }
+    }
+    const ok = await saveAnnouncement(image, caption);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'שמירת הודעה';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    errEl.style.color = '#2F5233';
+    errEl.textContent = 'ההודעה נשמרה בהצלחה';
+    renderAdminSettings();
+  };
   document.getElementById('changePassForm').onsubmit = async (e) => {
     e.preventDefault();
     const cur = document.getElementById('curPass').value;
@@ -1071,6 +1146,7 @@ async function renderEmployeeDashboard(emp, editingId){
   const totalHours = entries.reduce((s,e) => s + (computeEntryHours(e) || 0), 0);
   const pay = calcPay(emp, totalHours);
   const editingEntry = editingId ? entries.find(e => e.id === editingId) : null;
+  const announcement = editingEntry ? { image: null, caption: '' } : await loadAnnouncement();
 
   const todayMonth = currentMonthStr();
   const todayEntries = hoursData[todayMonth] || [];
@@ -1084,6 +1160,12 @@ async function renderEmployeeDashboard(emp, editingId){
       ${avatarHtml(emp)}
       <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
     </div>
+    ${(announcement.image || announcement.caption) ? `
+    <div class="card" style="border-color:var(--brass);">
+      ${announcement.image ? `<img src="${announcement.image}" style="max-width:100%; border-radius:6px; margin-bottom:${announcement.caption ? '12px' : '0'}; display:block;" />` : ''}
+      ${announcement.caption ? `<p style="margin:0; font-size:15px; white-space:pre-wrap;">${escapeHtml(announcement.caption)}</p>` : ''}
+    </div>
+    ` : ''}
     <div class="top-actions">
       <input type="month" class="month-picker" id="empMonthPicker" value="${month}" />
       <span class="subtitle">${monthLabel(month)} · ${emp.payType === 'hourly' ? 'שכר שעתי · ' + fmtMoney(emp.rate) + ' לשעה' : 'שכר חודשי קבוע'}</span>
@@ -1110,8 +1192,13 @@ async function renderEmployeeDashboard(emp, editingId){
         <p class="hint" style="margin-top:-6px; font-size:14px;">
           ${onBreak ? `⏸️ בהפסקה מאז <b class="mono">${lastBreak.start}</b>` : `🟢 בעבודה מאז <b class="mono">${openEntry.start}</b>`}
         </p>
-        <div id="liveTimer" class="mono" style="font-size:32px; color:var(--brass-dark); margin:6px 0 2px;">00:00:00</div>
-        <div style="color:var(--muted); font-size:12px; margin-bottom:12px;">${onBreak ? 'זמן הפסקה רץ' : 'זמן עבודה רץ'}</div>
+        <div class="timer-row">
+          <span class="hourglass-spin">⏳</span>
+          <div>
+            <div id="liveTimer" class="mono" style="font-size:32px; color:var(--brass-dark);">00:00:00</div>
+            <div style="color:var(--muted); font-size:12px;">${onBreak ? 'זמן הפסקה רץ' : 'זמן עבודה רץ'}</div>
+          </div>
+        </div>
         ${(openEntry.breaks && openEntry.breaks.length) ? `
           <div class="table-scroll" style="margin:12px 0;">
             <table>
