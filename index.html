@@ -344,17 +344,19 @@ function calcPay(emp, hoursTotal){
 }
 function computeHoursFromRange(start, end){
   if(!start || !end) return null;
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  let startMin = sh*60 + sm;
-  let endMin = eh*60 + em;
-  if(endMin <= startMin) endMin += 24*60; // crosses midnight
-  const diffHours = (endMin - startMin) / 60;
+  const sParts = start.split(':').map(Number);
+  const eParts = end.split(':').map(Number);
+  const sh = sParts[0], sm = sParts[1], ss = sParts[2] || 0;
+  const eh = eParts[0], em = eParts[1], es = eParts[2] || 0;
+  let startSec = sh*3600 + sm*60 + ss;
+  let endSec = eh*3600 + em*60 + es;
+  if(endSec < startSec) endSec += 24*3600; // crosses midnight
+  const diffHours = (endSec - startSec) / 3600;
   return Math.round(diffHours * 100) / 100;
 }
 function nowTimeStr(){
   const d = new Date();
-  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
 }
 // Net worked hours for an entry, subtracting any completed breaks. Returns null if the entry is still open (no end time yet).
 function computeEntryHours(entry){
@@ -470,8 +472,8 @@ function startLiveTimer(sinceTimeStr){
     const target = document.getElementById('liveTimer');
     if(!target){ stopLiveTimer(); return; }
     const now = new Date();
-    const [h, m] = sinceTimeStr.split(':').map(Number);
-    const since = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+    const [h, m, s] = sinceTimeStr.split(':').map(Number);
+    const since = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, s || 0);
     let diffMs = now - since;
     if(diffMs < 0) diffMs += 24 * 60 * 60 * 1000; // crossed midnight
     const totalSec = Math.floor(diffMs / 1000);
@@ -688,6 +690,10 @@ function renderEmployeeLogin(){
 
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+// Display-only helper: shows HH:MM even though the stored value may include seconds (used for accurate calculation)
+function hhmm(t){
+  return t ? t.slice(0,5) : t;
 }
 
 // Custom confirm modal (replaces native confirm() so we can style/animate the message)
@@ -1257,7 +1263,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         </form>
       ` : `
         <p class="hint" style="margin-top:-6px; font-size:14px;">
-          ${onBreak ? `⏸️ בהפסקה מאז <b class="mono">${lastBreak.start}</b>` : `🟢 בעבודה מאז <b class="mono">${openEntry.start}</b>`}
+          ${onBreak ? `⏸️ בהפסקה מאז <b class="mono">${hhmm(lastBreak.start)}</b>` : `🟢 בעבודה מאז <b class="mono">${hhmm(openEntry.start)}</b>`}
         </p>
         <div class="timer-row">
           <span class="hourglass-spin">⏳</span>
@@ -1271,7 +1277,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
             <table>
               <thead><tr><th>הפסקה</th><th>משך</th></tr></thead>
               <tbody>
-                ${openEntry.breaks.map(b => `<tr><td class="mono">${b.start} – ${b.end || 'מתמשכת'}</td><td class="mono">${b.end ? fmtHours(computeHoursFromRange(b.start,b.end)) + ' שעות' : '—'}</td></tr>`).join('')}
+                ${openEntry.breaks.map(b => `<tr><td class="mono">${hhmm(b.start)} – ${b.end ? hhmm(b.end) : 'מתמשכת'}</td><td class="mono">${b.end ? fmtHours(computeHoursFromRange(b.start,b.end)) + ' שעות' : '—'}</td></tr>`).join('')}
               </tbody>
             </table>
           </div>
@@ -1328,8 +1334,8 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
             <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${editingEntry ? editingEntry.date : todayStr()}" required /></div>
           </div>
           <div class="emp-row-form" style="margin-top:14px;">
-            <div class="field"><label>משעה</label><input type="time" id="hoursStart" value="${editingEntry ? editingEntry.start || '' : ''}" required /></div>
-            <div class="field"><label>עד שעה</label><input type="time" id="hoursEnd" value="${editingEntry ? editingEntry.end || '' : ''}" required /></div>
+            <div class="field"><label>משעה</label><input type="time" id="hoursStart" value="${editingEntry ? hhmm(editingEntry.start) || '' : ''}" required /></div>
+            <div class="field"><label>עד שעה</label><input type="time" id="hoursEnd" value="${editingEntry ? hhmm(editingEntry.end) || '' : ''}" required /></div>
           </div>
           <div class="mono" id="computedHoursPreview" style="margin-top:12px; font-size:15px; color:var(--brass-dark);"></div>
           <div class="error-msg" id="addHoursErr"></div>
@@ -1356,7 +1362,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
                 return `
                 <tr>
                   <td>${e.date}</td>
-                  <td class="mono">${e.start ? (e.start + ' – ' + (e.end || '...')) : '—'}</td>
+                  <td class="mono">${e.start ? (hhmm(e.start) + ' – ' + (e.end ? hhmm(e.end) : '...')) : '—'}</td>
                   <td class="mono">${breaksCount > 0 ? breaksCount + ' הפסקות' : '—'}</td>
                   <td class="mono">${h !== null ? fmtHours(h) : '<span class="pill hourly">בעבודה</span>'}</td>
                   <td>
