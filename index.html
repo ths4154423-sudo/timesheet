@@ -1476,7 +1476,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       entry.end = endTime;
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
-      renderEmployeeDashboard(emp);
+      renderEmployeeDashboard(emp, null, fresh);
     };
   }
 
