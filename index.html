@@ -1381,7 +1381,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   if(empMonthPicker){
     empMonthPicker.onchange = (e) => {
       state._empMonth = e.target.value;
-      renderEmployeeDashboard(emp);
+      renderEmployeeDashboard(emp, null, true);
     };
   }
 
@@ -1428,7 +1428,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       }
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ alert('שגיאה בשמירה: ' + ok); startBreakBtn.disabled=false; startBreakBtn.textContent='☕ התחלת הפסקה'; return; }
-      renderEmployeeDashboard(emp);
+      renderEmployeeDashboard(emp, null, fresh);
     };
   }
 
@@ -1447,7 +1447,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       }
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ alert('שגיאה בשמירה: ' + ok); endBreakBtn.disabled=false; endBreakBtn.textContent='▶️ סיום הפסקה'; return; }
-      renderEmployeeDashboard(emp);
+      renderEmployeeDashboard(emp, null, fresh);
     };
   }
 
@@ -1556,7 +1556,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           }
           const lastMonth = validRows[validRows.length - 1].date.slice(0,7);
           state._empMonth = lastMonth;
-          renderEmployeeDashboard(emp);
+          renderEmployeeDashboard(emp, null, fresh);
         };
       }
     };
@@ -1587,7 +1587,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     dateInput.onchange = () => { startInput.focus(); if(startInput.showPicker){ try{ startInput.showPicker(); }catch(e){} } };
 
     const cancelBtn = document.getElementById('cancelEditHours');
-    if(cancelBtn) cancelBtn.onclick = () => renderEmployeeDashboard(emp);
+    if(cancelBtn) cancelBtn.onclick = () => renderEmployeeDashboard(emp, null, true);
 
     document.getElementById('addHoursForm').onsubmit = async (e) => {
       e.preventDefault();
@@ -1622,11 +1622,11 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       submitBtn.textContent = editingEntry ? 'עדכון שינויים' : 'הוספה';
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
       if(entryMonth !== month){ state._empMonth = entryMonth; }
-      renderEmployeeDashboard(emp);
+      renderEmployeeDashboard(emp, null, fresh);
     };
   }
   document.querySelectorAll('[data-edit-entry]').forEach(btn => {
-    btn.onclick = () => renderEmployeeDashboard(emp, btn.dataset.editEntry);
+    btn.onclick = () => renderEmployeeDashboard(emp, btn.dataset.editEntry, true);
   });
   document.querySelectorAll('[data-del-entry]').forEach(btn => {
     btn.onclick = async () => {
@@ -1635,7 +1635,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const fresh = await loadHours(emp.id);
       fresh[month] = (fresh[month] || []).filter(e => e.id !== btn.dataset.delEntry);
       await saveHours(emp.id, fresh);
-      renderEmployeeDashboard(emp);
+      renderEmployeeDashboard(emp, null, fresh);
     };
   });
 }
