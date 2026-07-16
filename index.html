@@ -1342,10 +1342,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
             <div class="emp-row-form">
               <div class="field">
                 <label>שעת סיום</label>
-                <div style="display:flex; gap:8px;">
-                  <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockOutTime" value="${nowTimeStr()}" required style="flex:1; direction:ltr; text-align:left;" dir="ltr" />
-                  <button type="button" class="btn ghost small" id="clockOutNowBtn">עכשיו</button>
-                </div>
+                <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockOutTime" value="${nowTimeStr()}" required style="direction:ltr; text-align:right;" dir="ltr" />
               </div>
             </div>
             <div class="error-msg" id="clockOutErr"></div>
@@ -1516,7 +1513,6 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   // ---- clock-out ----
   const clockOutForm = document.getElementById('clockOutForm');
   bindLiveTimeField('clockOutTime');
-  wireNowButton('clockOutNowBtn', 'clockOutTime');
   if(clockOutForm){
     clockOutForm.onsubmit = async (e) => {
       e.preventDefault();
