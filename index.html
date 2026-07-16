@@ -184,6 +184,28 @@
     .readout .digit-block .num{ font-size:26px; }
     .login-card{ padding:30px 22px; }
   }
+
+  /* Custom confirm modal */
+  .confirm-overlay{
+    position:fixed; inset:0; background:rgba(20,32,25,.55);
+    display:flex; align-items:center; justify-content:center;
+    z-index:1000; padding:20px;
+  }
+  .confirm-box{
+    background:var(--white); border:1px solid var(--line); border-radius:8px;
+    padding:30px 28px; max-width:360px; width:100%; text-align:center;
+    box-shadow:0 4px 0 var(--line);
+  }
+  @keyframes blink-text{
+    0%, 100%{ opacity:1; }
+    50%{ opacity:.25; }
+  }
+  .confirm-box .confirm-msg{
+    font-family:'Fraunces', serif; font-weight:600; font-size:19px;
+    color:var(--danger); margin:0 0 26px;
+    animation: blink-text 1s ease-in-out infinite;
+  }
+  .confirm-box .actions{ justify-content:center; margin-top:0; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -666,6 +688,28 @@ function renderEmployeeLogin(){
 
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Custom confirm modal (replaces native confirm() so we can style/animate the message)
+function showConfirmModal(message){
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML = `
+      <div class="confirm-box">
+        <p class="confirm-msg">${escapeHtml(message)}</p>
+        <div class="actions">
+          <button type="button" class="btn danger" id="confirmYes" style="padding:10px 22px;">מחיקה</button>
+          <button type="button" class="btn ghost" id="confirmNo">ביטול</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const cleanup = (result) => { overlay.remove(); resolve(result); };
+    overlay.querySelector('#confirmYes').onclick = () => cleanup(true);
+    overlay.querySelector('#confirmNo').onclick = () => cleanup(false);
+    overlay.onclick = (e) => { if(e.target === overlay) cleanup(false); };
+  });
 }
 
 function avatarHtml(emp, size){
@@ -1567,7 +1611,8 @@ async function renderEmployeeDashboard(emp, editingId){
   });
   document.querySelectorAll('[data-del-entry]').forEach(btn => {
     btn.onclick = async () => {
-      if(!confirm('למחוק את רישום השעות הזה? לא ניתן לשחזר לאחר המחיקה.')) return;
+      const confirmed = await showConfirmModal('האם אתה בטוח שברצונך למחוק?');
+      if(!confirmed) return;
       const fresh = await loadHours(emp.id);
       fresh[month] = (fresh[month] || []).filter(e => e.id !== btn.dataset.delEntry);
       await saveHours(emp.id, fresh);
