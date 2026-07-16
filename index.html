@@ -1,9 +1,15 @@
-\<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>שעון נוכחות</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1F2E26">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="שעון נוכחות">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Heebo:wght@300;400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -402,6 +408,31 @@ async function parseExcelFile(file){
 
 // ---------- init ----------
 let authReady = false;
+let liveTimerInterval = null;
+function stopLiveTimer(){
+  if(liveTimerInterval){ clearInterval(liveTimerInterval); liveTimerInterval = null; }
+}
+function startLiveTimer(sinceTimeStr){
+  stopLiveTimer();
+  const el = document.getElementById('liveTimer');
+  if(!el) return;
+  function update(){
+    const target = document.getElementById('liveTimer');
+    if(!target){ stopLiveTimer(); return; }
+    const now = new Date();
+    const [h, m] = sinceTimeStr.split(':').map(Number);
+    const since = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+    let diffMs = now - since;
+    if(diffMs < 0) diffMs += 24 * 60 * 60 * 1000; // crossed midnight
+    const totalSec = Math.floor(diffMs / 1000);
+    const hh = Math.floor(totalSec / 3600);
+    const mm = Math.floor((totalSec % 3600) / 60);
+    const ss = totalSec % 60;
+    target.textContent = String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+  }
+  update();
+  liveTimerInterval = setInterval(update, 1000);
+}
 async function init(){
   app.innerHTML = '<div class="empty-state">טוען...</div>';
   state.employees = await loadEmployees();
@@ -1029,6 +1060,7 @@ function renderAdminSettings(){
 
 // ---------- EMPLOYEE DASHBOARD ----------
 async function renderEmployeeDashboard(emp, editingId){
+  stopLiveTimer();
   state.currentEmployee = emp;
   setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
   const month = state._empMonth || currentMonthStr();
@@ -1078,6 +1110,8 @@ async function renderEmployeeDashboard(emp, editingId){
         <p class="hint" style="margin-top:-6px; font-size:14px;">
           ${onBreak ? `⏸️ בהפסקה מאז <b class="mono">${lastBreak.start}</b>` : `🟢 בעבודה מאז <b class="mono">${openEntry.start}</b>`}
         </p>
+        <div id="liveTimer" class="mono" style="font-size:32px; color:var(--brass-dark); margin:6px 0 2px;">00:00:00</div>
+        <div style="color:var(--muted); font-size:12px; margin-bottom:12px;">${onBreak ? 'זמן הפסקה רץ' : 'זמן עבודה רץ'}</div>
         ${(openEntry.breaks && openEntry.breaks.length) ? `
           <div class="table-scroll" style="margin:12px 0;">
             <table>
@@ -1174,13 +1208,17 @@ async function renderEmployeeDashboard(emp, editingId){
     `}
   `;
 
-  document.getElementById('logoutBtn').onclick = () => { state.currentEmployee = null; clearSession(); renderLanding(); };
+  document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); state.currentEmployee = null; clearSession(); renderLanding(); };
   const empMonthPicker = document.getElementById('empMonthPicker');
   if(empMonthPicker){
     empMonthPicker.onchange = (e) => {
       state._empMonth = e.target.value;
       renderEmployeeDashboard(emp);
     };
+  }
+
+  if(!editingEntry && openEntry){
+    startLiveTimer(onBreak ? lastBreak.start : openEntry.start);
   }
 
   // ---- clock-in ----
@@ -1422,6 +1460,12 @@ async function renderEmployeeDashboard(emp, editingId){
 }
 
 init();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.error('SW registration failed', err));
+  });
+}
 </script>
 </body>
 </html>
