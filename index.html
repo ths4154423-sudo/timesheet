@@ -352,7 +352,7 @@ function computeHoursFromRange(start, end){
   let endSec = eh*3600 + em*60 + es;
   if(endSec < startSec) endSec += 24*3600; // crosses midnight
   const diffHours = (endSec - startSec) / 3600;
-  return Math.round(diffHours * 100) / 100;
+  return Math.round(diffHours * 1e6) / 1e6;
 }
 function nowTimeStr(){
   const d = new Date();
@@ -368,7 +368,7 @@ function computeEntryHours(entry){
     const h = computeHoursFromRange(b.start, b.end);
     return s + (h || 0);
   }, 0);
-  return Math.max(0, Math.round((gross - breaksHours) * 100) / 100);
+  return Math.max(0, Math.round((gross - breaksHours) * 1e6) / 1e6);
 }
 function findOpenEntryToday(entries){
   const t = todayStr();
@@ -1302,10 +1302,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           <div class="emp-row-form">
             <div class="field">
               <label>שעת הגעה</label>
-              <div style="display:flex; gap:8px;">
-                <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockInTime" value="${nowTimeStr()}" required style="flex:1; direction:ltr; text-align:left;" dir="ltr" />
-                <button type="button" class="btn ghost small" id="clockInNowBtn">עכשיו</button>
-              </div>
+              <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockInTime" value="${nowTimeStr()}" required style="direction:ltr; text-align:right;" dir="ltr" />
             </div>
           </div>
           <div class="error-msg" id="clockInErr"></div>
@@ -1456,7 +1453,6 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   // ---- clock-in ----
   const clockInForm = document.getElementById('clockInForm');
   bindLiveTimeField('clockInTime');
-  wireNowButton('clockInNowBtn', 'clockInTime');
   if(clockInForm){
     clockInForm.onsubmit = async (e) => {
       e.preventDefault();
