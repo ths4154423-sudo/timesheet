@@ -1182,19 +1182,34 @@ async function renderAdminSettings(){
 }
 
 // ---------- EMPLOYEE DASHBOARD ----------
-async function renderEmployeeDashboard(emp, editingId){
+async function renderEmployeeDashboard(emp, editingId, useCache){
   stopLiveTimer();
   state.currentEmployee = emp;
   setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
   const month = state._empMonth || currentMonthStr();
-  app.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
 
-  const hoursData = await loadHours(emp.id);
+  const cacheValid = useCache && state._dashCache && state._dashCache.empId === emp.id;
+  let hoursData, cachedAnnouncement;
+  if(cacheValid){
+    hoursData = state._dashCache.hoursData;
+    cachedAnnouncement = state._dashCache.announcement;
+  }else{
+    app.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
+    hoursData = await loadHours(emp.id);
+  }
   const entries = (hoursData[month] || []).slice().sort((a,b) => a.date.localeCompare(b.date));
   const totalHours = entries.reduce((s,e) => s + (computeEntryHours(e) || 0), 0);
   const pay = calcPay(emp, totalHours);
   const editingEntry = editingId ? entries.find(e => e.id === editingId) : null;
-  const announcement = editingEntry ? { image: null, caption: '' } : await loadAnnouncement();
+  let announcement;
+  if(editingEntry){
+    announcement = { image: null, caption: '' };
+  }else if(cacheValid){
+    announcement = cachedAnnouncement;
+  }else{
+    announcement = await loadAnnouncement();
+  }
+  state._dashCache = { empId: emp.id, hoursData, announcement: editingEntry ? cachedAnnouncement : announcement };
 
   const todayMonth = currentMonthStr();
   const todayEntries = hoursData[todayMonth] || [];
@@ -1546,11 +1561,11 @@ async function renderEmployeeDashboard(emp, editingId){
 
   const excelToggleHeader = document.getElementById('excelToggleHeader');
   if(excelToggleHeader){
-    excelToggleHeader.onclick = () => { state._excelOpen = !state._excelOpen; renderEmployeeDashboard(emp); };
+    excelToggleHeader.onclick = () => { state._excelOpen = !state._excelOpen; renderEmployeeDashboard(emp, null, true); };
   }
   const manualToggleHeader = document.getElementById('manualToggleHeader');
   if(manualToggleHeader && !editingEntry){
-    manualToggleHeader.onclick = () => { state._manualOpen = !state._manualOpen; renderEmployeeDashboard(emp); };
+    manualToggleHeader.onclick = () => { state._manualOpen = !state._manualOpen; renderEmployeeDashboard(emp, null, true); };
   }
 
   const dateInput = document.getElementById('hoursDate');
