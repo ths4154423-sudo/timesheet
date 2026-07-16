@@ -500,13 +500,25 @@ function bindLiveTimeField(inputId){
   const markEdited = () => { userEdited = true; };
   el.addEventListener('input', markEdited);
   el.addEventListener('focus', markEdited);
+  el.addEventListener('blur', () => {
+    // typing just HH:MM is fine — auto-complete the seconds so the value stays valid
+    const v = el.value.trim();
+    if(/^([01]\d|2[0-3]):[0-5]\d$/.test(v)){ el.value = v + ':00'; }
+  });
   const id = setInterval(() => {
     if(userEdited){ clearInterval(id); return; }
     const stillThere = document.getElementById(inputId);
     if(!stillThere){ clearInterval(id); return; }
-    stillThere.value = hhmm(nowTimeStr());
+    stillThere.value = nowTimeStr();
   }, 1000);
   clockFieldIntervals.push(id);
+}
+function wireNowButton(buttonId, inputId){
+  const btn = document.getElementById(buttonId);
+  const input = document.getElementById(inputId);
+  if(btn && input){
+    btn.onclick = () => { input.value = nowTimeStr(); };
+  }
 }
 async function init(){
   app.innerHTML = '<div class="empty-state">טוען...</div>';
@@ -1278,7 +1290,13 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">לחצו כשאתם מגיעים לעבודה — את שעת הסיום תעדכנו בנפרד בסוף היום.</p>
         <form id="clockInForm">
           <div class="emp-row-form">
-            <div class="field"><label>שעת הגעה</label><input type="time" id="clockInTime" value="${hhmm(nowTimeStr())}" required /></div>
+            <div class="field">
+              <label>שעת הגעה</label>
+              <div style="display:flex; gap:8px;">
+                <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockInTime" value="${nowTimeStr()}" required style="flex:1;" />
+                <button type="button" class="btn ghost small" id="clockInNowBtn">עכשיו</button>
+              </div>
+            </div>
           </div>
           <div class="error-msg" id="clockInErr"></div>
           <div class="actions" style="justify-content:flex-start;">
@@ -1315,7 +1333,13 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         ${!onBreak ? `
           <form id="clockOutForm" style="margin-top:18px; border-top:1px solid var(--line); padding-top:16px;">
             <div class="emp-row-form">
-              <div class="field"><label>שעת סיום</label><input type="time" id="clockOutTime" value="${hhmm(nowTimeStr())}" required /></div>
+              <div class="field">
+                <label>שעת סיום</label>
+                <div style="display:flex; gap:8px;">
+                  <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockOutTime" value="${nowTimeStr()}" required style="flex:1;" />
+                  <button type="button" class="btn ghost small" id="clockOutNowBtn">עכשיו</button>
+                </div>
+              </div>
             </div>
             <div class="error-msg" id="clockOutErr"></div>
             <div class="actions" style="justify-content:flex-start;">
@@ -1422,6 +1446,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   // ---- clock-in ----
   const clockInForm = document.getElementById('clockInForm');
   bindLiveTimeField('clockInTime');
+  wireNowButton('clockInNowBtn', 'clockInTime');
   if(clockInForm){
     clockInForm.onsubmit = async (e) => {
       e.preventDefault();
@@ -1485,6 +1510,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   // ---- clock-out ----
   const clockOutForm = document.getElementById('clockOutForm');
   bindLiveTimeField('clockOutTime');
+  wireNowButton('clockOutNowBtn', 'clockOutTime');
   if(clockOutForm){
     clockOutForm.onsubmit = async (e) => {
       e.preventDefault();
