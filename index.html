@@ -1188,9 +1188,13 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
   const month = state._empMonth || currentMonthStr();
 
-  const cacheValid = useCache && state._dashCache && state._dashCache.empId === emp.id;
+  const passedFresh = useCache && typeof useCache === 'object' ? useCache : null;
+  const cacheValid = !passedFresh && useCache && state._dashCache && state._dashCache.empId === emp.id;
   let hoursData, cachedAnnouncement;
-  if(cacheValid){
+  if(passedFresh){
+    hoursData = passedFresh;
+    cachedAnnouncement = (state._dashCache && state._dashCache.empId === emp.id) ? state._dashCache.announcement : null;
+  }else if(cacheValid){
     hoursData = state._dashCache.hoursData;
     cachedAnnouncement = state._dashCache.announcement;
   }else{
@@ -1204,7 +1208,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   let announcement;
   if(editingEntry){
     announcement = { image: null, caption: '' };
-  }else if(cacheValid){
+  }else if(cachedAnnouncement){
     announcement = cachedAnnouncement;
   }else{
     announcement = await loadAnnouncement();
@@ -1404,7 +1408,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
       if(month !== tm) state._empMonth = tm;
-      renderEmployeeDashboard(emp);
+      renderEmployeeDashboard(emp, null, fresh);
     };
   }
 
