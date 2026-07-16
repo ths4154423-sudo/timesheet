@@ -1567,6 +1567,7 @@ async function renderEmployeeDashboard(emp, editingId){
   });
   document.querySelectorAll('[data-del-entry]').forEach(btn => {
     btn.onclick = async () => {
+      if(!confirm('למחוק את רישום השעות הזה? לא ניתן לשחזר לאחר המחיקה.')) return;
       const fresh = await loadHours(emp.id);
       fresh[month] = (fresh[month] || []).filter(e => e.id !== btn.dataset.delEntry);
       await saveHours(emp.id, fresh);
