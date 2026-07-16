@@ -157,6 +157,8 @@
     filter: drop-shadow(0 1px 1px rgba(0,0,0,.15));
   }
   .timer-row{ display:flex; align-items:center; gap:16px; margin-bottom:14px; }
+  .collapsible-header{ display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
+  .collapsible-header .chevron{ color:var(--brass-dark); font-size:14px; transition:transform .15s ease; }
   .pill.hourly{ background:#E4EEE6; color:#2F5233; }
   .pill.fixed{ background:#EFE3D0; color:var(--brass-dark); }
 
@@ -230,6 +232,8 @@ let state = {
   currentEmployee: null,
   isAdmin: false,
   loading: true,
+  _excelOpen: false,
+  _manualOpen: false,
 };
 
 const monthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
@@ -1230,35 +1234,49 @@ async function renderEmployeeDashboard(emp, editingId){
     </div>
 
     <div class="card">
-      <h3>ייבוא שעות מקובץ אקסל</h3>
-      <p class="hint" style="margin-top:-6px; margin-bottom:14px; font-size:13px;">
-        העלו קובץ אקסל (.xlsx) עם שלוש עמודות: <b>תאריך</b>, <b>משעה</b>, <b>עד שעה</b> (מומלץ עם שורת כותרות ראשונה).
-        המערכת תקרא את הקובץ ותוסיף את כל השעות בבת אחת, במקום מילוי ידני שורה-שורה.
-      </p>
-      <input type="file" id="excelFileInput" accept=".xlsx,.xls" />
-      <div class="error-msg" id="excelErr"></div>
-      <div id="excelPreviewArea"></div>
+      <div class="collapsible-header" id="excelToggleHeader">
+        <h3 style="margin:0;">ייבוא שעות מקובץ אקסל</h3>
+        <span class="chevron">${state._excelOpen ? '▲' : '▼'}</span>
+      </div>
+      ${state._excelOpen ? `
+      <div style="margin-top:14px;">
+        <p class="hint" style="margin-top:0; margin-bottom:14px; font-size:13px;">
+          העלו קובץ אקסל (.xlsx) עם שלוש עמודות: <b>תאריך</b>, <b>משעה</b>, <b>עד שעה</b> (מומלץ עם שורת כותרות ראשונה).
+          המערכת תקרא את הקובץ ותוסיף את כל השעות בבת אחת, במקום מילוי ידני שורה-שורה.
+        </p>
+        <input type="file" id="excelFileInput" accept=".xlsx,.xls" />
+        <div class="error-msg" id="excelErr"></div>
+        <div id="excelPreviewArea"></div>
+      </div>
+      ` : ''}
     </div>
     `}
 
     <div class="card">
-      <h3>${editingEntry ? 'עריכת רישום שעות' : 'הוספה ידנית / תיקון רישום'}</h3>
-      <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">לתיקון רישום ישן או הוספת יום שלם בבת אחת — הזינו תאריך, שעת התחלה ושעת סיום.</p>
-      <form id="addHoursForm">
-        <div class="emp-row-form">
-          <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${editingEntry ? editingEntry.date : todayStr()}" required /></div>
-        </div>
-        <div class="emp-row-form" style="margin-top:14px;">
-          <div class="field"><label>משעה</label><input type="time" id="hoursStart" value="${editingEntry ? editingEntry.start || '' : ''}" required /></div>
-          <div class="field"><label>עד שעה</label><input type="time" id="hoursEnd" value="${editingEntry ? editingEntry.end || '' : ''}" required /></div>
-        </div>
-        <div class="mono" id="computedHoursPreview" style="margin-top:12px; font-size:15px; color:var(--brass-dark);"></div>
-        <div class="error-msg" id="addHoursErr"></div>
-        <div class="actions" style="justify-content:flex-start;">
-          <button type="submit" class="btn brass">${editingEntry ? 'עדכון שינויים' : 'הוספה'}</button>
-          ${editingEntry ? '<button type="button" class="btn ghost" id="cancelEditHours">ביטול</button>' : ''}
-        </div>
-      </form>
+      <div class="collapsible-header" id="manualToggleHeader" style="${editingEntry ? 'cursor:default;' : ''}">
+        <h3 style="margin:0;">${editingEntry ? 'עריכת רישום שעות' : 'הוספה ידנית / תיקון רישום'}</h3>
+        ${editingEntry ? '' : `<span class="chevron">${state._manualOpen ? '▲' : '▼'}</span>`}
+      </div>
+      ${(editingEntry || state._manualOpen) ? `
+      <div style="margin-top:14px;">
+        <p class="hint" style="margin-top:0; margin-bottom:16px; font-size:13px;">לתיקון רישום ישן או הוספת יום שלם בבת אחת — הזינו תאריך, שעת התחלה ושעת סיום.</p>
+        <form id="addHoursForm">
+          <div class="emp-row-form">
+            <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${editingEntry ? editingEntry.date : todayStr()}" required /></div>
+          </div>
+          <div class="emp-row-form" style="margin-top:14px;">
+            <div class="field"><label>משעה</label><input type="time" id="hoursStart" value="${editingEntry ? editingEntry.start || '' : ''}" required /></div>
+            <div class="field"><label>עד שעה</label><input type="time" id="hoursEnd" value="${editingEntry ? editingEntry.end || '' : ''}" required /></div>
+          </div>
+          <div class="mono" id="computedHoursPreview" style="margin-top:12px; font-size:15px; color:var(--brass-dark);"></div>
+          <div class="error-msg" id="addHoursErr"></div>
+          <div class="actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn brass">${editingEntry ? 'עדכון שינויים' : 'הוספה'}</button>
+            ${editingEntry ? '<button type="button" class="btn ghost" id="cancelEditHours">ביטול</button>' : ''}
+          </div>
+        </form>
+      </div>
+      ` : ''}
     </div>
     ${editingEntry ? '' : `
     <div class="card">
@@ -1482,57 +1500,68 @@ async function renderEmployeeDashboard(emp, editingId){
   }
 
 
+  const excelToggleHeader = document.getElementById('excelToggleHeader');
+  if(excelToggleHeader){
+    excelToggleHeader.onclick = () => { state._excelOpen = !state._excelOpen; renderEmployeeDashboard(emp); };
+  }
+  const manualToggleHeader = document.getElementById('manualToggleHeader');
+  if(manualToggleHeader && !editingEntry){
+    manualToggleHeader.onclick = () => { state._manualOpen = !state._manualOpen; renderEmployeeDashboard(emp); };
+  }
+
   const dateInput = document.getElementById('hoursDate');
   const startInput = document.getElementById('hoursStart');
   const endInput = document.getElementById('hoursEnd');
-  const preview = document.getElementById('computedHoursPreview');
-  function updatePreview(){
-    const h = computeHoursFromRange(startInput.value, endInput.value);
-    preview.textContent = h !== null ? ('סה"כ: ' + fmtHours(h) + ' שעות') : '';
-  }
-  startInput.oninput = updatePreview;
-  endInput.oninput = updatePreview;
-  updatePreview();
-  dateInput.onchange = () => { startInput.focus(); if(startInput.showPicker){ try{ startInput.showPicker(); }catch(e){} } };
-
-  const cancelBtn = document.getElementById('cancelEditHours');
-  if(cancelBtn) cancelBtn.onclick = () => renderEmployeeDashboard(emp);
-
-  document.getElementById('addHoursForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const date = document.getElementById('hoursDate').value;
-    const start = startInput.value;
-    const end = endInput.value;
-    const errEl = document.getElementById('addHoursErr');
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    const hoursVal = computeHoursFromRange(start, end);
-    if(!date || hoursVal === null || hoursVal <= 0){ errEl.textContent = 'יש להזין תאריך, שעת התחלה ושעת סיום תקינים'; return; }
-    if(hoursVal > 24){ errEl.textContent = 'טווח השעות ארוך מ-24 שעות, בדקו את השעות שהוזנו'; return; }
-    const entryMonth = date.slice(0,7);
-    errEl.style.color = '';
-    errEl.textContent = '';
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'שומר...';
-    const fresh = await loadHours(emp.id);
-
-    if(editingEntry){
-      // remove the old entry from whichever month it was in (it may change if the date changed)
-      const oldMonth = editingEntry.date.slice(0,7);
-      if(fresh[oldMonth]) fresh[oldMonth] = fresh[oldMonth].filter(x => x.id !== editingEntry.id);
-      if(!fresh[entryMonth]) fresh[entryMonth] = [];
-      fresh[entryMonth].push({ id: editingEntry.id, date, start, end, breaks: editingEntry.breaks || [] });
-    } else {
-      if(!fresh[entryMonth]) fresh[entryMonth] = [];
-      fresh[entryMonth].push({ id: uid(), date, start, end, breaks: [] });
+  if(dateInput && startInput && endInput){
+    const preview = document.getElementById('computedHoursPreview');
+    function updatePreview(){
+      const h = computeHoursFromRange(startInput.value, endInput.value);
+      preview.textContent = h !== null ? ('סה"כ: ' + fmtHours(h) + ' שעות') : '';
     }
+    startInput.oninput = updatePreview;
+    endInput.oninput = updatePreview;
+    updatePreview();
+    dateInput.onchange = () => { startInput.focus(); if(startInput.showPicker){ try{ startInput.showPicker(); }catch(e){} } };
 
-    const ok = await saveHours(emp.id, fresh);
-    submitBtn.disabled = false;
-    submitBtn.textContent = editingEntry ? 'עדכון שינויים' : 'הוספה';
-    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
-    if(entryMonth !== month){ state._empMonth = entryMonth; }
-    renderEmployeeDashboard(emp);
-  };
+    const cancelBtn = document.getElementById('cancelEditHours');
+    if(cancelBtn) cancelBtn.onclick = () => renderEmployeeDashboard(emp);
+
+    document.getElementById('addHoursForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const date = document.getElementById('hoursDate').value;
+      const start = startInput.value;
+      const end = endInput.value;
+      const errEl = document.getElementById('addHoursErr');
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      const hoursVal = computeHoursFromRange(start, end);
+      if(!date || hoursVal === null || hoursVal <= 0){ errEl.textContent = 'יש להזין תאריך, שעת התחלה ושעת סיום תקינים'; return; }
+      if(hoursVal > 24){ errEl.textContent = 'טווח השעות ארוך מ-24 שעות, בדקו את השעות שהוזנו'; return; }
+      const entryMonth = date.slice(0,7);
+      errEl.style.color = '';
+      errEl.textContent = '';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'שומר...';
+      const fresh = await loadHours(emp.id);
+
+      if(editingEntry){
+        // remove the old entry from whichever month it was in (it may change if the date changed)
+        const oldMonth = editingEntry.date.slice(0,7);
+        if(fresh[oldMonth]) fresh[oldMonth] = fresh[oldMonth].filter(x => x.id !== editingEntry.id);
+        if(!fresh[entryMonth]) fresh[entryMonth] = [];
+        fresh[entryMonth].push({ id: editingEntry.id, date, start, end, breaks: editingEntry.breaks || [] });
+      } else {
+        if(!fresh[entryMonth]) fresh[entryMonth] = [];
+        fresh[entryMonth].push({ id: uid(), date, start, end, breaks: [] });
+      }
+
+      const ok = await saveHours(emp.id, fresh);
+      submitBtn.disabled = false;
+      submitBtn.textContent = editingEntry ? 'עדכון שינויים' : 'הוספה';
+      if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+      if(entryMonth !== month){ state._empMonth = entryMonth; }
+      renderEmployeeDashboard(emp);
+    };
+  }
   document.querySelectorAll('[data-edit-entry]').forEach(btn => {
     btn.onclick = () => renderEmployeeDashboard(emp, btn.dataset.editEntry);
   });
