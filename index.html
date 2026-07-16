@@ -730,6 +730,16 @@ function escapeHtml(s){
 function hhmm(t){
   return t ? t.slice(0,5) : t;
 }
+// Cleans up a manually-typed time value: strips invisible RTL/LTR direction marks that
+// mobile keyboards sometimes insert around digits in an RTL page, then validates the format.
+// Returns a clean "HH:MM:SS" string, or null if the value isn't a valid time.
+function sanitizeTimeInput(raw){
+  if(!raw) return null;
+  let v = raw.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\s]/g, '');
+  if(/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) v += ':00';
+  if(!/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(v)) return null;
+  return v;
+}
 
 // Custom confirm modal (replaces native confirm() so we can style/animate the message)
 function showConfirmModal(message){
@@ -1288,12 +1298,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       <h3>כרטיס נוכחות היום</h3>
       ${!openEntry ? `
         <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">לחצו כשאתם מגיעים לעבודה — את שעת הסיום תעדכנו בנפרד בסוף היום.</p>
-        <form id="clockInForm">
+        <form id="clockInForm" novalidate>
           <div class="emp-row-form">
             <div class="field">
               <label>שעת הגעה</label>
               <div style="display:flex; gap:8px;">
-                <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockInTime" value="${nowTimeStr()}" required style="flex:1;" />
+                <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockInTime" value="${nowTimeStr()}" required style="flex:1; direction:ltr; text-align:left;" dir="ltr" />
                 <button type="button" class="btn ghost small" id="clockInNowBtn">עכשיו</button>
               </div>
             </div>
@@ -1331,12 +1341,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           }
         </div>
         ${!onBreak ? `
-          <form id="clockOutForm" style="margin-top:18px; border-top:1px solid var(--line); padding-top:16px;">
+          <form id="clockOutForm" novalidate style="margin-top:18px; border-top:1px solid var(--line); padding-top:16px;">
             <div class="emp-row-form">
               <div class="field">
                 <label>שעת סיום</label>
                 <div style="display:flex; gap:8px;">
-                  <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockOutTime" value="${nowTimeStr()}" required style="flex:1;" />
+                  <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockOutTime" value="${nowTimeStr()}" required style="flex:1; direction:ltr; text-align:left;" dir="ltr" />
                   <button type="button" class="btn ghost small" id="clockOutNowBtn">עכשיו</button>
                 </div>
               </div>
@@ -1450,10 +1460,10 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   if(clockInForm){
     clockInForm.onsubmit = async (e) => {
       e.preventDefault();
-      const startTime = document.getElementById('clockInTime').value;
+      const startTime = sanitizeTimeInput(document.getElementById('clockInTime').value);
       const errEl = document.getElementById('clockInErr');
       const submitBtn = e.target.querySelector('button[type="submit"]');
-      if(!startTime){ errEl.textContent = 'יש להזין שעת הגעה'; return; }
+      if(!startTime){ errEl.textContent = 'פורמט השעה לא תקין — השתמשו בכפתור "עכשיו" או הזינו בפורמט שעה:דקה'; return; }
       submitBtn.disabled = true;
       submitBtn.textContent = 'שומר...';
       const fresh = await loadHours(emp.id);
@@ -1514,10 +1524,10 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   if(clockOutForm){
     clockOutForm.onsubmit = async (e) => {
       e.preventDefault();
-      const endTime = document.getElementById('clockOutTime').value;
+      const endTime = sanitizeTimeInput(document.getElementById('clockOutTime').value);
       const errEl = document.getElementById('clockOutErr');
       const submitBtn = e.target.querySelector('button[type="submit"]');
-      if(!endTime){ errEl.textContent = 'יש להזין שעת סיום'; return; }
+      if(!endTime){ errEl.textContent = 'פורמט השעה לא תקין — השתמשו בכפתור "עכשיו" או הזינו בפורמט שעה:דקה'; return; }
       submitBtn.disabled = true;
       submitBtn.textContent = 'שומר...';
       const fresh = await loadHours(emp.id);
