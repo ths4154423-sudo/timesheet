@@ -485,6 +485,29 @@ function startLiveTimer(sinceTimeStr){
   update();
   liveTimerInterval = setInterval(update, 1000);
 }
+
+// Keeps a time-input field (like "arrival time") showing the real current time live,
+// so the user never has to refresh the page. Stops updating the moment the user touches it themselves.
+let clockFieldIntervals = [];
+function stopClockFieldTimers(){
+  clockFieldIntervals.forEach(id => clearInterval(id));
+  clockFieldIntervals = [];
+}
+function bindLiveTimeField(inputId){
+  const el = document.getElementById(inputId);
+  if(!el) return;
+  let userEdited = false;
+  const markEdited = () => { userEdited = true; };
+  el.addEventListener('input', markEdited);
+  el.addEventListener('focus', markEdited);
+  const id = setInterval(() => {
+    if(userEdited){ clearInterval(id); return; }
+    const stillThere = document.getElementById(inputId);
+    if(!stillThere){ clearInterval(id); return; }
+    stillThere.value = hhmm(nowTimeStr());
+  }, 1000);
+  clockFieldIntervals.push(id);
+}
 async function init(){
   app.innerHTML = '<div class="empty-state">טוען...</div>';
   state.employees = await loadEmployees();
@@ -1190,6 +1213,7 @@ async function renderAdminSettings(){
 // ---------- EMPLOYEE DASHBOARD ----------
 async function renderEmployeeDashboard(emp, editingId, useCache){
   stopLiveTimer();
+  stopClockFieldTimers();
   state.currentEmployee = emp;
   setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
   const month = state._empMonth || currentMonthStr();
@@ -1254,7 +1278,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">לחצו כשאתם מגיעים לעבודה — את שעת הסיום תעדכנו בנפרד בסוף היום.</p>
         <form id="clockInForm">
           <div class="emp-row-form">
-            <div class="field"><label>שעת הגעה</label><input type="time" id="clockInTime" value="${nowTimeStr()}" required /></div>
+            <div class="field"><label>שעת הגעה</label><input type="time" id="clockInTime" value="${hhmm(nowTimeStr())}" required /></div>
           </div>
           <div class="error-msg" id="clockInErr"></div>
           <div class="actions" style="justify-content:flex-start;">
@@ -1291,7 +1315,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         ${!onBreak ? `
           <form id="clockOutForm" style="margin-top:18px; border-top:1px solid var(--line); padding-top:16px;">
             <div class="emp-row-form">
-              <div class="field"><label>שעת סיום</label><input type="time" id="clockOutTime" value="${nowTimeStr()}" required /></div>
+              <div class="field"><label>שעת סיום</label><input type="time" id="clockOutTime" value="${hhmm(nowTimeStr())}" required /></div>
             </div>
             <div class="error-msg" id="clockOutErr"></div>
             <div class="actions" style="justify-content:flex-start;">
@@ -1382,7 +1406,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     `}
   `;
 
-  document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); state.currentEmployee = null; clearSession(); renderLanding(); };
+  document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopClockFieldTimers(); state.currentEmployee = null; clearSession(); renderLanding(); };
   const empMonthPicker = document.getElementById('empMonthPicker');
   if(empMonthPicker){
     empMonthPicker.onchange = (e) => {
@@ -1397,6 +1421,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 
   // ---- clock-in ----
   const clockInForm = document.getElementById('clockInForm');
+  bindLiveTimeField('clockInTime');
   if(clockInForm){
     clockInForm.onsubmit = async (e) => {
       e.preventDefault();
@@ -1459,6 +1484,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 
   // ---- clock-out ----
   const clockOutForm = document.getElementById('clockOutForm');
+  bindLiveTimeField('clockOutTime');
   if(clockOutForm){
     clockOutForm.onsubmit = async (e) => {
       e.preventDefault();
