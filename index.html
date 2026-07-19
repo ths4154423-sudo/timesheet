@@ -486,6 +486,49 @@ function startLiveTimer(sinceTimeStr){
   liveTimerInterval = setInterval(update, 1000);
 }
 
+// Live "earnings so far" ticker for the current open work session (hourly employees only).
+// Naturally freezes during a break: elapsed-since-clockin and elapsed-since-break-start grow
+// at the same rate, so their difference (net worked time) stays constant while on break.
+let liveMoneyInterval = null;
+function stopLiveMoneyTimer(){
+  if(liveMoneyInterval){ clearInterval(liveMoneyInterval); liveMoneyInterval = null; }
+}
+function startLiveMoneyTimer(emp, openEntry, onBreak, lastBreak){
+  stopLiveMoneyTimer();
+  const el = document.getElementById('liveMoney');
+  if(!el || emp.payType === 'fixed') return;
+  function secOfDay(t){
+    const [h, m, s] = t.split(':').map(Number);
+    return h*3600 + m*60 + (s || 0);
+  }
+  const startSec = secOfDay(openEntry.start);
+  const completedBreaksSec = (openEntry.breaks || []).reduce((sum, b) => {
+    if(!b.end) return sum;
+    let bs = secOfDay(b.start), be = secOfDay(b.end);
+    if(be < bs) be += 24*3600;
+    return sum + (be - bs);
+  }, 0);
+  function update(){
+    const target = document.getElementById('liveMoney');
+    if(!target){ stopLiveMoneyTimer(); return; }
+    const now = new Date();
+    const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+    let totalElapsed = nowSec - startSec;
+    if(totalElapsed < 0) totalElapsed += 24*3600;
+    let ongoingBreakSec = 0;
+    if(onBreak && lastBreak){
+      let diff = nowSec - secOfDay(lastBreak.start);
+      if(diff < 0) diff += 24*3600;
+      ongoingBreakSec = diff;
+    }
+    const workSec = Math.max(0, totalElapsed - completedBreaksSec - ongoingBreakSec);
+    const money = (workSec / 3600) * emp.rate;
+    target.textContent = '₪' + money.toLocaleString('he-IL', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  update();
+  liveMoneyInterval = setInterval(update, 1000);
+}
+
 // Keeps a time-input field (like "arrival time") showing the real current time live,
 // so the user never has to refresh the page. Stops updating the moment the user touches it themselves.
 let clockFieldIntervals = [];
@@ -1235,6 +1278,7 @@ async function renderAdminSettings(){
 // ---------- EMPLOYEE DASHBOARD ----------
 async function renderEmployeeDashboard(emp, editingId, useCache){
   stopLiveTimer();
+  stopLiveMoneyTimer();
   stopClockFieldTimers();
   state.currentEmployee = emp;
   setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
@@ -1320,6 +1364,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
             <div id="liveTimer" class="mono" style="font-size:32px; color:var(--brass-dark);">00:00:00</div>
             <div style="color:var(--muted); font-size:12px;">${onBreak ? 'זמן הפסקה רץ' : 'זמן עבודה רץ'}</div>
           </div>
+          ${emp.payType !== 'fixed' ? `
+            <div style="margin-inline-start:auto; text-align:left;">
+              <div id="liveMoney" class="mono" style="font-size:32px; color:var(--brass-dark);">₪0.00</div>
+              <div style="color:var(--muted); font-size:12px;">הרווחת עד כה</div>
+            </div>
+          ` : ''}
         </div>
         ${(openEntry.breaks && openEntry.breaks.length) ? `
           <div class="table-scroll" style="margin:12px 0;">
@@ -1434,7 +1484,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     `}
   `;
 
-  document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopClockFieldTimers(); state.currentEmployee = null; clearSession(); renderLanding(); };
+  document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); state.currentEmployee = null; clearSession(); renderLanding(); };
   const empMonthPicker = document.getElementById('empMonthPicker');
   if(empMonthPicker){
     empMonthPicker.onchange = (e) => {
@@ -1445,6 +1495,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 
   if(!editingEntry && openEntry){
     startLiveTimer(onBreak ? lastBreak.start : openEntry.start);
+    startLiveMoneyTimer(emp, openEntry, onBreak, lastBreak);
   }
 
   // ---- clock-in ----
