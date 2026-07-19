@@ -293,6 +293,60 @@ function fmtHours(n){
 }
 function uid(){ return Math.random().toString(36).slice(2,10); }
 
+// ---------- sound effects (synthesized, no external audio files) ----------
+let audioCtx = null;
+function getAudioCtx(){
+  try{
+    if(!audioCtx){ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }catch(e){ return null; }
+}
+function playTone(ctx, freq, startTime, duration, type, gain){
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  g.gain.setValueAtTime(0, startTime);
+  g.gain.linearRampToValueAtTime(gain, startTime + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+  osc.connect(g).connect(ctx.destination);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.02);
+}
+function playChaChing(){
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    playTone(ctx, 1568, now, 0.12, 'triangle', 0.25);
+    playTone(ctx, 2093, now + 0.07, 0.2, 'triangle', 0.22);
+    const bufferSize = Math.floor(ctx.sampleRate * 0.15);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i = 0; i < bufferSize; i++){ data[i] = (Math.random()*2 - 1) * (1 - i/bufferSize); }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 4000;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.09, now + 0.05);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+    noise.connect(filter).connect(noiseGain).connect(ctx.destination);
+    noise.start(now + 0.05);
+  }catch(e){ /* ignore audio errors */ }
+}
+function playSuccessChime(){
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    playTone(ctx, 880, now, 0.12, 'sine', 0.22);
+    playTone(ctx, 1318.5, now + 0.09, 0.2, 'sine', 0.22);
+  }catch(e){ /* ignore audio errors */ }
+}
+
 // ---------- session persistence (survives page refresh) ----------
 function saveSession(session){
   try{ localStorage.setItem('timesheet_session', JSON.stringify(session)); }catch(e){}
@@ -919,6 +973,7 @@ function showDaySummaryModal(entry, emp){
     </div>
   `;
   document.body.appendChild(overlay);
+  if(money !== null) playChaChing();
   const close = () => overlay.remove();
   overlay.querySelector('#daySummaryClose').onclick = close;
   overlay.onclick = (e) => { if(e.target === overlay) close(); };
@@ -1640,6 +1695,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       fresh[tm].push({ id: uid(), date: todayStr(), start: startTime, end: null, breaks: [] });
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
+      playSuccessChime();
       if(month !== tm) state._empMonth = tm;
       renderEmployeeDashboard(emp, null, fresh);
     };
@@ -1710,6 +1766,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       entry.end = endTime;
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
+      playSuccessChime();
       renderEmployeeDashboard(emp, null, fresh);
     };
   }
