@@ -215,6 +215,21 @@
     animation: blink-text 1s ease-in-out infinite;
   }
   .confirm-box .actions{ justify-content:center; margin-top:0; }
+  .bills-wrap{ display:flex; flex-wrap:wrap; justify-content:center; gap:14px; margin-top:6px; }
+  .bill-group{ display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .bill-chip{
+    width:76px; height:38px; border-radius:6px; color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:14px;
+    box-shadow:0 2px 3px rgba(0,0,0,.2); border:1px solid rgba(255,255,255,.35);
+  }
+  .coin-chip{
+    width:44px; height:44px; border-radius:50%; color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:11px;
+    box-shadow:0 2px 3px rgba(0,0,0,.2); border:1px solid rgba(255,255,255,.35);
+  }
+  .bill-count{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -813,6 +828,75 @@ function showConfirmModal(message){
     overlay.querySelector('#confirmNo').onclick = () => cleanup(false);
     overlay.onclick = (e) => { if(e.target === overlay) cleanup(false); };
   });
+}
+
+// Breaks an amount (in ₪) down into real Israeli bill/coin denominations.
+// Works in whole agorot internally to avoid floating point rounding issues.
+function billBreakdown(amountShekels){
+  let cents = Math.round(amountShekels * 100);
+  const denoms = [
+    { cents: 20000, label: '₪200', bill: true,  color: '#7A3B63' },
+    { cents: 10000, label: '₪100', bill: true,  color: '#C97A2B' },
+    { cents: 5000,  label: '₪50',  bill: true,  color: '#4C8C6B' },
+    { cents: 2000,  label: '₪20',  bill: true,  color: '#3B6EA5' },
+    { cents: 1000,  label: '₪10',  bill: false, color: '#B08D57' },
+    { cents: 500,   label: '₪5',   bill: false, color: '#9AA5AE' },
+    { cents: 200,   label: '₪2',   bill: false, color: '#9AA5AE' },
+    { cents: 100,   label: '₪1',   bill: false, color: '#C7A85B' },
+    { cents: 50,    label: '50 אג׳', bill: false, color: '#B7C0C7' },
+    { cents: 10,    label: '10 אג׳', bill: false, color: '#C7A85B' },
+  ];
+  const result = [];
+  for(const d of denoms){
+    const count = Math.floor(cents / d.cents);
+    if(count > 0){
+      result.push({ ...d, count });
+      cents -= count * d.cents;
+    }
+  }
+  return result;
+}
+function billsHtml(amountShekels){
+  const parts = billBreakdown(amountShekels);
+  if(parts.length === 0) return `<p class="hint">₪0</p>`;
+  return `<div class="bills-wrap">` + parts.map(p => {
+    const shape = p.bill
+      ? `<div class="bill-chip" style="background:${p.color};">${p.label}</div>`
+      : `<div class="coin-chip" style="background:${p.color};">${p.label}</div>`;
+    return `<div class="bill-group">${shape}${p.count > 1 ? `<div class="bill-count">×${p.count}</div>` : ''}</div>`;
+  }).join('') + `</div>`;
+}
+function showDaySummaryModal(entry, emp){
+  const hours = computeEntryHours(entry);
+  const money = (emp.payType !== 'fixed' && hours !== null) ? hours * emp.rate : null;
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = `
+    <div class="confirm-box" style="max-width:420px; text-align:center;">
+      <h3 style="margin:0 0 4px;">${entry.date}</h3>
+      <p class="hint" style="margin:0 0 18px;">${entry.start ? (hhmm(entry.start) + ' – ' + (entry.end ? hhmm(entry.end) : '...')) : ''}</p>
+      <div style="display:flex; justify-content:center; gap:28px; margin-bottom:20px;">
+        <div>
+          <div class="mono" style="font-size:26px; color:var(--brass-dark);">${hours !== null ? fmtHours(hours) : '—'}</div>
+          <div class="hint" style="font-size:12px;">שעות עבודה</div>
+        </div>
+        ${money !== null ? `
+          <div>
+            <div class="mono" style="font-size:26px; color:var(--brass-dark);">${fmtMoney(money)}</div>
+            <div class="hint" style="font-size:12px;">סה"כ הרווחת</div>
+          </div>
+        ` : ''}
+      </div>
+      ${money !== null ? billsHtml(money) : ''}
+      <div class="actions" style="justify-content:center; margin-top:20px;">
+        <button type="button" class="btn ghost" id="daySummaryClose">סגירה</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#daySummaryClose').onclick = close;
+  overlay.onclick = (e) => { if(e.target === overlay) close(); };
 }
 
 function avatarHtml(emp, size){
@@ -1482,6 +1566,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
                   ${emp.payType !== 'fixed' ? `<td class="mono">${h !== null ? fmtMoney(h * emp.rate) : '—'}</td>` : ''}
                   <td>
                     <div class="row-actions">
+                      ${h !== null ? `<button class="btn ghost small" data-view-entry="${e.id}">הצגה</button>` : ''}
                       <button class="btn ghost small" data-edit-entry="${e.id}">עריכה</button>
                       <button class="btn danger" data-del-entry="${e.id}">מחיקה</button>
                     </div>
@@ -1749,6 +1834,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       renderEmployeeDashboard(emp, null, fresh);
     };
   }
+  document.querySelectorAll('[data-view-entry]').forEach(btn => {
+    btn.onclick = () => {
+      const entry = entries.find(e => e.id === btn.dataset.viewEntry);
+      if(entry) showDaySummaryModal(entry, emp);
+    };
+  });
   document.querySelectorAll('[data-edit-entry]').forEach(btn => {
     btn.onclick = () => renderEmployeeDashboard(emp, btn.dataset.editEntry, true);
   });
