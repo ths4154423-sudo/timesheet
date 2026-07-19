@@ -346,6 +346,25 @@ function playSuccessChime(){
     playTone(ctx, 1318.5, now + 0.09, 0.2, 'sine', 0.22);
   }catch(e){ /* ignore audio errors */ }
 }
+function speakWorkdayGreeting(name){
+  try{
+    if(!('speechSynthesis' in window)) return;
+    const utter = new SpeechSynthesisUtterance(`${name}, עבודה נעימה ותצליח להביא כמה שיותר מתוכים`);
+    utter.lang = 'he-IL';
+    utter.rate = 1;
+    const speakNow = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const heVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('he'));
+      if(heVoice) utter.voice = heVoice;
+      window.speechSynthesis.speak(utter);
+    };
+    if(window.speechSynthesis.getVoices().length === 0){
+      window.speechSynthesis.addEventListener('voiceschanged', speakNow, { once: true });
+    }else{
+      speakNow();
+    }
+  }catch(e){ /* ignore speech errors */ }
+}
 
 // ---------- session persistence (survives page refresh) ----------
 function saveSession(session){
@@ -1696,6 +1715,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
       playSuccessChime();
+      speakWorkdayGreeting(emp.name);
       if(month !== tm) state._empMonth = tm;
       renderEmployeeDashboard(emp, null, fresh);
     };
