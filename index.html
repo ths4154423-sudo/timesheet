@@ -1468,7 +1468,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         ${entries.length === 0 ? '<div class="empty-state">אין עדיין רישומי שעות לחודש זה.</div>' : `
         <div class="table-scroll">
           <table>
-            <thead><tr><th>תאריך</th><th>טווח שעות</th><th>הפסקות</th><th>סה"כ שעות</th><th></th></tr></thead>
+            <thead><tr><th>תאריך</th><th>טווח שעות</th><th>הפסקות</th><th>סה"כ שעות</th>${emp.payType !== 'fixed' ? '<th>סה"כ להרוויח</th>' : ''}<th></th></tr></thead>
             <tbody>
               ${entries.map(e => {
                 const h = computeEntryHours(e);
@@ -1479,6 +1479,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
                   <td class="mono">${e.start ? (hhmm(e.start) + ' – ' + (e.end ? hhmm(e.end) : '...')) : '—'}</td>
                   <td class="mono">${breaksCount > 0 ? breaksCount + ' הפסקות' : '—'}</td>
                   <td class="mono">${h !== null ? fmtHours(h) : '<span class="pill hourly">בעבודה</span>'}</td>
+                  ${emp.payType !== 'fixed' ? `<td class="mono">${h !== null ? fmtMoney(h * emp.rate) : '—'}</td>` : ''}
                   <td>
                     <div class="row-actions">
                       <button class="btn ghost small" data-edit-entry="${e.id}">עריכה</button>
