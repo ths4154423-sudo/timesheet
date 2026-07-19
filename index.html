@@ -156,6 +156,16 @@
     animation: hourglass-flip 4s ease-in-out infinite;
     filter: drop-shadow(0 1px 1px rgba(0,0,0,.15));
   }
+  @keyframes coin-spin{
+    0%{ transform:rotateY(0deg); }
+    100%{ transform:rotateY(360deg); }
+  }
+  .coin-spin{
+    display:inline-block;
+    font-size:30px;
+    animation: coin-spin 1.4s linear infinite;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.15));
+  }
   .timer-row{ display:flex; align-items:center; gap:16px; margin-bottom:14px; }
   .collapsible-header{ display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
   .collapsible-header .chevron{ color:var(--brass-dark); font-size:14px; transition:transform .15s ease; }
@@ -1365,9 +1375,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
             <div style="color:var(--muted); font-size:12px;">${onBreak ? 'זמן הפסקה רץ' : 'זמן עבודה רץ'}</div>
           </div>
           ${emp.payType !== 'fixed' ? `
-            <div style="margin-inline-start:auto; text-align:left;">
-              <div id="liveMoney" class="mono" style="font-size:32px; color:var(--brass-dark);">₪0.00</div>
-              <div style="color:var(--muted); font-size:12px;">הרווחת עד כה</div>
+            <div style="margin-inline-start:auto; display:flex; align-items:center; gap:16px;">
+              <div style="text-align:left;">
+                <div id="liveMoney" class="mono" style="font-size:32px; color:var(--brass-dark);">₪0.00</div>
+                <div style="color:var(--muted); font-size:12px;">הרווחת עד כה</div>
+              </div>
+              <span class="coin-spin">🪙</span>
             </div>
           ` : ''}
         </div>
