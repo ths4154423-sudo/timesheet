@@ -219,6 +219,32 @@
   .bill-group{ display:flex; flex-direction:column; align-items:center; gap:4px; }
   .bill-group svg{ filter: drop-shadow(0 2px 3px rgba(0,0,0,.25)); }
   .bill-count{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); }
+
+  /* Post-login welcome splash */
+  .welcome-overlay{
+    position:fixed; inset:0; background:rgba(10,20,30,.82);
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    z-index:2000; padding:24px;
+  }
+  .welcome-text{
+    color:#fff; font-family:'Fraunces', serif; font-weight:700; font-size:24px;
+    margin-bottom:20px; text-align:center; max-width:90vw;
+    text-shadow:0 2px 8px rgba(0,0,0,.6);
+  }
+  .welcome-text span{ display:inline-block; animation: letter-dance 1s ease-in-out infinite; }
+  @keyframes letter-dance{
+    0%, 100%{ transform:translateY(0) rotate(0deg); }
+    50%{ transform:translateY(-10px) rotate(-5deg); }
+  }
+  .welcome-overlay img{
+    max-width:88vw; max-height:65vh; border-radius:12px;
+    box-shadow:0 10px 40px rgba(0,0,0,.55);
+  }
+  .welcome-skip{
+    position:absolute; bottom:14px; left:14px; color:rgba(255,255,255,.6);
+    font-size:11px; cursor:pointer; text-decoration:underline;
+    background:none; border:none; font-family:'Heebo', sans-serif;
+  }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -352,12 +378,12 @@ function speakHebrew(text){
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = 'he-IL';
     utter.rate = 1;
-    utter.pitch = 0.75; // deeper pitch for a more masculine-sounding voice
+    utter.pitch = 0.55; // notably deeper, to push toward a masculine-sounding tone
     const speakNow = () => {
       const voices = window.speechSynthesis.getVoices();
       const heVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('he'));
-      let voice = heVoices.find(v => /male/i.test(v.name) && !/female/i.test(v.name));
-      if(!voice) voice = heVoices.find(v => !/female/i.test(v.name));
+      let voice = heVoices.find(v => /(male|man|^m\b)/i.test(v.name) && !/female|woman/i.test(v.name));
+      if(!voice) voice = heVoices.find(v => !/female|woman/i.test(v.name));
       if(!voice) voice = heVoices[0];
       if(voice) utter.voice = voice;
       window.speechSynthesis.speak(utter);
@@ -841,14 +867,21 @@ function renderEmployeeLogin(){
   if(back) back.onclick = renderLanding;
   const form = document.getElementById('empLoginForm');
   if(form){
-    form.onsubmit = (e) => {
+    form.onsubmit = async (e) => {
       e.preventDefault();
       const empId = document.getElementById('empSelect').value;
       const pin = document.getElementById('empPinInput').value;
       const emp = state.employees.find(x => x.id === empId);
       if(emp && emp.pin === pin){
         saveSession({ role: 'employee', empId: emp.id });
-        renderEmployeeDashboard(emp);
+        const hoursData = await loadHours(emp.id);
+        const todayEntries = hoursData[currentMonthStr()] || [];
+        const alreadyStarted = !!findOpenEntryToday(todayEntries);
+        if(alreadyStarted){
+          renderEmployeeDashboard(emp, null, hoursData);
+        }else{
+          showWelcomeSplash(emp, () => renderEmployeeDashboard(emp, null, hoursData));
+        }
       }else{
         document.getElementById('empErr').textContent = 'קוד אישי שגוי';
       }
@@ -967,6 +1000,33 @@ function billsHtml(amountShekels){
     const shape = p.bill ? billSvg(p.value, p.color, p.colorLight) : coinSvg(p.value, p.gold);
     return `<div class="bill-group">${shape}${p.count > 1 ? `<div class="bill-count">×${p.count}</div>` : ''}</div>`;
   }).join('') + `</div>`;
+}
+function showWelcomeSplash(emp, onDone){
+  try{
+    const overlay = document.createElement('div');
+    overlay.className = 'welcome-overlay';
+    const text = 'וזכרת כי הוא הנותן לך כח לעשות חיל';
+    const lettersHtml = text.split('').map((ch, i) => {
+      const shown = ch === ' ' ? '&nbsp;' : escapeHtml(ch);
+      return `<span style="animation-delay:${(i * 0.06).toFixed(2)}s">${shown}</span>`;
+    }).join('');
+    overlay.innerHTML = `
+      <div class="welcome-text">${lettersHtml}</div>
+      <img src="welcome.jpg" alt="" />
+      <button type="button" class="welcome-skip" id="welcomeSkip">דילוג</button>
+    `;
+    document.body.appendChild(overlay);
+    let finished = false;
+    const timer = setTimeout(finish, 6000);
+    function finish(){
+      if(finished) return;
+      finished = true;
+      clearTimeout(timer);
+      overlay.remove();
+      onDone();
+    }
+    overlay.querySelector('#welcomeSkip').onclick = finish;
+  }catch(e){ onDone(); }
 }
 function showDaySummaryModal(entry, emp){
   const hours = computeEntryHours(entry);
@@ -1791,7 +1851,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
       playSuccessChime();
-      speakHebrew(`${emp.name}, מעריכים אותך על העבודה, ערב טוב`);
+      speakHebrew(`${emp.name}, מעריכים אוֹתְךָ על העבודה, ערב טוב`);
       renderEmployeeDashboard(emp, null, fresh);
     };
   }
