@@ -346,16 +346,20 @@ function playSuccessChime(){
     playTone(ctx, 1318.5, now + 0.09, 0.2, 'sine', 0.22);
   }catch(e){ /* ignore audio errors */ }
 }
-function speakWorkdayGreeting(name){
+function speakHebrew(text){
   try{
     if(!('speechSynthesis' in window)) return;
-    const utter = new SpeechSynthesisUtterance(`${name}, עבודה נעימה ותצליח להביא כמה שיותר מתוכים`);
+    const utter = new SpeechSynthesisUtterance(text);
     utter.lang = 'he-IL';
     utter.rate = 1;
+    utter.pitch = 0.75; // deeper pitch for a more masculine-sounding voice
     const speakNow = () => {
       const voices = window.speechSynthesis.getVoices();
-      const heVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('he'));
-      if(heVoice) utter.voice = heVoice;
+      const heVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('he'));
+      let voice = heVoices.find(v => /male/i.test(v.name) && !/female/i.test(v.name));
+      if(!voice) voice = heVoices.find(v => !/female/i.test(v.name));
+      if(!voice) voice = heVoices[0];
+      if(voice) utter.voice = voice;
       window.speechSynthesis.speak(utter);
     };
     if(window.speechSynthesis.getVoices().length === 0){
@@ -1715,7 +1719,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
       playSuccessChime();
-      speakWorkdayGreeting(emp.name);
+      speakHebrew(`${emp.name}, בוקר טוב, שיהיה בעזרת השם יום מוצלח`);
       if(month !== tm) state._empMonth = tm;
       renderEmployeeDashboard(emp, null, fresh);
     };
@@ -1787,6 +1791,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
       playSuccessChime();
+      speakHebrew(`${emp.name}, מעריכים אותך על העבודה, ערב טוב`);
       renderEmployeeDashboard(emp, null, fresh);
     };
   }
