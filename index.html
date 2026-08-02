@@ -645,6 +645,23 @@ function startLiveMoneyTimer(emp, openEntry, onBreak, lastBreak){
   liveMoneyInterval = setInterval(update, 1000);
 }
 
+// Watches the clock while the employee is on break / paused, so that if 20:00 arrives while the tab
+// stays open, we re-render immediately and let the auto-close logic in renderEmployeeDashboard kick in
+// (rather than waiting for the employee to manually refresh or click something).
+let breakWatchdogInterval = null;
+function stopBreakWatchdog(){
+  if(breakWatchdogInterval){ clearInterval(breakWatchdogInterval); breakWatchdogInterval = null; }
+}
+function startBreakWatchdog(emp){
+  stopBreakWatchdog();
+  breakWatchdogInterval = setInterval(() => {
+    if(new Date().getHours() >= 20){
+      stopBreakWatchdog();
+      renderEmployeeDashboard(emp, null, true);
+    }
+  }, 15000);
+}
+
 // Keeps a time-input field (like "arrival time") showing the real current time live,
 // so the user never has to refresh the page. Stops updating the moment the user touches it themselves.
 let clockFieldIntervals = [];
@@ -1536,6 +1553,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   stopLiveTimer();
   stopLiveMoneyTimer();
   stopClockFieldTimers();
+  stopBreakWatchdog();
   state.currentEmployee = emp;
   setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
   const month = state._empMonth || currentMonthStr();
@@ -1581,9 +1599,22 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 
   const todayMonth = currentMonthStr();
   const todayEntries = hoursData[todayMonth] || [];
-  const openEntry = findOpenEntryToday(todayEntries);
-  const onBreak = !!(openEntry && openEntry.breaks && openEntry.breaks.length && !openEntry.breaks[openEntry.breaks.length - 1].end);
-  const lastBreak = onBreak ? openEntry.breaks[openEntry.breaks.length - 1] : null;
+  let openEntry = findOpenEntryToday(todayEntries);
+  let onBreak = !!(openEntry && openEntry.breaks && openEntry.breaks.length && !openEntry.breaks[openEntry.breaks.length - 1].end);
+  let lastBreak = onBreak ? openEntry.breaks[openEntry.breaks.length - 1] : null;
+
+  // Auto-close the work day if the employee went on break / paused the day and never came back before 20:00.
+  // The day is ended at the moment the break started, and the break itself is dropped from the record entirely.
+  let autoCloseNotice = null;
+  if(openEntry && onBreak && lastBreak && !editingEntry && new Date().getHours() >= 20){
+    autoCloseNotice = `יום העבודה נסגר אוטומטית בשעה ${hhmm(lastBreak.start)}, מכיוון שלא חזרת עד השעה 20:00. ההפסקה לא תופיע ברישום.`;
+    openEntry.end = lastBreak.start;
+    openEntry.breaks = [];
+    await saveHours(emp.id, hoursData);
+    openEntry = null;
+    onBreak = false;
+    lastBreak = null;
+  }
 
   app.innerHTML = `
     ${editingEntry ? '' : `
@@ -1591,6 +1622,11 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       ${avatarHtml(emp)}
       <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
     </div>
+    ${autoCloseNotice ? `
+    <div class="card" style="border-color:var(--danger); background:#FBEFED;">
+      <p style="margin:0; color:var(--danger); font-size:14px;">⚠️ ${escapeHtml(autoCloseNotice)}</p>
+    </div>
+    ` : ''}
     ${(announcement.image || announcement.caption) ? `
     <div class="card" style="border-color:var(--brass);">
       ${announcement.image ? `<img src="${announcement.image}" style="max-width:100%; border-radius:6px; margin-bottom:${announcement.caption ? '12px' : '0'}; display:block;" />` : ''}
@@ -1624,13 +1660,17 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         </form>
       ` : `
         <p class="hint" style="margin-top:-6px; font-size:14px;">
-          ${onBreak ? `⏸️ בהפסקה מאז <b class="mono">${hhmm(lastBreak.start)}</b>` : `🟢 בעבודה מאז <b class="mono">${hhmm(openEntry.start)}</b>`}
+          ${onBreak
+            ? (lastBreak.type === 'pause'
+                ? `⏸️ יום העבודה מושהה מאז <b class="mono">${hhmm(lastBreak.start)}</b>`
+                : `⏸️ בהפסקה מאז <b class="mono">${hhmm(lastBreak.start)}</b>`)
+            : `🟢 בעבודה מאז <b class="mono">${hhmm(openEntry.start)}</b>`}
         </p>
         <div class="timer-row">
           <span class="hourglass-spin">⏳</span>
           <div>
             <div id="liveTimer" class="mono" style="font-size:32px; color:var(--brass-dark);">00:00:00</div>
-            <div style="color:var(--muted); font-size:12px;">${onBreak ? 'זמן הפסקה רץ' : 'זמן עבודה רץ'}</div>
+            <div style="color:var(--muted); font-size:12px;">${onBreak ? (lastBreak.type === 'pause' ? 'זמן השהיה רץ' : 'זמן הפסקה רץ') : 'זמן עבודה רץ'}</div>
           </div>
           ${emp.payType !== 'fixed' ? `
             <div style="margin-inline-start:auto; display:flex; align-items:center; gap:16px;">
@@ -1654,7 +1694,9 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         ` : ''}
         <div class="actions" style="justify-content:flex-start; margin-top:10px;">
           ${onBreak
-            ? '<button type="button" class="btn brass" id="endBreakBtn">▶️ סיום הפסקה</button>'
+            ? (lastBreak.type === 'pause'
+                ? '<button type="button" class="btn brass" id="endBreakBtn">🔁 המשך יום עבודה</button>'
+                : '<button type="button" class="btn brass" id="endBreakBtn">▶️ סיום הפסקה</button>')
             : '<button type="button" class="btn ghost" id="startBreakBtn">☕ התחלת הפסקה</button>'
           }
         </div>
@@ -1667,8 +1709,9 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
               </div>
             </div>
             <div class="error-msg" id="clockOutErr"></div>
-            <div class="actions" style="justify-content:flex-start;">
+            <div class="actions" style="justify-content:flex-start; gap:10px;">
               <button type="submit" class="btn brass">🔴 סיום יום עבודה</button>
+              <button type="button" class="btn ghost" id="pauseDayBtn">⏸️ סיום יום עבודה בינתיים</button>
             </div>
           </form>
         ` : ''}
@@ -1785,7 +1828,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     `}
   `;
 
-  document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); state.currentEmployee = null; clearSession(); renderLanding(); };
+  document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); renderLanding(); };
   const empMonthPicker = document.getElementById('empMonthPicker');
   if(empMonthPicker){
     empMonthPicker.onchange = (e) => {
@@ -1797,6 +1840,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   if(!editingEntry && openEntry){
     startLiveTimer(onBreak ? lastBreak.start : openEntry.start);
     startLiveMoneyTimer(emp, openEntry, onBreak, lastBreak);
+    if(onBreak) startBreakWatchdog(emp);
   }
 
   // ---- clock-in ----
@@ -1845,9 +1889,11 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     };
   }
 
-  // ---- end break ----
+  // ---- end break / resume paused day ----
   const endBreakBtn = document.getElementById('endBreakBtn');
   if(endBreakBtn){
+    const isPause = onBreak && lastBreak && lastBreak.type === 'pause';
+    const restoreLabel = isPause ? '🔁 המשך יום עבודה' : '▶️ סיום הפסקה';
     endBreakBtn.onclick = async () => {
       endBreakBtn.disabled = true;
       endBreakBtn.textContent = 'שומר...';
@@ -1859,7 +1905,27 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         entry.breaks[entry.breaks.length - 1].end = nowTimeStr();
       }
       const ok = await saveHours(emp.id, fresh);
-      if(ok !== true){ alert('שגיאה בשמירה: ' + ok); endBreakBtn.disabled=false; endBreakBtn.textContent='▶️ סיום הפסקה'; return; }
+      if(ok !== true){ alert('שגיאה בשמירה: ' + ok); endBreakBtn.disabled=false; endBreakBtn.textContent=restoreLabel; return; }
+      renderEmployeeDashboard(emp, null, fresh);
+    };
+  }
+
+  // ---- pause the work day for now (functions just like a break, but flagged so the button reads "resume") ----
+  const pauseDayBtn = document.getElementById('pauseDayBtn');
+  if(pauseDayBtn){
+    pauseDayBtn.onclick = async () => {
+      pauseDayBtn.disabled = true;
+      pauseDayBtn.textContent = 'שומר...';
+      const fresh = await loadHours(emp.id);
+      const tm = currentMonthStr();
+      const list = fresh[tm] || [];
+      const entry = list.find(x => x.id === openEntry.id);
+      if(entry){
+        if(!entry.breaks) entry.breaks = [];
+        entry.breaks.push({ id: uid(), start: nowTimeStr(), end: null, type: 'pause' });
+      }
+      const ok = await saveHours(emp.id, fresh);
+      if(ok !== true){ alert('שגיאה בשמירה: ' + ok); pauseDayBtn.disabled=false; pauseDayBtn.textContent='⏸️ סיום יום עבודה בינתיים'; return; }
       renderEmployeeDashboard(emp, null, fresh);
     };
   }
