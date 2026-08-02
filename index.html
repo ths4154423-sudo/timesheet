@@ -1557,6 +1557,18 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   const totalHours = entries.reduce((s,e) => s + (computeEntryHours(e) || 0), 0);
   const pay = calcPay(emp, totalHours);
   const editingEntry = editingId ? entries.find(e => e.id === editingId) : null;
+  const editKey = editingEntry ? editingEntry.id : 'new';
+  if(state._editBreaksKey !== editKey){
+    state._editBreaksKey = editKey;
+    state._editBreaks = editingEntry ? (editingEntry.breaks || []).map(b => ({...b})) : [];
+    state._formDraft = null;
+  }
+  const editBreaks = state._editBreaks || [];
+  const editingOpenEntry = !!(editingEntry && !editingEntry.end);
+  const formDraft = state._formDraft;
+  const draftDate = formDraft ? formDraft.date : (editingEntry ? editingEntry.date : todayStr());
+  const draftStart = formDraft ? formDraft.start : (editingEntry ? (hhmm(editingEntry.start) || '') : '');
+  const draftEnd = formDraft ? formDraft.end : (editingEntry ? (hhmm(editingEntry.end) || '') : '');
   let announcement;
   if(editingEntry){
     announcement = { image: null, caption: '' };
@@ -1689,16 +1701,44 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       </div>
       ${(editingEntry || state._manualOpen) ? `
       <div style="margin-top:14px;">
-        <p class="hint" style="margin-top:0; margin-bottom:16px; font-size:13px;">לתיקון רישום ישן או הוספת יום שלם בבת אחת — הזינו תאריך, שעת התחלה ושעת סיום.</p>
+        <p class="hint" style="margin-top:0; margin-bottom:16px; font-size:13px;">${editingOpenEntry ? 'ניתן לתקן את שעת ההתחלה. השאירו את "עד שעה" ריק אם עדיין נמצאים באמצע יום העבודה.' : 'לתיקון רישום ישן או הוספת יום שלם בבת אחת — הזינו תאריך, שעת התחלה ושעת סיום.'}</p>
         <form id="addHoursForm">
           <div class="emp-row-form">
-            <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${editingEntry ? editingEntry.date : todayStr()}" required /></div>
+            <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${draftDate}" required /></div>
           </div>
           <div class="emp-row-form" style="margin-top:14px;">
-            <div class="field"><label>משעה</label><input type="time" id="hoursStart" value="${editingEntry ? hhmm(editingEntry.start) || '' : ''}" required /></div>
-            <div class="field"><label>עד שעה</label><input type="time" id="hoursEnd" value="${editingEntry ? hhmm(editingEntry.end) || '' : ''}" required /></div>
+            <div class="field"><label>משעה</label><input type="time" id="hoursStart" value="${draftStart}" required /></div>
+            <div class="field"><label>עד שעה${editingOpenEntry ? ' (אופציונלי)' : ''}</label><input type="time" id="hoursEnd" value="${draftEnd}" ${editingOpenEntry ? '' : 'required'} /></div>
           </div>
           <div class="mono" id="computedHoursPreview" style="margin-top:12px; font-size:15px; color:var(--brass-dark);"></div>
+
+          <div style="margin-top:20px; border-top:1px solid var(--line); padding-top:16px;">
+            <label style="margin-top:0;">הפסקות ביום זה</label>
+            ${editBreaks.length ? `
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>משעה</th><th>עד שעה</th><th>סה"כ</th><th></th></tr></thead>
+                <tbody>
+                  ${editBreaks.map(b => `
+                    <tr>
+                      <td class="mono">${hhmm(b.start) || '—'}</td>
+                      <td class="mono">${b.end ? (hhmm(b.end) || '—') : 'מתמשכת'}</td>
+                      <td class="mono">${b.end ? fmtHours(computeHoursFromRange(b.start, b.end)) + ' שעות' : '—'}</td>
+                      <td><button type="button" class="btn danger" data-del-break="${b.id}">מחיקה</button></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+            ` : '<p class="hint" style="margin-top:6px;">אין הפסקות רשומות ליום זה.</p>'}
+            <div class="emp-row-form" style="margin-top:12px;">
+              <div class="field"><label>תחילת הפסקה</label><input type="time" id="breakStart" /></div>
+              <div class="field"><label>סוף הפסקה</label><input type="time" id="breakEnd" /></div>
+              <div class="field" style="flex:0;"><button type="button" class="btn ghost small" id="addBreakBtn" style="margin-top:0;">הוספת הפסקה</button></div>
+            </div>
+            <div class="error-msg" id="addBreakErr"></div>
+          </div>
+
           <div class="error-msg" id="addHoursErr"></div>
           <div class="actions" style="justify-content:flex-start;">
             <button type="submit" class="btn brass">${editingEntry ? 'עדכון שינויים' : 'הוספה'}</button>
@@ -1945,7 +1985,11 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   }
   const manualToggleHeader = document.getElementById('manualToggleHeader');
   if(manualToggleHeader && !editingEntry){
-    manualToggleHeader.onclick = () => { state._manualOpen = !state._manualOpen; renderEmployeeDashboard(emp, null, true); };
+    manualToggleHeader.onclick = () => {
+      state._manualOpen = !state._manualOpen;
+      if(state._manualOpen){ state._editBreaks = []; state._editBreaksKey = 'new'; state._formDraft = null; }
+      renderEmployeeDashboard(emp, null, true);
+    };
   }
 
   const dateInput = document.getElementById('hoursDate');
@@ -1957,13 +2001,45 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const h = computeHoursFromRange(startInput.value, endInput.value);
       preview.textContent = h !== null ? ('סה"כ: ' + fmtHours(h) + ' שעות') : '';
     }
-    startInput.oninput = updatePreview;
-    endInput.oninput = updatePreview;
+    function saveDraft(){
+      state._formDraft = { date: dateInput.value, start: startInput.value, end: endInput.value };
+    }
+    startInput.oninput = () => { updatePreview(); saveDraft(); };
+    endInput.oninput = () => { updatePreview(); saveDraft(); };
+    dateInput.oninput = saveDraft;
     updatePreview();
-    dateInput.onchange = () => { startInput.focus(); if(startInput.showPicker){ try{ startInput.showPicker(); }catch(e){} } };
+    dateInput.onchange = () => { saveDraft(); startInput.focus(); if(startInput.showPicker){ try{ startInput.showPicker(); }catch(e){} } };
 
     const cancelBtn = document.getElementById('cancelEditHours');
-    if(cancelBtn) cancelBtn.onclick = () => renderEmployeeDashboard(emp, null, true);
+    if(cancelBtn) cancelBtn.onclick = () => {
+      state._editBreaks = []; state._editBreaksKey = 'new'; state._formDraft = null;
+      renderEmployeeDashboard(emp, null, true);
+    };
+
+    const breakStartInput = document.getElementById('breakStart');
+    const breakEndInput = document.getElementById('breakEnd');
+    const addBreakBtn = document.getElementById('addBreakBtn');
+    const breakErrEl = document.getElementById('addBreakErr');
+    if(addBreakBtn){
+      addBreakBtn.onclick = () => {
+        saveDraft();
+        const bStart = breakStartInput.value;
+        const bEnd = breakEndInput.value;
+        breakErrEl.textContent = '';
+        const bHours = computeHoursFromRange(bStart, bEnd);
+        if(!bStart || !bEnd || bHours === null || bHours <= 0){ breakErrEl.textContent = 'יש להזין שעת התחלה ושעת סיום תקינות להפסקה'; return; }
+        if(!state._editBreaks) state._editBreaks = [];
+        state._editBreaks.push({ id: uid(), start: bStart, end: bEnd });
+        renderEmployeeDashboard(emp, editingEntry ? editingEntry.id : null, true);
+      };
+    }
+    document.querySelectorAll('[data-del-break]').forEach(btn => {
+      btn.onclick = () => {
+        saveDraft();
+        state._editBreaks = (state._editBreaks || []).filter(b => b.id !== btn.dataset.delBreak);
+        renderEmployeeDashboard(emp, editingEntry ? editingEntry.id : null, true);
+      };
+    });
 
     document.getElementById('addHoursForm').onsubmit = async (e) => {
       e.preventDefault();
@@ -1973,9 +2049,16 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const errEl = document.getElementById('addHoursErr');
       const submitBtn = e.target.querySelector('button[type="submit"]');
       const hoursVal = computeHoursFromRange(start, end);
-      if(!date || hoursVal === null || hoursVal <= 0){ errEl.textContent = 'יש להזין תאריך, שעת התחלה ושעת סיום תקינים'; return; }
-      if(hoursVal > 24){ errEl.textContent = 'טווח השעות ארוך מ-24 שעות, בדקו את השעות שהוזנו'; return; }
+      if(!date || !start){ errEl.textContent = 'יש להזין תאריך ושעת התחלה תקינים'; return; }
+      if(end){
+        if(hoursVal === null || hoursVal <= 0){ errEl.textContent = 'שעת הסיום שהוזנה אינה תקינה'; return; }
+        if(hoursVal > 24){ errEl.textContent = 'טווח השעות ארוך מ-24 שעות, בדקו את השעות שהוזנו'; return; }
+      } else if(!editingOpenEntry){
+        errEl.textContent = 'יש להזין תאריך, שעת התחלה ושעת סיום תקינים';
+        return;
+      }
       const entryMonth = date.slice(0,7);
+      const breaksToSave = (state._editBreaks || []).map(b => ({...b}));
       errEl.style.color = '';
       errEl.textContent = '';
       submitBtn.disabled = true;
@@ -1987,10 +2070,10 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         const oldMonth = editingEntry.date.slice(0,7);
         if(fresh[oldMonth]) fresh[oldMonth] = fresh[oldMonth].filter(x => x.id !== editingEntry.id);
         if(!fresh[entryMonth]) fresh[entryMonth] = [];
-        fresh[entryMonth].push({ id: editingEntry.id, date, start, end, breaks: editingEntry.breaks || [] });
+        fresh[entryMonth].push({ id: editingEntry.id, date, start, end: end || null, breaks: breaksToSave });
       } else {
         if(!fresh[entryMonth]) fresh[entryMonth] = [];
-        fresh[entryMonth].push({ id: uid(), date, start, end, breaks: [] });
+        fresh[entryMonth].push({ id: uid(), date, start, end, breaks: breaksToSave });
       }
 
       const ok = await saveHours(emp.id, fresh);
@@ -1998,6 +2081,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       submitBtn.textContent = editingEntry ? 'עדכון שינויים' : 'הוספה';
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
       if(entryMonth !== month){ state._empMonth = entryMonth; }
+      state._editBreaks = []; state._editBreaksKey = 'new'; state._formDraft = null;
       renderEmployeeDashboard(emp, null, fresh);
     };
   }
