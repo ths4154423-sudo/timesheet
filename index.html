@@ -1707,13 +1707,13 @@ async function renderAdminSettings(){
         3) תחת "Account" &gt; "API Keys" מצאו את ה-Public Key. אם משאירים את הרשימה של חשבונות שולחים ריקה, העובדים ימשיכו לראות רק את אפשרות פתיחת טיוטת המייל הרגילה.
       </p>
       <form id="emailjsConfigForm">
-        <div class="field"><label>Public Key</label><input type="text" id="emailjsPublicKey" value="${escapeHtml(draft.publicKey)}" dir="ltr" style="text-align:left;" /></div>
-        <div class="field"><label>Template ID</label><input type="text" id="emailjsTemplateId" value="${escapeHtml(draft.templateId)}" dir="ltr" style="text-align:left;" /></div>
+        <div class="field"><label>Public Key</label><input type="text" id="emailjsPublicKey" value="${escapeHtml(draft.publicKey)}" dir="ltr" style="text-align:left;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
+        <div class="field"><label>Template ID</label><input type="text" id="emailjsTemplateId" value="${escapeHtml(draft.templateId)}" dir="ltr" style="text-align:left;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
         <label style="margin-top:18px;">חשבונות שולחים</label>
         ${draft.senders.length ? draft.senders.map(s => `
           <div class="emp-row-form" style="margin-top:8px; align-items:flex-end;">
             <div class="field" style="margin-top:0;"><label>שם לתצוגה</label><input type="text" data-sender-label="${s.id}" value="${escapeHtml(s.label || '')}" placeholder="למשל: משרד ראשי" /></div>
-            <div class="field" style="margin-top:0;"><label>Service ID</label><input type="text" data-sender-service="${s.id}" value="${escapeHtml(s.serviceId || '')}" dir="ltr" style="text-align:left;" placeholder="service_xxxxxxx" /></div>
+            <div class="field" style="margin-top:0;"><label>Service ID</label><input type="text" data-sender-service="${s.id}" value="${escapeHtml(s.serviceId || '')}" dir="ltr" style="text-align:left;" placeholder="service_xxxxxxx" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
             <div class="field" style="flex:0 0 auto; margin-top:0;"><button type="button" class="btn danger" data-remove-sender="${s.id}">הסרה</button></div>
           </div>
         `).join('') : '<p class="hint" style="margin-top:6px;">עדיין לא נוספו חשבונות שולחים — העובדים יראו רק את אפשרות פתיחת טיוטת המייל הרגילה.</p>'}
