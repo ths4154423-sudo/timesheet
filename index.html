@@ -455,6 +455,19 @@ async function saveAnnouncement(image, caption){
     return true;
   }catch(e){ console.error('saveAnnouncement error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
 }
+// ---------- manager contact email (destination for employees' "send my hours" emails) ----------
+async function loadManagerEmail(){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'contact')), 12000, 'loadManagerEmail');
+    return snap.exists() ? (snap.data().managerEmail || '') : '';
+  }catch(e){ console.error('loadManagerEmail error', e); return ''; }
+}
+async function saveManagerEmail(managerEmail){
+  try{
+    await withTimeout(setDoc(doc(db, 'meta', 'contact'), { managerEmail }), 12000, 'saveManagerEmail');
+    return true;
+  }catch(e){ console.error('saveManagerEmail error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
 // ---------- per-employee settings (extensible: add new keys to EMPLOYEE_SETTINGS_DEFS below) ----------
 async function loadSettings(empId){
   try{
@@ -580,6 +593,29 @@ function computeEntryHours(entry){
 function findOpenEntryToday(entries){
   const t = todayStr();
   return entries.find(e => e.date === t && !e.end) || null;
+}
+// Builds a plain-text hours report for the "email my hours to the manager" feature.
+function buildHoursEmailBody(emp, month, entries, totalHours, pay){
+  const lines = [];
+  lines.push(`דוח שעות עבודה — ${emp.name}`);
+  lines.push(`חודש: ${monthLabel(month)}`);
+  lines.push('');
+  if(!entries.length){
+    lines.push('(אין רישומי שעות בחודש זה)');
+  } else {
+    entries.forEach(e => {
+      const h = computeEntryHours(e);
+      const closedBreaks = (e.breaks || []).filter(b => b.end);
+      const breaksTxt = closedBreaks.length
+        ? ` | הפסקות: ${closedBreaks.map(b => hhmm(b.start) + '-' + hhmm(b.end)).join(', ')}`
+        : '';
+      lines.push(`${e.date} | ${hhmm(e.start)}–${e.end ? hhmm(e.end) : 'פתוח'} | ${h !== null ? fmtHours(h) + ' שעות' : '—'}${breaksTxt}`);
+    });
+  }
+  lines.push('');
+  lines.push(`סה"כ שעות: ${fmtHours(totalHours)}`);
+  lines.push(`סה"כ לתשלום: ${fmtMoney(pay)}`);
+  return lines.join('\n');
 }
 
 // ---------- Excel import helpers ----------
@@ -1529,6 +1565,7 @@ async function renderAdminSettings(){
   const content = document.getElementById('tabContent');
   content.innerHTML = `<div class="empty-state">טוען...</div>`;
   const announcement = await loadAnnouncement();
+  const managerEmail = await loadManagerEmail();
   content.innerHTML = `
     <div class="card">
       <h3>שינוי סיסמת מנהל</h3>
@@ -1548,6 +1585,19 @@ async function renderAdminSettings(){
         אם תשכחו את הסיסמה, לחצו "שכחת סיסמה?" במסך הכניסה — יישלח מייל אמיתי לכתובת
         <b>${escapeHtml(state.adminEmail || '')}</b> עם קישור לקביעת סיסמה חדשה. אין צורך בהגדרה נוספת.
       </p>
+    </div>
+    <div class="card">
+      <h3>כתובת אימייל לקבלת דוחות שעות</h3>
+      <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
+        כשעובד לוחץ "שליחת השעות למנהל באימייל" בדשבורד שלו, זו הכתובת שתופיע כנמען. אפשר להשאיר ריק כדי לבטל את האפשרות אצל העובדים.
+      </p>
+      <form id="managerEmailForm">
+        <div class="field"><label>כתובת אימייל</label><input type="email" id="managerEmailInput" value="${escapeHtml(managerEmail)}" placeholder="${escapeHtml(state.adminEmail || 'name@example.com')}" /></div>
+        <div class="error-msg" id="managerEmailErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">שמירת כתובת</button>
+        </div>
+      </form>
     </div>
     <div class="card">
       <h3>הודעה לעובדים</h3>
@@ -1608,6 +1658,22 @@ async function renderAdminSettings(){
     errEl.style.color = '#2F5233';
     errEl.textContent = 'ההודעה נשמרה בהצלחה';
     renderAdminSettings();
+  };
+  document.getElementById('managerEmailForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('managerEmailErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const val = document.getElementById('managerEmailInput').value.trim();
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const ok = await saveManagerEmail(val);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'שמירת כתובת';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    errEl.style.color = '#2F5233';
+    errEl.textContent = 'הכתובת נשמרה בהצלחה';
   };
   document.getElementById('changePassForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -1735,6 +1801,9 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     <div class="readout">
       <div class="digit-block"><div class="num mono">${fmtHours(totalHours)}</div><div class="lbl">סה"כ שעות החודש</div></div>
       <div class="digit-block"><div class="num mono">${fmtMoney(pay)}</div><div class="lbl">סה"כ לתשלום</div></div>
+    </div>
+    <div class="actions" style="justify-content:flex-start; margin-top:-8px; margin-bottom:18px;">
+      <button type="button" class="btn ghost small" id="emailHoursBtn">📧 שליחת השעות למנהל באימייל</button>
     </div>
 
     <div class="card">
@@ -1925,6 +1994,26 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 
   document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); renderLanding(); };
   document.getElementById('settingsBtn').onclick = () => renderEmployeeSettings(emp);
+
+  const emailHoursBtn = document.getElementById('emailHoursBtn');
+  if(emailHoursBtn){
+    emailHoursBtn.onclick = async () => {
+      const originalLabel = emailHoursBtn.textContent;
+      emailHoursBtn.disabled = true;
+      emailHoursBtn.textContent = 'מכין...';
+      const managerEmail = await loadManagerEmail();
+      emailHoursBtn.disabled = false;
+      emailHoursBtn.textContent = originalLabel;
+      if(!managerEmail){
+        alert('לא הוגדרה כתובת אימייל לקבלת דוחות שעות. יש לבקש מהמנהל להגדיר אותה במסך "הגדרות" שלו.');
+        return;
+      }
+      const subject = `דוח שעות עבודה – ${emp.name} – ${monthLabel(month)}`;
+      const body = buildHoursEmailBody(emp, month, entries, totalHours, pay);
+      const mailtoUrl = `mailto:${managerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = mailtoUrl;
+    };
+  }
   const empMonthPicker = document.getElementById('empMonthPicker');
   if(empMonthPicker){
     empMonthPicker.onchange = (e) => {
