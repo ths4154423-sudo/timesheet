@@ -1150,7 +1150,7 @@ function showSendHoursModal(ctx){
             subject,
             message: body,
             employee_name: emp.name
-          }, emailjsConfig.publicKey);
+          }, { publicKey: emailjsConfig.publicKey });
           autoBtn.textContent = '✓ נשלח בהצלחה';
           setTimeout(cleanup, 1200);
         }catch(err){
