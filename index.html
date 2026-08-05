@@ -453,6 +453,26 @@ async function saveAnnouncement(image, caption){
     return true;
   }catch(e){ console.error('saveAnnouncement error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
 }
+// ---------- per-employee settings (extensible: add new keys to EMPLOYEE_SETTINGS_DEFS below) ----------
+async function loadSettings(empId){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'settings', empId)), 12000, 'loadSettings');
+    return snap.exists() ? snap.data() : {};
+  }catch(e){ console.error('loadSettings error', e); return {}; }
+}
+async function saveSettings(empId, data){
+  try{
+    await withTimeout(setDoc(doc(db, 'settings', empId), data), 12000, 'saveSettings');
+    return true;
+  }catch(e){ console.error('saveSettings error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
+// Cache so we don't hit the network on every dashboard render — only refreshed on employee switch or explicit save.
+async function getEmpSettings(empId){
+  if(state._settingsCache && state._settingsCache.empId === empId) return state._settingsCache.settings;
+  const settings = await loadSettings(empId);
+  state._settingsCache = { empId, settings };
+  return settings;
+}
 
 function calcPay(emp, hoursTotal){
   if(emp.payType === 'fixed'){ return emp.rate; }
@@ -1555,7 +1575,8 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   stopClockFieldTimers();
   stopBreakWatchdog();
   state.currentEmployee = emp;
-  setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
+  const empSettings = await getEmpSettings(emp.id);
+  setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="btn ghost small" id="logoutBtn">יציאה</button>');
   const month = state._empMonth || currentMonthStr();
 
   const passedFresh = useCache && typeof useCache === 'object' ? useCache : null;
@@ -1829,6 +1850,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   `;
 
   document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); renderLanding(); };
+  document.getElementById('settingsBtn').onclick = () => renderEmployeeSettings(emp);
   const empMonthPicker = document.getElementById('empMonthPicker');
   if(empMonthPicker){
     empMonthPicker.onchange = (e) => {
@@ -1862,8 +1884,10 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       fresh[tm].push({ id: uid(), date: todayStr(), start: startTime, end: null, breaks: [] });
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
-      playSuccessChime();
-      speakHebrew(`${emp.name}, בוקר טוב, שיהיה בעזרת השם יום מוצלח`);
+      if(!(empSettings.muteOpeningAnnouncement ?? false)){
+        playSuccessChime();
+        speakHebrew(`${emp.name}, בוקר טוב, שיהיה בעזרת השם יום מוצלח`);
+      }
       if(month !== tm) state._empMonth = tm;
       renderEmployeeDashboard(emp, null, fresh);
     };
@@ -2168,6 +2192,69 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       fresh[month] = (fresh[month] || []).filter(e => e.id !== btn.dataset.delEntry);
       await saveHours(emp.id, fresh);
       renderEmployeeDashboard(emp, null, fresh);
+    };
+  });
+}
+
+// ---------- EMPLOYEE SETTINGS ----------
+// To add a new setting later: just add another entry to this array — the screen below
+// renders a checkbox for every entry automatically, no other code changes needed.
+const EMPLOYEE_SETTINGS_DEFS = [
+  {
+    key: 'muteOpeningAnnouncement',
+    label: 'השתקת הודעת הפתיחה',
+    hint: 'לא ישמעו הצליל וההודעה הקולית ("בוקר טוב...") בעת התחלת יום עבודה.',
+    default: false
+  }
+];
+
+async function renderEmployeeSettings(emp){
+  stopLiveTimer();
+  stopLiveMoneyTimer();
+  stopClockFieldTimers();
+  stopBreakWatchdog();
+  setHeader('הגדרות', '<button class="btn ghost small" id="settingsBackBtn">חזרה</button>');
+  const settings = await getEmpSettings(emp.id);
+
+  app.innerHTML = `
+    <div class="avatar-row" style="margin-bottom:16px;">
+      ${avatarHtml(emp)}
+      <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
+    </div>
+    <div class="card">
+      <h3>הגדרות אישיות</h3>
+      ${EMPLOYEE_SETTINGS_DEFS.map(def => `
+        <label style="display:flex; align-items:flex-start; gap:10px; margin-top:${def === EMPLOYEE_SETTINGS_DEFS[0] ? '0' : '18px'}; cursor:pointer;">
+          <input type="checkbox" id="setting_${def.key}" data-setting-key="${def.key}" ${ (settings[def.key] ?? def.default) ? 'checked' : '' } style="margin-top:3px; width:18px; height:18px; flex-shrink:0;" />
+          <span>
+            <span style="display:block; font-weight:600;">${escapeHtml(def.label)}</span>
+            ${def.hint ? `<span class="hint" style="display:block; margin-top:2px; font-size:13px;">${escapeHtml(def.hint)}</span>` : ''}
+          </span>
+        </label>
+      `).join('')}
+      <div class="error-msg" id="settingsErr" style="margin-top:16px;"></div>
+      <p class="hint" id="settingsSavedMsg" style="margin-top:12px; font-size:13px; display:none; color:var(--brass-dark);">✓ נשמר</p>
+    </div>
+  `;
+
+  document.getElementById('settingsBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
+
+  EMPLOYEE_SETTINGS_DEFS.forEach(def => {
+    const checkbox = document.getElementById('setting_' + def.key);
+    checkbox.onchange = async () => {
+      const errEl = document.getElementById('settingsErr');
+      const savedMsg = document.getElementById('settingsSavedMsg');
+      savedMsg.style.display = 'none';
+      errEl.textContent = '';
+      checkbox.disabled = true;
+      const updated = { ...settings, [def.key]: checkbox.checked };
+      const ok = await saveSettings(emp.id, updated);
+      checkbox.disabled = false;
+      if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; checkbox.checked = !checkbox.checked; return; }
+      state._settingsCache = { empId: emp.id, settings: updated };
+      settings[def.key] = checkbox.checked;
+      savedMsg.style.display = 'block';
+      setTimeout(() => { const m = document.getElementById('settingsSavedMsg'); if(m) m.style.display = 'none'; }, 2000);
     };
   });
 }
