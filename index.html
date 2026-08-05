@@ -610,7 +610,7 @@ function findOpenEntryToday(entries){
   return entries.find(e => e.date === t && !e.end) || null;
 }
 // Builds a plain-text hours report for the "email my hours to the manager" feature.
-function buildHoursEmailBody(emp, month, entries, totalHours, pay){
+function buildHoursEmailBody(emp, month, entries, totalHours, pay, includePay){
   const lines = [];
   lines.push(`חודש: ${monthLabel(month)}`);
   lines.push('');
@@ -628,17 +628,19 @@ function buildHoursEmailBody(emp, month, entries, totalHours, pay){
   }
   lines.push('');
   lines.push(`סה"כ שעות: ${fmtHours(totalHours)}`);
-  // Deliberately using the Hebrew letters ש"ח instead of the ₪ symbol: a number followed by plain
-  // Hebrew text is the normal, always-safe RTL pattern. The ₪ symbol's Unicode bidi class is a
-  // "European Terminator", which some mail clients render in an unpredictable position next to
-  // a number inside an RTL paragraph — spelling it out in Hebrew avoids that class of bug entirely.
-  const payStr = pay.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-  lines.push(`סה"כ לתשלום: ${payStr} ש"ח`);
+  if(includePay){
+    // Deliberately using the Hebrew letters ש"ח instead of the ₪ symbol: a number followed by plain
+    // Hebrew text is the normal, always-safe RTL pattern. The ₪ symbol's Unicode bidi class is a
+    // "European Terminator", which some mail clients render in an unpredictable position next to
+    // a number inside an RTL paragraph — spelling it out in Hebrew avoids that class of bug entirely.
+    const payStr = pay.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    lines.push(`סה"כ לתשלום: ${payStr} ש"ח`);
+  }
   return lines.join('\n');
 }
 // Same report, but as a clean styled HTML table — used only for the automatic EmailJS send
 // (the mailto draft still uses the plain-text version above, since mail apps show that as-typed).
-function buildHoursEmailHtml(emp, month, entries, totalHours, pay){
+function buildHoursEmailHtml(emp, month, entries, totalHours, pay, includePay){
   const payStr = pay.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const rowsHtml = entries.length ? entries.map(e => {
     const h = computeEntryHours(e);
@@ -679,10 +681,12 @@ function buildHoursEmailHtml(emp, month, entries, totalHours, pay){
           <td style="padding:8px 10px; text-align:right;">סה"כ שעות</td>
           <td style="padding:8px 10px; text-align:right; font-weight:700;">${escapeHtml(fmtHours(totalHours))}</td>
         </tr>
+        ${includePay ? `
         <tr>
           <td style="padding:8px 10px; text-align:right;">סה"כ לתשלום</td>
           <td style="padding:8px 10px; text-align:right; font-weight:700;">${escapeHtml(payStr)} ש"ח</td>
         </tr>
+        ` : ''}
       </table>
     </div>`;
 }
@@ -1151,8 +1155,6 @@ function showSendHoursModal(ctx){
     const senders = (emailjsConfig && emailjsConfig.senders) || [];
     const canAutoSend = !!(emailjsConfig && emailjsConfig.publicKey && emailjsConfig.templateId && senders.length && window.emailjs);
     const subject = `דוח שעות עבודה – ${emp.name} – ${monthLabel(month)}`;
-    const body = buildHoursEmailBody(emp, month, entries, totalHours, pay);
-    const htmlBody = buildHoursEmailHtml(emp, month, entries, totalHours, pay);
 
     const overlay = document.createElement('div');
     overlay.className = 'confirm-overlay';
@@ -1160,6 +1162,10 @@ function showSendHoursModal(ctx){
       <div class="confirm-box" style="max-width:400px;">
         <h3 style="margin-top:0;">שליחת דוח שעות</h3>
         <p class="hint" style="font-size:13.5px; margin-top:-6px;">${monthLabel(month)} · ${escapeHtml(emp.name)}</p>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:14px; cursor:pointer; text-align:right;">
+          <input type="checkbox" id="includePaySend" checked style="width:17px; height:17px;" />
+          לכלול גם את הסכום הכולל לתשלום (לא רק שעות)
+        </label>
         ${canAutoSend ? `
           <div class="field" style="margin-top:14px; text-align:right;">
             <label>שליחה מחשבון</label>
@@ -1183,8 +1189,10 @@ function showSendHoursModal(ctx){
     const cleanup = () => { overlay.remove(); resolve(); };
     overlay.onclick = (e) => { if(e.target === overlay) cleanup(); };
     overlay.querySelector('#cancelSendBtn').onclick = cleanup;
+    const includePay = () => overlay.querySelector('#includePaySend').checked;
 
     overlay.querySelector('#mailtoSendBtn').onclick = () => {
+      const body = buildHoursEmailBody(emp, month, entries, totalHours, pay, includePay());
       const mailtoUrl = `mailto:${managerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.location.href = mailtoUrl;
       cleanup();
@@ -1195,6 +1203,7 @@ function showSendHoursModal(ctx){
       const errEl = overlay.querySelector('#sendHoursErr');
       autoBtn.onclick = async () => {
         const serviceId = overlay.querySelector('#senderSelect').value;
+        const htmlBody = buildHoursEmailHtml(emp, month, entries, totalHours, pay, includePay());
         errEl.textContent = '';
         autoBtn.disabled = true;
         const originalLabel = autoBtn.textContent;
