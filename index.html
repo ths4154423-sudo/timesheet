@@ -249,6 +249,7 @@
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -455,18 +456,32 @@ async function saveAnnouncement(image, caption){
     return true;
   }catch(e){ console.error('saveAnnouncement error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
 }
-// ---------- manager contact email (destination for employees' "send my hours" emails) ----------
-async function loadManagerEmail(){
+// ---------- manager contact + automatic email sending config (shared "meta/contact" doc) ----------
+async function loadContactConfig(){
   try{
-    const snap = await withTimeout(getDoc(doc(db, 'meta', 'contact')), 12000, 'loadManagerEmail');
-    return snap.exists() ? (snap.data().managerEmail || '') : '';
-  }catch(e){ console.error('loadManagerEmail error', e); return ''; }
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'contact')), 12000, 'loadContactConfig');
+    return snap.exists() ? snap.data() : {};
+  }catch(e){ console.error('loadContactConfig error', e); return {}; }
+}
+async function saveContactConfig(partial){
+  try{
+    await withTimeout(setDoc(doc(db, 'meta', 'contact'), partial, { merge: true }), 12000, 'saveContactConfig');
+    return true;
+  }catch(e){ console.error('saveContactConfig error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
+async function loadManagerEmail(){
+  const cfg = await loadContactConfig();
+  return cfg.managerEmail || '';
 }
 async function saveManagerEmail(managerEmail){
-  try{
-    await withTimeout(setDoc(doc(db, 'meta', 'contact'), { managerEmail }), 12000, 'saveManagerEmail');
-    return true;
-  }catch(e){ console.error('saveManagerEmail error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+  return saveContactConfig({ managerEmail });
+}
+async function loadEmailjsConfig(){
+  const cfg = await loadContactConfig();
+  return cfg.emailjs || { publicKey: '', templateId: '', senders: [] };
+}
+async function saveEmailjsConfig(emailjsConfig){
+  return saveContactConfig({ emailjs: emailjsConfig });
 }
 // ---------- per-employee settings (extensible: add new keys to EMPLOYEE_SETTINGS_DEFS below) ----------
 async function loadSettings(empId){
@@ -1074,6 +1089,81 @@ function showConfirmModal(message){
   });
 }
 
+// Lets the employee pick how to send their hours report: automatically via a manager-configured
+// EmailJS sender account (if any are set up), or by opening a regular mailto draft as a fallback.
+function showSendHoursModal(ctx){
+  return new Promise(resolve => {
+    const { emp, month, entries, totalHours, pay, managerEmail, emailjsConfig } = ctx;
+    const senders = (emailjsConfig && emailjsConfig.senders) || [];
+    const canAutoSend = !!(emailjsConfig && emailjsConfig.publicKey && emailjsConfig.templateId && senders.length && window.emailjs);
+    const subject = `דוח שעות עבודה – ${emp.name} – ${monthLabel(month)}`;
+    const body = buildHoursEmailBody(emp, month, entries, totalHours, pay);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML = `
+      <div class="confirm-box" style="max-width:400px;">
+        <h3 style="margin-top:0;">שליחת דוח שעות</h3>
+        <p class="hint" style="font-size:13.5px; margin-top:-6px;">${monthLabel(month)} · ${escapeHtml(emp.name)}</p>
+        ${canAutoSend ? `
+          <div class="field" style="margin-top:14px; text-align:right;">
+            <label>שליחה מחשבון</label>
+            <select id="senderSelect" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:4px; background:var(--paper); color:var(--ink); font-family:'Heebo',sans-serif; font-size:15px;">
+              ${senders.map(s => `<option value="${escapeHtml(s.serviceId)}">${escapeHtml(s.label)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="actions" style="justify-content:center; margin-top:16px;">
+            <button type="button" class="btn brass" id="autoSendBtn" style="padding:10px 22px;">🚀 שליחה אוטומטית</button>
+          </div>
+          <p class="hint" style="font-size:12.5px; margin-top:14px; margin-bottom:0;">או לחלופין:</p>
+        ` : ''}
+        <div class="error-msg" id="sendHoursErr" style="margin-top:10px;"></div>
+        <div class="actions" style="justify-content:center; flex-wrap:wrap; margin-top:${canAutoSend ? '4px' : '14px'};">
+          <button type="button" class="btn ghost" id="mailtoSendBtn">📧 פתיחת טיוטת מייל</button>
+          <button type="button" class="btn ghost" id="cancelSendBtn">ביטול</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const cleanup = () => { overlay.remove(); resolve(); };
+    overlay.onclick = (e) => { if(e.target === overlay) cleanup(); };
+    overlay.querySelector('#cancelSendBtn').onclick = cleanup;
+
+    overlay.querySelector('#mailtoSendBtn').onclick = () => {
+      const mailtoUrl = `mailto:${managerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = mailtoUrl;
+      cleanup();
+    };
+
+    if(canAutoSend){
+      const autoBtn = overlay.querySelector('#autoSendBtn');
+      const errEl = overlay.querySelector('#sendHoursErr');
+      autoBtn.onclick = async () => {
+        const serviceId = overlay.querySelector('#senderSelect').value;
+        errEl.textContent = '';
+        autoBtn.disabled = true;
+        const originalLabel = autoBtn.textContent;
+        autoBtn.textContent = 'שולח...';
+        try{
+          await window.emailjs.send(serviceId, emailjsConfig.templateId, {
+            to_email: managerEmail,
+            subject,
+            message: body,
+            employee_name: emp.name
+          }, emailjsConfig.publicKey);
+          autoBtn.textContent = '✓ נשלח בהצלחה';
+          setTimeout(cleanup, 1200);
+        }catch(err){
+          console.error('emailjs send error', err);
+          errEl.textContent = 'שליחה נכשלה: ' + ((err && err.text) || (err && err.message) || 'שגיאה לא ידועה');
+          autoBtn.disabled = false;
+          autoBtn.textContent = originalLabel;
+        }
+      };
+    }
+  });
+}
+
 // Breaks an amount (in ₪) down into real Israeli bill/coin denominations.
 // Works in whole agorot internally to avoid floating point rounding issues.
 function billBreakdown(amountShekels){
@@ -1566,6 +1656,15 @@ async function renderAdminSettings(){
   content.innerHTML = `<div class="empty-state">טוען...</div>`;
   const announcement = await loadAnnouncement();
   const managerEmail = await loadManagerEmail();
+  const emailjsConfig = await loadEmailjsConfig();
+  if(!state._emailjsDraft){
+    state._emailjsDraft = {
+      publicKey: emailjsConfig.publicKey || '',
+      templateId: emailjsConfig.templateId || '',
+      senders: (emailjsConfig.senders || []).map(s => ({ ...s }))
+    };
+  }
+  const draft = state._emailjsDraft;
   content.innerHTML = `
     <div class="card">
       <h3>שינוי סיסמת מנהל</h3>
@@ -1589,13 +1688,41 @@ async function renderAdminSettings(){
     <div class="card">
       <h3>כתובת אימייל לקבלת דוחות שעות</h3>
       <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
-        כשעובד לוחץ "שליחת השעות למנהל באימייל" בדשבורד שלו, זו הכתובת שתופיע כנמען. אפשר להשאיר ריק כדי לבטל את האפשרות אצל העובדים.
+        כשעובד שולח דוח שעות, זו הכתובת שתופיע כנמען. אפשר להשאיר ריק כדי לבטל את האפשרות אצל העובדים.
       </p>
       <form id="managerEmailForm">
         <div class="field"><label>כתובת אימייל</label><input type="email" id="managerEmailInput" value="${escapeHtml(managerEmail)}" placeholder="${escapeHtml(state.adminEmail || 'name@example.com')}" /></div>
         <div class="error-msg" id="managerEmailErr"></div>
         <div class="actions" style="justify-content:flex-start;">
           <button type="submit" class="btn brass">שמירת כתובת</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h3>שליחה אוטומטית של דוחות שעות (EmailJS)</h3>
+      <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
+        זו אפשרות מתקדמת: העובדים ישלחו את דוח השעות ישירות מהאתר, בלי לפתוח אפליקציית מייל, ויוכלו לבחור מבין חשבונות השליחה שתגדירו כאן.
+        דורש חשבון חינמי ב-<b>emailjs.com</b>. הגדרה חד-פעמית: 1) בחשבון ה-EmailJS, תחת "Email Services", חברו חשבון מייל אחד לכל "שולח" שתרצו שיופיע לעובדים, ורשמו לכל אחד את ה-Service ID שלו.
+        2) תחת "Email Templates" צרו תבנית אחת (משותפת לכולם) עם המשתנים <code>{{to_email}}</code>, <code>{{subject}}</code>, <code>{{message}}</code> ו-<code>{{employee_name}}</code> בגוף התבנית, ורשמו את ה-Template ID.
+        3) תחת "Account" &gt; "API Keys" מצאו את ה-Public Key. אם משאירים את הרשימה של חשבונות שולחים ריקה, העובדים ימשיכו לראות רק את אפשרות פתיחת טיוטת המייל הרגילה.
+      </p>
+      <form id="emailjsConfigForm">
+        <div class="field"><label>Public Key</label><input type="text" id="emailjsPublicKey" value="${escapeHtml(draft.publicKey)}" dir="ltr" style="text-align:left;" /></div>
+        <div class="field"><label>Template ID</label><input type="text" id="emailjsTemplateId" value="${escapeHtml(draft.templateId)}" dir="ltr" style="text-align:left;" /></div>
+        <label style="margin-top:18px;">חשבונות שולחים</label>
+        ${draft.senders.length ? draft.senders.map(s => `
+          <div class="emp-row-form" style="margin-top:8px; align-items:flex-end;">
+            <div class="field" style="margin-top:0;"><label>שם לתצוגה</label><input type="text" data-sender-label="${s.id}" value="${escapeHtml(s.label || '')}" placeholder="למשל: משרד ראשי" /></div>
+            <div class="field" style="margin-top:0;"><label>Service ID</label><input type="text" data-sender-service="${s.id}" value="${escapeHtml(s.serviceId || '')}" dir="ltr" style="text-align:left;" placeholder="service_xxxxxxx" /></div>
+            <div class="field" style="flex:0 0 auto; margin-top:0;"><button type="button" class="btn danger" data-remove-sender="${s.id}">הסרה</button></div>
+          </div>
+        `).join('') : '<p class="hint" style="margin-top:6px;">עדיין לא נוספו חשבונות שולחים — העובדים יראו רק את אפשרות פתיחת טיוטת המייל הרגילה.</p>'}
+        <div class="actions" style="justify-content:flex-start; margin-top:12px;">
+          <button type="button" class="btn ghost small" id="addSenderBtn">+ הוספת חשבון שולח</button>
+        </div>
+        <div class="error-msg" id="emailjsErr" style="margin-top:12px;"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">שמירת הגדרות שליחה</button>
         </div>
       </form>
     </div>
@@ -1675,6 +1802,53 @@ async function renderAdminSettings(){
     errEl.style.color = '#2F5233';
     errEl.textContent = 'הכתובת נשמרה בהצלחה';
   };
+
+  // Keeps the in-memory draft (state._emailjsDraft) in sync with whatever the admin has typed so far,
+  // so adding/removing a sender row (which re-renders this whole tab) never loses unsaved edits.
+  function syncEmailjsDraftFromInputs(){
+    const pk = document.getElementById('emailjsPublicKey');
+    const tid = document.getElementById('emailjsTemplateId');
+    if(pk) draft.publicKey = pk.value.trim();
+    if(tid) draft.templateId = tid.value.trim();
+    draft.senders.forEach(s => {
+      const labelEl = document.querySelector(`[data-sender-label="${s.id}"]`);
+      const svcEl = document.querySelector(`[data-sender-service="${s.id}"]`);
+      if(labelEl) s.label = labelEl.value.trim();
+      if(svcEl) s.serviceId = svcEl.value.trim();
+    });
+  }
+  document.getElementById('addSenderBtn').onclick = () => {
+    syncEmailjsDraftFromInputs();
+    draft.senders.push({ id: uid(), label: '', serviceId: '' });
+    renderAdminSettings();
+  };
+  document.querySelectorAll('[data-remove-sender]').forEach(btn => {
+    btn.onclick = () => {
+      syncEmailjsDraftFromInputs();
+      draft.senders = draft.senders.filter(s => s.id !== btn.dataset.removeSender);
+      renderAdminSettings();
+    };
+  });
+  document.getElementById('emailjsConfigForm').onsubmit = async (e) => {
+    e.preventDefault();
+    syncEmailjsDraftFromInputs();
+    const errEl = document.getElementById('emailjsErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const invalidRow = draft.senders.some(s => !s.label || !s.serviceId);
+    if(invalidRow){ errEl.textContent = 'יש למלא שם ו-Service ID לכל חשבון שולח, או להסיר את השורות הריקות'; return; }
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const ok = await saveEmailjsConfig({ publicKey: draft.publicKey, templateId: draft.templateId, senders: draft.senders });
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'שמירת הגדרות שליחה';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state._emailjsDraft = null;
+    errEl.style.color = '#2F5233';
+    errEl.textContent = 'ההגדרות נשמרו בהצלחה';
+  };
+
   document.getElementById('changePassForm').onsubmit = async (e) => {
     e.preventDefault();
     const cur = document.getElementById('curPass').value;
@@ -1803,7 +1977,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       <div class="digit-block"><div class="num mono">${fmtMoney(pay)}</div><div class="lbl">סה"כ לתשלום</div></div>
     </div>
     <div class="actions" style="justify-content:flex-start; margin-top:-8px; margin-bottom:18px;">
-      <button type="button" class="btn ghost small" id="emailHoursBtn">📧 שליחת השעות למנהל באימייל</button>
+      <button type="button" class="btn ghost small" id="emailHoursBtn">📧 שליחת דוח שעות</button>
     </div>
 
     <div class="card">
@@ -2001,17 +2175,14 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const originalLabel = emailHoursBtn.textContent;
       emailHoursBtn.disabled = true;
       emailHoursBtn.textContent = 'מכין...';
-      const managerEmail = await loadManagerEmail();
+      const [managerEmail, emailjsConfig] = await Promise.all([loadManagerEmail(), loadEmailjsConfig()]);
       emailHoursBtn.disabled = false;
       emailHoursBtn.textContent = originalLabel;
       if(!managerEmail){
         alert('לא הוגדרה כתובת אימייל לקבלת דוחות שעות. יש לבקש מהמנהל להגדיר אותה במסך "הגדרות" שלו.');
         return;
       }
-      const subject = `דוח שעות עבודה – ${emp.name} – ${monthLabel(month)}`;
-      const body = buildHoursEmailBody(emp, month, entries, totalHours, pay);
-      const mailtoUrl = `mailto:${managerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      window.location.href = mailtoUrl;
+      await showSendHoursModal({ emp, month, entries, totalHours, pay, managerEmail, emailjsConfig });
     };
   }
   const empMonthPicker = document.getElementById('empMonthPicker');
