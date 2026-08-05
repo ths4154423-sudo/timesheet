@@ -2271,11 +2271,16 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 }
 
 // ---------- EMPLOYEE SETTINGS ----------
-// To add a new setting later: just add another entry to this array — the screen below
-// renders a checkbox for every entry automatically, no other code changes needed.
+// To add a new setting later: just add another entry to this array — the category screen
+// renders the right field type automatically, no other code changes needed.
+const SETTINGS_CATEGORIES = [
+  { key: 'sound', icon: '🔊', label: 'קול והתראות', hint: 'הודעות קוליות וצלילים בזמן העבודה' },
+  { key: 'appearance', icon: '🎨', label: 'עיצוב וצבעים', hint: 'צבעי הרקע, הטקסט וההדגשים באתר' }
+];
 const EMPLOYEE_SETTINGS_DEFS = [
   {
     key: 'muteOpeningAnnouncement',
+    category: 'sound',
     type: 'checkbox',
     label: 'השתקת הודעת הפתיחה',
     hint: 'לא ישמעו הצליל וההודעה הקולית ("בוקר טוב...") בעת התחלת יום עבודה.',
@@ -2283,6 +2288,7 @@ const EMPLOYEE_SETTINGS_DEFS = [
   },
   {
     key: 'themeColor',
+    category: 'appearance',
     type: 'color',
     label: 'צבע הכפתורים וההדגשים',
     hint: 'בחר/י את הצבע האהוב עליך — הוא ישפיע על הכפתורים וההדגשים באתר אצלך בלבד. צבע הטקסט על גביהם מותאם אוטומטית לניגודיות.',
@@ -2290,6 +2296,7 @@ const EMPLOYEE_SETTINGS_DEFS = [
   },
   {
     key: 'bgColor',
+    category: 'appearance',
     type: 'color',
     label: 'צבע רקע האתר',
     hint: 'צבע הרקע הכללי של האתר אצלך.',
@@ -2297,6 +2304,7 @@ const EMPLOYEE_SETTINGS_DEFS = [
   },
   {
     key: 'textColor',
+    category: 'appearance',
     type: 'auto-color',
     label: 'צבע הטקסט באתר',
     hint: 'אפשר לבחור צבע טקסט ספציפי, או להשאיר על "התאמה אוטומטית" — ואז הטקסט יהיה בהיר או כהה בהתאם לצבע הרקע שנבחר, כדי שתמיד יהיה קריא.',
@@ -2304,12 +2312,50 @@ const EMPLOYEE_SETTINGS_DEFS = [
   }
 ];
 
+// The main "הגדרות" screen: just a menu of categories. Add a category above and give some
+// defs that category's key to make it appear here automatically.
 async function renderEmployeeSettings(emp){
   stopLiveTimer();
   stopLiveMoneyTimer();
   stopClockFieldTimers();
   stopBreakWatchdog();
   setHeader('הגדרות', '<button class="btn ghost small" id="settingsBackBtn">חזרה</button>');
+  const settings = await getEmpSettings(emp.id);
+  applyEmployeeTheme(settings);
+
+  app.innerHTML = `
+    <div class="avatar-row" style="margin-bottom:16px;">
+      ${avatarHtml(emp)}
+      <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
+    </div>
+    <div class="card">
+      <h3>הגדרות</h3>
+      ${SETTINGS_CATEGORIES.map((cat, i) => `
+        <button type="button" class="btn ghost" data-open-category="${cat.key}" style="width:100%; text-align:right; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 16px; margin-top:${i === 0 ? '0' : '10px'};">
+          <span>
+            <span style="display:block; font-weight:600;">${cat.icon} ${escapeHtml(cat.label)}</span>
+            <span class="hint" style="display:block; margin-top:2px; font-size:13px;">${escapeHtml(cat.hint)}</span>
+          </span>
+          <span style="font-size:18px;">‹</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  document.getElementById('settingsBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
+  document.querySelectorAll('[data-open-category]').forEach(btn => {
+    btn.onclick = () => renderEmployeeSettingsCategory(emp, btn.dataset.openCategory);
+  });
+}
+
+async function renderEmployeeSettingsCategory(emp, categoryKey){
+  stopLiveTimer();
+  stopLiveMoneyTimer();
+  stopClockFieldTimers();
+  stopBreakWatchdog();
+  const category = SETTINGS_CATEGORIES.find(c => c.key === categoryKey);
+  const defs = EMPLOYEE_SETTINGS_DEFS.filter(d => d.category === categoryKey);
+  setHeader(category ? (category.icon + ' ' + category.label) : 'הגדרות', '<button class="btn ghost small" id="settingsBackBtn">חזרה</button>');
   const settings = await getEmpSettings(emp.id);
   applyEmployeeTheme(settings);
 
@@ -2363,14 +2409,14 @@ async function renderEmployeeSettings(emp){
       <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
     </div>
     <div class="card">
-      <h3>הגדרות אישיות</h3>
-      ${EMPLOYEE_SETTINGS_DEFS.map((def, i) => renderSettingField(def, i === 0)).join('')}
+      <h3>${category ? category.icon + ' ' + escapeHtml(category.label) : 'הגדרות'}</h3>
+      ${defs.map((def, i) => renderSettingField(def, i === 0)).join('')}
       <div class="error-msg" id="settingsErr" style="margin-top:16px;"></div>
       <p class="hint" id="settingsSavedMsg" style="margin-top:12px; font-size:13px; display:none; color:var(--brass-dark);">✓ נשמר</p>
     </div>
   `;
 
-  document.getElementById('settingsBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
+  document.getElementById('settingsBackBtn').onclick = () => renderEmployeeSettings(emp);
 
   async function persistSetting(key, value){
     const errEl = document.getElementById('settingsErr');
@@ -2388,7 +2434,7 @@ async function renderEmployeeSettings(emp){
   }
 
   function syncAutoTextPreview(liveBg){
-    const textDef = EMPLOYEE_SETTINGS_DEFS.find(d => d.type === 'auto-color');
+    const textDef = defs.find(d => d.type === 'auto-color');
     if(!textDef) return;
     const autoCheckbox = document.getElementById('auto_' + textDef.key);
     const textField = document.getElementById('setting_' + textDef.key);
@@ -2397,7 +2443,7 @@ async function renderEmployeeSettings(emp){
     }
   }
 
-  EMPLOYEE_SETTINGS_DEFS.forEach(def => {
+  defs.forEach(def => {
     const field = document.getElementById('setting_' + def.key);
     if(!field) return;
 
