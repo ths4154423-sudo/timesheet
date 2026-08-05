@@ -612,7 +612,6 @@ function findOpenEntryToday(entries){
 // Builds a plain-text hours report for the "email my hours to the manager" feature.
 function buildHoursEmailBody(emp, month, entries, totalHours, pay){
   const lines = [];
-  lines.push(`דוח שעות עבודה — ${emp.name}`);
   lines.push(`חודש: ${monthLabel(month)}`);
   lines.push('');
   if(!entries.length){
@@ -629,7 +628,9 @@ function buildHoursEmailBody(emp, month, entries, totalHours, pay){
   }
   lines.push('');
   lines.push(`סה"כ שעות: ${fmtHours(totalHours)}`);
-  lines.push(`סה"כ לתשלום: ${fmtMoney(pay)}`);
+  // Number before the ₪ sign (not fmtMoney's usual "₪123") — inside a plain-text RTL email,
+  // a currency symbol placed before LTR digits can get visually scrambled by the bidi algorithm.
+  lines.push(`סה"כ לתשלום: ${pay.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₪`);
   return lines.join('\n');
 }
 
