@@ -26,6 +26,8 @@
     --danger: #A23E30;
     --muted: #5B7186;
     --white: #FFFFFF;
+    --brass-text: #FFFFFF;
+    --surface: #FFFFFF;
   }
   *{box-sizing:border-box;}
   body{
@@ -63,7 +65,7 @@
   }
   .btn:hover{ background:var(--ink-soft); }
   .btn:active{ transform:scale(.97); }
-  .btn.brass{ background:var(--brass); color:var(--white); }
+  .btn.brass{ background:var(--brass); color:var(--brass-text); }
   .btn.brass:hover{ background:var(--brass-dark); }
   .btn.ghost{ background:transparent; color:var(--ink); border:1.5px solid var(--ink); }
   .btn.ghost:hover{ background:var(--ink); color:var(--paper); }
@@ -73,7 +75,7 @@
   .btn:disabled{ opacity:.5; cursor:not-allowed; }
 
   .card{
-    background:var(--white); border:1px solid var(--line); border-radius:6px;
+    background:var(--surface); border:1px solid var(--line); border-radius:6px;
     padding:26px; margin-bottom:22px;
   }
   .card h2, .card h3{ font-family:'Fraunces',serif; margin-top:0; }
@@ -201,7 +203,7 @@
     z-index:1000; padding:20px;
   }
   .confirm-box{
-    background:var(--white); border:1px solid var(--line); border-radius:8px;
+    background:var(--surface); border:1px solid var(--line); border-radius:8px;
     padding:30px 28px; max-width:360px; width:100%; text-align:center;
     box-shadow:0 4px 0 var(--line);
   }
@@ -472,6 +474,75 @@ async function getEmpSettings(empId){
   const settings = await loadSettings(empId);
   state._settingsCache = { empId, settings };
   return settings;
+}
+
+// ---------- personal color theme (per-employee background/text/accent color choices) ----------
+function hexToRgb(hex){
+  const clean = (hex || '').replace('#', '');
+  if(!/^[0-9a-fA-F]{6}$/.test(clean)) return null;
+  const num = parseInt(clean, 16);
+  return { r: (num >> 16) & 0xFF, g: (num >> 8) & 0xFF, b: num & 0xFF };
+}
+function rgbToHex(r, g, b){
+  return '#' + [r, g, b].map(x => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0')).join('');
+}
+function darkenHexColor(hex, amount){
+  amount = amount == null ? 0.25 : amount;
+  const rgb = hexToRgb(hex);
+  if(!rgb) return hex;
+  return rgbToHex(rgb.r * (1 - amount), rgb.g * (1 - amount), rgb.b * (1 - amount));
+}
+// Blends two colors together (weight 0 = pure a, weight 1 = pure b).
+function mixHexColors(hexA, hexB, weight){
+  const a = hexToRgb(hexA), b = hexToRgb(hexB);
+  if(!a || !b) return hexA;
+  return rgbToHex(
+    a.r + (b.r - a.r) * weight,
+    a.g + (b.g - a.g) * weight,
+    a.b + (b.b - a.b) * weight
+  );
+}
+// Perceived brightness (0 = black, 1 = white) — good enough to decide light-vs-dark, not full WCAG math.
+function relativeBrightness(hex){
+  const rgb = hexToRgb(hex);
+  if(!rgb) return 1;
+  return (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+}
+function isLightColor(hex){ return relativeBrightness(hex) > 0.6; }
+// Picks a readable text color for a given background — dark ink for light backgrounds, off-white for dark ones.
+function getContrastTextColor(hex){ return isLightColor(hex) ? '#1A2733' : '#F5FAFF'; }
+
+const DEFAULT_THEME_COLOR = '#5FBF8F'; // accent (buttons / highlights)
+const DEFAULT_BG_COLOR = '#EAF3FB';    // page background
+const DEFAULT_INK_COLOR = '#12293F';   // main text color
+
+function applyEmployeeTheme(settings){
+  settings = settings || {};
+  const accent = settings.themeColor || DEFAULT_THEME_COLOR;
+  const bgCustomized = !!settings.bgColor;
+  const bg = settings.bgColor || DEFAULT_BG_COLOR;
+  // Only fall back to auto-contrast once the person has actually customized the background;
+  // with an untouched background we keep the app's exact original ink tone.
+  const text = settings.textColor || (bgCustomized ? getContrastTextColor(bg) : DEFAULT_INK_COLOR);
+  const bgIsLight = isLightColor(bg);
+  // Card/modal "surface" stays in the same light-or-dark family as the background (so the auto-picked
+  // text color, chosen to contrast with the background, also reads fine on top of these panels) —
+  // but defaults to plain white when the background hasn't been customized, matching the original look.
+  const surface = bgCustomized ? mixHexColors(bg, bgIsLight ? '#FFFFFF' : '#000000', bgIsLight ? 0.75 : 0.15) : '#FFFFFF';
+  const root = document.documentElement.style;
+  root.setProperty('--brass', accent);
+  root.setProperty('--brass-dark', darkenHexColor(accent));
+  root.setProperty('--brass-text', getContrastTextColor(accent));
+  root.setProperty('--paper', bg);
+  root.setProperty('--paper-alt', mixHexColors(bg, bgIsLight ? '#000000' : '#FFFFFF', 0.08));
+  root.setProperty('--ink', text);
+  root.setProperty('--ink-soft', mixHexColors(text, bg, 0.35));
+  root.setProperty('--surface', surface);
+}
+function resetTheme(){
+  ['--brass', '--brass-dark', '--brass-text', '--paper', '--paper-alt', '--ink', '--ink-soft', '--surface'].forEach(v => {
+    document.documentElement.style.removeProperty(v);
+  });
 }
 
 function calcPay(emp, hoursTotal){
@@ -748,6 +819,7 @@ function setHeader(subtitle, actionsHtml){
 // ---------- LANDING ----------
 function renderLanding(){
   state.view = 'landing';
+  resetTheme();
   setHeader('רישום שעות עבודה ושכר', '');
   app.innerHTML = `
     <div class="center-stage">
@@ -1136,6 +1208,7 @@ function resizeImageFile(file, maxSize, quality){
 
 // ---------- ADMIN DASHBOARD ----------
 function renderAdminDashboard(tab){
+  resetTheme();
   setHeader('פאנל ניהול', '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
   app.innerHTML = `
     <div class="tabs">
@@ -1576,6 +1649,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   stopBreakWatchdog();
   state.currentEmployee = emp;
   const empSettings = await getEmpSettings(emp.id);
+  applyEmployeeTheme(empSettings);
   setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="btn ghost small" id="logoutBtn">יציאה</button>');
   const month = state._empMonth || currentMonthStr();
 
@@ -2202,9 +2276,31 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 const EMPLOYEE_SETTINGS_DEFS = [
   {
     key: 'muteOpeningAnnouncement',
+    type: 'checkbox',
     label: 'השתקת הודעת הפתיחה',
     hint: 'לא ישמעו הצליל וההודעה הקולית ("בוקר טוב...") בעת התחלת יום עבודה.',
     default: false
+  },
+  {
+    key: 'themeColor',
+    type: 'color',
+    label: 'צבע הכפתורים וההדגשים',
+    hint: 'בחר/י את הצבע האהוב עליך — הוא ישפיע על הכפתורים וההדגשים באתר אצלך בלבד. צבע הטקסט על גביהם מותאם אוטומטית לניגודיות.',
+    default: DEFAULT_THEME_COLOR
+  },
+  {
+    key: 'bgColor',
+    type: 'color',
+    label: 'צבע רקע האתר',
+    hint: 'צבע הרקע הכללי של האתר אצלך.',
+    default: DEFAULT_BG_COLOR
+  },
+  {
+    key: 'textColor',
+    type: 'auto-color',
+    label: 'צבע הטקסט באתר',
+    hint: 'אפשר לבחור צבע טקסט ספציפי, או להשאיר על "התאמה אוטומטית" — ואז הטקסט יהיה בהיר או כהה בהתאם לצבע הרקע שנבחר, כדי שתמיד יהיה קריא.',
+    default: null
   }
 ];
 
@@ -2215,6 +2311,51 @@ async function renderEmployeeSettings(emp){
   stopBreakWatchdog();
   setHeader('הגדרות', '<button class="btn ghost small" id="settingsBackBtn">חזרה</button>');
   const settings = await getEmpSettings(emp.id);
+  applyEmployeeTheme(settings);
+
+  function renderSettingField(def, isFirst){
+    const currentVal = settings[def.key] ?? def.default;
+    const marginTop = isFirst ? '0' : '18px';
+    if(def.type === 'color'){
+      return `
+        <div style="margin-top:${marginTop};">
+          <span style="display:block; font-weight:600;">${escapeHtml(def.label)}</span>
+          ${def.hint ? `<span class="hint" style="display:block; margin-top:2px; margin-bottom:8px; font-size:13px;">${escapeHtml(def.hint)}</span>` : ''}
+          <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+            <input type="color" id="setting_${def.key}" data-setting-key="${def.key}" value="${currentVal}" style="width:52px; height:40px; padding:2px; border:1.5px solid var(--line); border-radius:6px; cursor:pointer; background:var(--white);" />
+            <button type="button" class="btn ghost small" id="reset_${def.key}">איפוס לצבע ברירת מחדל</button>
+          </div>
+        </div>
+      `;
+    }
+    if(def.type === 'auto-color'){
+      const isAuto = !settings[def.key];
+      const previewColor = settings[def.key] || getContrastTextColor(settings.bgColor || DEFAULT_BG_COLOR);
+      return `
+        <div style="margin-top:${marginTop};">
+          <span style="display:block; font-weight:600;">${escapeHtml(def.label)}</span>
+          ${def.hint ? `<span class="hint" style="display:block; margin-top:2px; margin-bottom:8px; font-size:13px;">${escapeHtml(def.hint)}</span>` : ''}
+          <div style="display:flex; align-items:center; gap:14px; margin-top:8px; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:14px; cursor:pointer;">
+              <input type="checkbox" id="auto_${def.key}" ${isAuto ? 'checked' : ''} style="width:16px; height:16px;" />
+              התאמה אוטומטית לפי צבע הרקע
+            </label>
+            <input type="color" id="setting_${def.key}" data-setting-key="${def.key}" value="${previewColor}" ${isAuto ? 'disabled' : ''} style="width:52px; height:40px; padding:2px; border:1.5px solid var(--line); border-radius:6px; cursor:pointer; background:var(--white);" />
+          </div>
+        </div>
+      `;
+    }
+    // default: checkbox
+    return `
+      <label style="display:flex; align-items:flex-start; gap:10px; margin-top:${marginTop}; cursor:pointer;">
+        <input type="checkbox" id="setting_${def.key}" data-setting-key="${def.key}" ${currentVal ? 'checked' : ''} style="margin-top:3px; width:18px; height:18px; flex-shrink:0;" />
+        <span>
+          <span style="display:block; font-weight:600;">${escapeHtml(def.label)}</span>
+          ${def.hint ? `<span class="hint" style="display:block; margin-top:2px; font-size:13px;">${escapeHtml(def.hint)}</span>` : ''}
+        </span>
+      </label>
+    `;
+  }
 
   app.innerHTML = `
     <div class="avatar-row" style="margin-bottom:16px;">
@@ -2223,15 +2364,7 @@ async function renderEmployeeSettings(emp){
     </div>
     <div class="card">
       <h3>הגדרות אישיות</h3>
-      ${EMPLOYEE_SETTINGS_DEFS.map(def => `
-        <label style="display:flex; align-items:flex-start; gap:10px; margin-top:${def === EMPLOYEE_SETTINGS_DEFS[0] ? '0' : '18px'}; cursor:pointer;">
-          <input type="checkbox" id="setting_${def.key}" data-setting-key="${def.key}" ${ (settings[def.key] ?? def.default) ? 'checked' : '' } style="margin-top:3px; width:18px; height:18px; flex-shrink:0;" />
-          <span>
-            <span style="display:block; font-weight:600;">${escapeHtml(def.label)}</span>
-            ${def.hint ? `<span class="hint" style="display:block; margin-top:2px; font-size:13px;">${escapeHtml(def.hint)}</span>` : ''}
-          </span>
-        </label>
-      `).join('')}
+      ${EMPLOYEE_SETTINGS_DEFS.map((def, i) => renderSettingField(def, i === 0)).join('')}
       <div class="error-msg" id="settingsErr" style="margin-top:16px;"></div>
       <p class="hint" id="settingsSavedMsg" style="margin-top:12px; font-size:13px; display:none; color:var(--brass-dark);">✓ נשמר</p>
     </div>
@@ -2239,23 +2372,96 @@ async function renderEmployeeSettings(emp){
 
   document.getElementById('settingsBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
 
+  async function persistSetting(key, value){
+    const errEl = document.getElementById('settingsErr');
+    const savedMsg = document.getElementById('settingsSavedMsg');
+    savedMsg.style.display = 'none';
+    errEl.textContent = '';
+    const updated = { ...settings, [key]: value };
+    const ok = await saveSettings(emp.id, updated);
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return false; }
+    state._settingsCache = { empId: emp.id, settings: updated };
+    settings[key] = value;
+    savedMsg.style.display = 'block';
+    setTimeout(() => { const m = document.getElementById('settingsSavedMsg'); if(m) m.style.display = 'none'; }, 2000);
+    return true;
+  }
+
+  function syncAutoTextPreview(liveBg){
+    const textDef = EMPLOYEE_SETTINGS_DEFS.find(d => d.type === 'auto-color');
+    if(!textDef) return;
+    const autoCheckbox = document.getElementById('auto_' + textDef.key);
+    const textField = document.getElementById('setting_' + textDef.key);
+    if(autoCheckbox && autoCheckbox.checked && textField){
+      textField.value = getContrastTextColor(liveBg || settings.bgColor || DEFAULT_BG_COLOR);
+    }
+  }
+
   EMPLOYEE_SETTINGS_DEFS.forEach(def => {
-    const checkbox = document.getElementById('setting_' + def.key);
-    checkbox.onchange = async () => {
-      const errEl = document.getElementById('settingsErr');
-      const savedMsg = document.getElementById('settingsSavedMsg');
-      savedMsg.style.display = 'none';
-      errEl.textContent = '';
-      checkbox.disabled = true;
-      const updated = { ...settings, [def.key]: checkbox.checked };
-      const ok = await saveSettings(emp.id, updated);
-      checkbox.disabled = false;
-      if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; checkbox.checked = !checkbox.checked; return; }
-      state._settingsCache = { empId: emp.id, settings: updated };
-      settings[def.key] = checkbox.checked;
-      savedMsg.style.display = 'block';
-      setTimeout(() => { const m = document.getElementById('settingsSavedMsg'); if(m) m.style.display = 'none'; }, 2000);
-    };
+    const field = document.getElementById('setting_' + def.key);
+    if(!field) return;
+
+    if(def.type === 'color'){
+      field.oninput = () => {
+        applyEmployeeTheme({ ...settings, [def.key]: field.value });
+        if(def.key === 'bgColor') syncAutoTextPreview(field.value);
+      };
+      field.onchange = async () => {
+        field.disabled = true;
+        const ok = await persistSetting(def.key, field.value);
+        field.disabled = false;
+        if(!ok){ field.value = settings[def.key] ?? def.default; applyEmployeeTheme(settings); return; }
+        if(def.key === 'bgColor') syncAutoTextPreview();
+      };
+      const resetBtn = document.getElementById('reset_' + def.key);
+      if(resetBtn){
+        resetBtn.onclick = async () => {
+          field.value = def.default;
+          applyEmployeeTheme({ ...settings, [def.key]: def.default });
+          if(def.key === 'bgColor') syncAutoTextPreview(def.default);
+          resetBtn.disabled = true;
+          await persistSetting(def.key, def.default);
+          resetBtn.disabled = false;
+        };
+      }
+    } else if(def.type === 'auto-color'){
+      const autoCheckbox = document.getElementById('auto_' + def.key);
+      field.oninput = () => {
+        if(autoCheckbox.checked) return;
+        applyEmployeeTheme({ ...settings, [def.key]: field.value });
+      };
+      field.onchange = async () => {
+        if(autoCheckbox.checked) return;
+        field.disabled = true;
+        const ok = await persistSetting(def.key, field.value);
+        field.disabled = false;
+        if(!ok){ field.value = settings[def.key] || getContrastTextColor(settings.bgColor || DEFAULT_BG_COLOR); applyEmployeeTheme(settings); }
+      };
+      autoCheckbox.onchange = async () => {
+        autoCheckbox.disabled = true;
+        field.disabled = true;
+        if(autoCheckbox.checked){
+          const ok = await persistSetting(def.key, null);
+          autoCheckbox.disabled = false;
+          if(!ok){ autoCheckbox.checked = false; field.disabled = false; return; }
+          field.value = getContrastTextColor(settings.bgColor || DEFAULT_BG_COLOR);
+          applyEmployeeTheme(settings);
+        } else {
+          const ok = await persistSetting(def.key, field.value);
+          autoCheckbox.disabled = false;
+          field.disabled = false;
+          if(!ok){ autoCheckbox.checked = true; field.disabled = true; return; }
+          applyEmployeeTheme(settings);
+        }
+      };
+    } else {
+      field.onchange = async () => {
+        field.disabled = true;
+        const ok = await persistSetting(def.key, field.checked);
+        field.disabled = false;
+        if(!ok) field.checked = !field.checked;
+      };
+    }
   });
 }
 
