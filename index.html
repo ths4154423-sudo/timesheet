@@ -643,22 +643,24 @@ function buildHoursEmailHtml(emp, month, entries, totalHours, pay){
   const rowsHtml = entries.length ? entries.map(e => {
     const h = computeEntryHours(e);
     const closedBreaks = (e.breaks || []).filter(b => b.end);
+    // <bdi> isolates each "start–end" pair as its own left-to-right unit — without it, the RTL
+    // table cell can visually flip which time comes first (exactly like the ₪ sign issue earlier).
     const breaksTxt = closedBreaks.length
-      ? closedBreaks.map(b => hhmm(b.start) + '–' + hhmm(b.end)).join(', ')
+      ? closedBreaks.map(b => `<bdi>${escapeHtml(hhmm(b.start))}–${escapeHtml(hhmm(b.end))}</bdi>`).join(', ')
       : '—';
     return `
       <tr>
-        <td style="padding:9px 10px; border:1px solid #ddd;">${escapeHtml(e.date)}</td>
-        <td style="padding:9px 10px; border:1px solid #ddd;">${escapeHtml(hhmm(e.start))}</td>
-        <td style="padding:9px 10px; border:1px solid #ddd;">${e.end ? escapeHtml(hhmm(e.end)) : 'פתוח'}</td>
-        <td style="padding:9px 10px; border:1px solid #ddd; font-weight:600;">${h !== null ? escapeHtml(fmtHours(h)) : '—'}</td>
-        <td style="padding:9px 10px; border:1px solid #ddd; color:#666;">${escapeHtml(breaksTxt)}</td>
+        <td dir="ltr" style="padding:9px 10px; border:1px solid #ddd; text-align:right;">${escapeHtml(e.date)}</td>
+        <td dir="ltr" style="padding:9px 10px; border:1px solid #ddd; text-align:right;">${escapeHtml(hhmm(e.start))}</td>
+        <td dir="ltr" style="padding:9px 10px; border:1px solid #ddd; text-align:right;">${e.end ? escapeHtml(hhmm(e.end)) : 'פתוח'}</td>
+        <td dir="ltr" style="padding:9px 10px; border:1px solid #ddd; text-align:right; font-weight:600;">${h !== null ? escapeHtml(fmtHours(h)) : '—'}</td>
+        <td style="padding:9px 10px; border:1px solid #ddd; color:#666;">${breaksTxt}</td>
       </tr>`;
   }).join('') : `
       <tr><td colspan="5" style="padding:14px; text-align:center; color:#666; border:1px solid #ddd;">אין רישומי שעות בחודש זה</td></tr>`;
 
   return `
-    <div dir="rtl" style="font-family:Arial,Helvetica,sans-serif; color:#222; max-width:600px;">
+    <div dir="rtl" align="right" style="font-family:Arial,Helvetica,sans-serif; color:#222; max-width:600px; margin:0 0 0 auto;">
       <p style="margin:0 0 14px 0; font-size:15px;">חודש: <strong>${escapeHtml(monthLabel(month))}</strong></p>
       <table style="width:100%; border-collapse:collapse; font-size:14px; text-align:right;">
         <thead>
