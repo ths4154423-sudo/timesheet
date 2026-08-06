@@ -1840,13 +1840,21 @@ async function renderAdminSettings(){
         <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
           כשעובד שולח דוח שעות, זו הכתובת שתופיע כנמען. אפשר להשאיר ריק כדי לבטל את האפשרות אצל העובדים.
         </p>
-        <form id="managerEmailForm">
-          <div class="field"><label>כתובת אימייל</label><input type="email" id="managerEmailInput" value="${escapeHtml(managerEmail)}" placeholder="${escapeHtml(state.adminEmail || 'name@example.com')}" /></div>
-          <div class="error-msg" id="managerEmailErr"></div>
+        ${state._emailEditMode ? `
+          <form id="managerEmailForm">
+            <div class="field"><label>כתובת אימייל</label><input type="email" id="managerEmailInput" value="${escapeHtml(managerEmail)}" placeholder="${escapeHtml(state.adminEmail || 'name@example.com')}" /></div>
+            <div class="error-msg" id="managerEmailErr"></div>
+            <div class="actions" style="justify-content:flex-start; gap:10px;">
+              <button type="submit" class="btn brass">שמירה</button>
+              <button type="button" class="btn ghost" id="cancelEmailEdit">ביטול</button>
+            </div>
+          </form>
+        ` : `
+          <p style="font-size:15.5px; margin:6px 0 16px;">${managerEmail ? `<span class="mono" dir="ltr" style="display:inline-block;">${escapeHtml(managerEmail)}</span>` : '<span class="hint">לא הוגדרה כתובת</span>'}</p>
           <div class="actions" style="justify-content:flex-start;">
-            <button type="submit" class="btn brass">שינוי כתובת</button>
+            <button type="button" class="btn ghost" id="startEmailEdit">עריכה</button>
           </div>
-        </form>
+        `}
       </div>
     `,
     autosend: () => `
@@ -1858,25 +1866,44 @@ async function renderAdminSettings(){
           2) תחת "Email Templates" צרו תבנית אחת (משותפת לכולם) עם המשתנים <code>{{to_email}}</code>, <code>{{subject}}</code>, <code>{{{message}}}</code> ו-<code>{{employee_name}}</code> בגוף התבנית, ורשמו את ה-Template ID.
           3) תחת "Account" &gt; "API Keys" מצאו את ה-Public Key. אם משאירים את הרשימה של חשבונות שולחים ריקה, העובדים ימשיכו לראות רק את אפשרות פתיחת טיוטת המייל הרגילה.
         </p>
-        <form id="emailjsConfigForm">
-          <div class="field"><label>Public Key</label><input type="text" id="emailjsPublicKey" value="${escapeHtml(draft.publicKey)}" dir="ltr" style="text-align:left;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
-          <div class="field"><label>Template ID</label><input type="text" id="emailjsTemplateId" value="${escapeHtml(draft.templateId)}" dir="ltr" style="text-align:left;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
-          <label style="margin-top:18px;">חשבונות שולחים</label>
-          ${draft.senders.length ? draft.senders.map(s => `
-            <div class="emp-row-form" style="margin-top:8px; align-items:flex-end;">
-              <div class="field" style="margin-top:0;"><label>שם לתצוגה</label><input type="text" data-sender-label="${s.id}" value="${escapeHtml(s.label || '')}" placeholder="למשל: משרד ראשי" /></div>
-              <div class="field" style="margin-top:0;"><label>Service ID</label><input type="text" data-sender-service="${s.id}" value="${escapeHtml(s.serviceId || '')}" dir="ltr" style="text-align:left;" placeholder="service_xxxxxxx" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
-              <div class="field" style="flex:0 0 auto; margin-top:0;"><button type="button" class="btn danger" data-remove-sender="${s.id}">הסרה</button></div>
+        ${state._autosendEditMode ? `
+          <form id="emailjsConfigForm">
+            <div class="field"><label>Public Key</label><input type="text" id="emailjsPublicKey" value="${escapeHtml(draft.publicKey)}" dir="ltr" style="text-align:left;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
+            <div class="field"><label>Template ID</label><input type="text" id="emailjsTemplateId" value="${escapeHtml(draft.templateId)}" dir="ltr" style="text-align:left;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
+            <label style="margin-top:18px;">חשבונות שולחים</label>
+            ${draft.senders.length ? draft.senders.map(s => `
+              <div class="emp-row-form" style="margin-top:8px; align-items:flex-end;">
+                <div class="field" style="margin-top:0;"><label>שם לתצוגה</label><input type="text" data-sender-label="${s.id}" value="${escapeHtml(s.label || '')}" placeholder="למשל: משרד ראשי" /></div>
+                <div class="field" style="margin-top:0;"><label>Service ID</label><input type="text" data-sender-service="${s.id}" value="${escapeHtml(s.serviceId || '')}" dir="ltr" style="text-align:left;" placeholder="service_xxxxxxx" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
+                <div class="field" style="flex:0 0 auto; margin-top:0;"><button type="button" class="btn danger" data-remove-sender="${s.id}">הסרה</button></div>
+              </div>
+            `).join('') : '<p class="hint" style="margin-top:6px;">עדיין לא נוספו חשבונות שולחים — העובדים יראו רק את אפשרות פתיחת טיוטת המייל הרגילה.</p>'}
+            <div class="actions" style="justify-content:flex-start; margin-top:12px;">
+              <button type="button" class="btn ghost small" id="addSenderBtn">+ הוספת חשבון שולח</button>
             </div>
-          `).join('') : '<p class="hint" style="margin-top:6px;">עדיין לא נוספו חשבונות שולחים — העובדים יראו רק את אפשרות פתיחת טיוטת המייל הרגילה.</p>'}
-          <div class="actions" style="justify-content:flex-start; margin-top:12px;">
-            <button type="button" class="btn ghost small" id="addSenderBtn">+ הוספת חשבון שולח</button>
+            <div class="error-msg" id="emailjsErr" style="margin-top:12px;"></div>
+            <div class="actions" style="justify-content:flex-start; gap:10px;">
+              <button type="submit" class="btn brass">שמירה</button>
+              <button type="button" class="btn ghost" id="cancelAutosendEdit">ביטול</button>
+            </div>
+          </form>
+        ` : `
+          <div style="font-size:14.5px; display:flex; flex-direction:column; gap:8px;">
+            <div><b>Public Key:</b> ${emailjsConfig.publicKey ? `<span class="mono" dir="ltr" style="display:inline-block;">${escapeHtml(emailjsConfig.publicKey)}</span>` : '<span class="hint">לא הוגדר</span>'}</div>
+            <div><b>Template ID:</b> ${emailjsConfig.templateId ? `<span class="mono" dir="ltr" style="display:inline-block;">${escapeHtml(emailjsConfig.templateId)}</span>` : '<span class="hint">לא הוגדר</span>'}</div>
+            <div>
+              <b>חשבונות שולחים:</b>
+              ${(emailjsConfig.senders && emailjsConfig.senders.length) ? `
+                <ul style="margin:6px 0 0; padding-inline-start:20px;">
+                  ${emailjsConfig.senders.map(s => `<li>${escapeHtml(s.label || '(ללא שם)')} — <span class="mono" dir="ltr" style="display:inline-block;">${escapeHtml(s.serviceId || '')}</span></li>`).join('')}
+                </ul>
+              ` : ' <span class="hint">לא הוגדרו</span>'}
+            </div>
           </div>
-          <div class="error-msg" id="emailjsErr" style="margin-top:12px;"></div>
-          <div class="actions" style="justify-content:flex-start;">
-            <button type="submit" class="btn brass">עריכת הגדרות שליחה</button>
+          <div class="actions" style="justify-content:flex-start; margin-top:16px;">
+            <button type="button" class="btn ghost" id="startAutosendEdit">עריכה</button>
           </div>
-        </form>
+        `}
       </div>
     `,
     announcement: () => `
@@ -1921,9 +1948,19 @@ async function renderAdminSettings(){
     t.onclick = () => {
       state._adminSettingsTab = t.dataset.settingsTab;
       state._emailjsDraft = null;
+      state._emailEditMode = false;
+      state._autosendEditMode = false;
       renderAdminSettings();
     };
   });
+  const startEmailEdit = document.getElementById('startEmailEdit');
+  if(startEmailEdit) startEmailEdit.onclick = () => { state._emailEditMode = true; renderAdminSettings(); };
+  const cancelEmailEdit = document.getElementById('cancelEmailEdit');
+  if(cancelEmailEdit) cancelEmailEdit.onclick = () => { state._emailEditMode = false; renderAdminSettings(); };
+  const startAutosendEdit = document.getElementById('startAutosendEdit');
+  if(startAutosendEdit) startAutosendEdit.onclick = () => { state._autosendEditMode = true; renderAdminSettings(); };
+  const cancelAutosendEdit = document.getElementById('cancelAutosendEdit');
+  if(cancelAutosendEdit) cancelAutosendEdit.onclick = () => { state._autosendEditMode = false; state._emailjsDraft = null; renderAdminSettings(); };
   let removeAnnouncementFlag = false;
   const removeAnnouncementBtn = document.getElementById('removeAnnouncementImg');
   if(removeAnnouncementBtn){
@@ -1971,10 +2008,10 @@ async function renderAdminSettings(){
     submitBtn.textContent = 'שומר...';
     const ok = await saveManagerEmail(val);
     submitBtn.disabled = false;
-    submitBtn.textContent = 'שינוי כתובת';
+    submitBtn.textContent = 'שמירה';
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
-    errEl.style.color = '#2F5233';
-    errEl.textContent = 'הכתובת נשמרה בהצלחה';
+    state._emailEditMode = false;
+    renderAdminSettings();
   };
 
   // Keeps the in-memory draft (state._emailjsDraft) in sync with whatever the admin has typed so far,
@@ -2018,11 +2055,11 @@ async function renderAdminSettings(){
     submitBtn.textContent = 'שומר...';
     const ok = await saveEmailjsConfig({ publicKey: draft.publicKey, templateId: draft.templateId, senders: draft.senders });
     submitBtn.disabled = false;
-    submitBtn.textContent = 'עריכת הגדרות שליחה';
+    submitBtn.textContent = 'שמירה';
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
     state._emailjsDraft = null;
-    errEl.style.color = '#2F5233';
-    errEl.textContent = 'ההגדרות נשמרו בהצלחה';
+    state._autosendEditMode = false;
+    renderAdminSettings();
   };
 
   const changePassForm = document.getElementById('changePassForm');
