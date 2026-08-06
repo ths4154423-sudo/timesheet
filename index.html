@@ -177,6 +177,8 @@
     display:flex; justify-content:space-between; align-items:center;
     padding:14px 4px; border-bottom:1px solid var(--line);
   }
+  .list-item.clickable{ cursor:pointer; }
+  .list-item.clickable:hover{ background:var(--paper-alt); border-radius:6px; }
   .list-item:last-child{ border-bottom:none; }
   .list-item .name{ font-weight:600; }
   .list-item .meta{ color:var(--muted); font-size:13px; margin-top:2px; }
@@ -1582,11 +1584,40 @@ function renderAddEmployeePage(){
   };
 }
 
+function showEmployeeDetailsModal(emp){
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = `
+    <div class="confirm-box" style="max-width:420px; text-align:center;">
+      <div style="display:flex; justify-content:center; margin-bottom:14px;">${avatarHtml(emp)}</div>
+      <h3 style="margin:0 0 4px;">${escapeHtml(emp.name)}</h3>
+      <p class="hint" style="margin:0 0 18px;">משתמש: ${escapeHtml(emp.username)}</p>
+      <div style="text-align:right; display:flex; flex-direction:column; gap:10px; font-size:14.5px; border-top:1px solid var(--line); padding-top:16px;">
+        <div><b>קוד אישי (PIN):</b> ${escapeHtml(emp.pin || '—')}</div>
+        <div><b>טלפון:</b> ${emp.phone ? escapeHtml(emp.phone) : '—'}</div>
+        <div><b>אימייל:</b> ${emp.email ? escapeHtml(emp.email) : '—'}</div>
+        <div><b>כתובת:</b> ${emp.address ? escapeHtml(emp.address) : '—'}</div>
+        <div><b>סוג שכר:</b> ${emp.payType === 'hourly' ? `שעתי · ${fmtMoney(emp.rate)}/שעה` : `חודשי קבוע · ${fmtMoney(emp.rate)}/חודש`}</div>
+        <div><b>Service ID לשליחה אוטומטית:</b> ${emp.emailjsServiceId ? `<span class="mono" dir="ltr" style="display:inline-block;">${escapeHtml(emp.emailjsServiceId)}</span>` : '— (לא הוגדר, ישתמש ברשימה המשותפת)'}</div>
+      </div>
+      <div class="actions" style="justify-content:center; margin-top:20px;">
+        <button type="button" class="btn ghost small" id="empDetailsEdit">עריכה</button>
+        <button type="button" class="btn ghost" id="empDetailsClose">סגירה</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#empDetailsClose').onclick = close;
+  overlay.querySelector('#empDetailsEdit').onclick = () => { close(); renderEditEmployee(emp.id); };
+  overlay.onclick = (e) => { if(e.target === overlay) close(); };
+}
+
 function renderEmpList(){
   const listEl = document.getElementById('empList');
   if(!listEl || state.employees.length === 0) return;
   listEl.innerHTML = state.employees.map(emp => `
-    <div class="list-item">
+    <div class="list-item clickable" data-emp-row="${emp.id}">
       <div class="avatar-row">
         ${avatarHtml(emp, 'small')}
         <div>
@@ -1606,6 +1637,14 @@ function renderEmpList(){
       </div>
     </div>
   `).join('');
+
+  listEl.querySelectorAll('[data-emp-row]').forEach(row => {
+    row.onclick = (e) => {
+      if(e.target.closest('[data-edit], [data-del]')) return;
+      const emp = state.employees.find(x => x.id === row.dataset.empRow);
+      if(emp) showEmployeeDetailsModal(emp);
+    };
+  });
 
   listEl.querySelectorAll('[data-del]').forEach(btn => {
     btn.onclick = async () => {
@@ -1628,6 +1667,16 @@ function renderEditEmployee(empId){
     <div class="card">
       <h3>עריכת עובד: ${escapeHtml(emp.name)}</h3>
       <form id="editEmpForm">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:22px;">
+          <div id="avatarClickTarget" style="cursor:pointer;" title="לחצו להחלפת התמונה">
+            <div id="avatarPreviewWrap">${avatarHtml(emp)}</div>
+          </div>
+          <input type="file" id="editPhoto" accept="image/*" style="display:none;" />
+          <div style="display:flex; gap:10px; margin-top:2px;">
+            <button type="button" class="btn ghost small" id="changePhotoBtn">${emp.photo ? 'החלפת תמונה' : 'הוספת תמונה'}</button>
+            <button type="button" class="btn danger small" id="removePhotoBtn" style="${emp.photo ? '' : 'display:none;'}">הסרת תמונה</button>
+          </div>
+        </div>
         <div class="emp-row-form">
           <div class="field"><label>שם מלא</label><input type="text" id="editName" value="${escapeHtml(emp.name)}" required /></div>
           <div class="field"><label>שם משתמש</label><input type="text" id="editUsername" value="${escapeHtml(emp.username)}" required /></div>
@@ -1652,20 +1701,12 @@ function renderEditEmployee(empId){
           </div>
         </div>
         <div class="emp-row-form" style="margin-top:14px;">
-          <div class="field" style="flex:0 0 auto;">
-            <label>תמונת פרופיל</label>
-            ${avatarHtml(emp)}
-          </div>
-          <div class="field"><label>${emp.photo ? 'החלפת תמונה' : 'הוספת תמונה'} (לא חובה)</label><input type="file" id="editPhoto" accept="image/*" /></div>
-          ${emp.photo ? '<div class="field" style="flex:0 0 auto; align-self:flex-end;"><label>&nbsp;</label><button type="button" class="btn danger" id="removePhotoBtn">הסרת תמונה</button></div>' : ''}
-        </div>
-        <div class="emp-row-form" style="margin-top:14px;">
           <div class="field">
             <label>Service ID אישי לשליחה אוטומטית (לא חובה)</label>
             <input type="text" id="editEmailjsServiceId" value="${escapeHtml(emp.emailjsServiceId || '')}" dir="ltr" style="text-align:left;" placeholder="service_xxxxxxx" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" />
           </div>
         </div>
-        <p class="hint" style="font-size:12.5px; margin-top:-8px;">
+        <p class="hint" style="font-size:12.5px; margin-top:8px;">
           אם ממלאים כאן Service ID (אחרי חיבור חשבון המייל האישי של העובד ב-EmailJS), הדוחות שלו יישלחו אוטומטית מהחשבון הזה בלי שהוא יצטרך לבחור. משאירים ריק כדי שהעובד ימשיך לבחור מרשימת החשבונות המשותפת שבהגדרות.
         </p>
         <div class="error-msg" id="editEmpErr"></div>
@@ -1676,19 +1717,34 @@ function renderEditEmployee(empId){
       </form>
     </div>
   `;
+  document.getElementById('avatarClickTarget').onclick = () => document.getElementById('editPhoto').click();
+  document.getElementById('changePhotoBtn').onclick = () => document.getElementById('editPhoto').click();
+  let stagedPhotoDataUrl = null;
+  document.getElementById('editPhoto').onchange = (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      stagedPhotoDataUrl = reader.result;
+      document.getElementById('avatarPreviewWrap').innerHTML = `<img src="${reader.result}" class="avatar" alt="" />`;
+      removePhotoFlag = false;
+      document.getElementById('removePhotoBtn').style.display = '';
+    };
+    reader.readAsDataURL(file);
+  };
   document.getElementById('editPayType').onchange = (e) => {
     document.getElementById('editRateLabel').textContent = e.target.value === 'hourly' ? 'תעריף לשעה (₪)' : 'שכר חודשי (₪)';
   };
   document.getElementById('cancelEdit').onclick = () => renderAdminDashboard('employees');
   let removePhotoFlag = false;
   const removePhotoBtn = document.getElementById('removePhotoBtn');
-  if(removePhotoBtn){
-    removePhotoBtn.onclick = () => {
-      removePhotoFlag = true;
-      removePhotoBtn.textContent = 'התמונה תוסר בשמירה ✓';
-      removePhotoBtn.disabled = true;
-    };
-  }
+  removePhotoBtn.onclick = () => {
+    removePhotoFlag = true;
+    stagedPhotoDataUrl = null;
+    document.getElementById('editPhoto').value = '';
+    document.getElementById('avatarPreviewWrap').innerHTML = avatarHtml({ ...emp, photo: null });
+    removePhotoBtn.style.display = 'none';
+  };
   document.getElementById('editEmpForm').onsubmit = async (e) => {
     e.preventDefault();
     const username = document.getElementById('editUsername').value.trim();
@@ -1732,13 +1788,22 @@ function renderEditEmployee(empId){
   };
 }
 
+const ADMIN_SETTINGS_TABS = [
+  { key: 'password', label: 'סיסמה' },
+  { key: 'email', label: 'כתובת אימייל' },
+  { key: 'autosend', label: 'שליחה אוטומטית' },
+  { key: 'announcement', label: 'הודעה לעובדים' },
+  { key: 'security', label: 'אבטחה' }
+];
+
 async function renderAdminSettings(){
   const content = document.getElementById('tabContent');
   content.innerHTML = `<div class="empty-state">טוען...</div>`;
-  const announcement = await loadAnnouncement();
-  const managerEmail = await loadManagerEmail();
-  const emailjsConfig = await loadEmailjsConfig();
-  if(!state._emailjsDraft){
+  const activeTab = state._adminSettingsTab || 'password';
+  const announcement = activeTab === 'announcement' ? await loadAnnouncement() : null;
+  const managerEmail = activeTab === 'email' ? await loadManagerEmail() : null;
+  const emailjsConfig = activeTab === 'autosend' ? await loadEmailjsConfig() : null;
+  if(activeTab === 'autosend' && !state._emailjsDraft){
     state._emailjsDraft = {
       publicKey: emailjsConfig.publicKey || '',
       templateId: emailjsConfig.templateId || '',
@@ -1746,94 +1811,119 @@ async function renderAdminSettings(){
     };
   }
   const draft = state._emailjsDraft;
-  content.innerHTML = `
-    <div class="card">
-      <h3>שינוי סיסמת מנהל</h3>
-      <p class="hint" style="font-size:13px; margin-top:-6px;">מחוברים כ: ${escapeHtml(state.adminEmail || '')}</p>
-      <form id="changePassForm">
-        <div class="field"><label>סיסמה נוכחית</label><input type="password" id="curPass" autocomplete="current-password" required /></div>
-        <div class="field"><label>סיסמה חדשה</label><input type="password" id="newPass" autocomplete="new-password" required /></div>
-        <div class="error-msg" id="passErr"></div>
-        <div class="actions" style="justify-content:flex-start;">
-          <button type="submit" class="btn brass">עדכון סיסמה</button>
-        </div>
-      </form>
-    </div>
-    <div class="card">
-      <h3>שחזור סיסמה במקרה ששכחתם</h3>
-      <p class="hint" style="font-size:13.5px; margin-top:-6px;">
-        אם תשכחו את הסיסמה, לחצו "שכחת סיסמה?" במסך הכניסה — יישלח מייל אמיתי לכתובת
-        <b>${escapeHtml(state.adminEmail || '')}</b> עם קישור לקביעת סיסמה חדשה. אין צורך בהגדרה נוספת.
-      </p>
-    </div>
-    <div class="card">
-      <h3>כתובת אימייל לקבלת דוחות שעות</h3>
-      <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
-        כשעובד שולח דוח שעות, זו הכתובת שתופיע כנמען. אפשר להשאיר ריק כדי לבטל את האפשרות אצל העובדים.
-      </p>
-      <form id="managerEmailForm">
-        <div class="field"><label>כתובת אימייל</label><input type="email" id="managerEmailInput" value="${escapeHtml(managerEmail)}" placeholder="${escapeHtml(state.adminEmail || 'name@example.com')}" /></div>
-        <div class="error-msg" id="managerEmailErr"></div>
-        <div class="actions" style="justify-content:flex-start;">
-          <button type="submit" class="btn brass">שמירת כתובת</button>
-        </div>
-      </form>
-    </div>
-    <div class="card">
-      <h3>שליחה אוטומטית של דוחות שעות (EmailJS)</h3>
-      <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
-        זו אפשרות מתקדמת: העובדים ישלחו את דוח השעות ישירות מהאתר, בלי לפתוח אפליקציית מייל, ויוכלו לבחור מבין חשבונות השליחה שתגדירו כאן.
-        דורש חשבון חינמי ב-<b>emailjs.com</b>. הגדרה חד-פעמית: 1) בחשבון ה-EmailJS, תחת "Email Services", חברו חשבון מייל אחד לכל "שולח" שתרצו שיופיע לעובדים, ורשמו לכל אחד את ה-Service ID שלו.
-        2) תחת "Email Templates" צרו תבנית אחת (משותפת לכולם) עם המשתנים <code>{{to_email}}</code>, <code>{{subject}}</code>, <code>{{message}}</code> ו-<code>{{employee_name}}</code> בגוף התבנית, ורשמו את ה-Template ID.
-        3) תחת "Account" &gt; "API Keys" מצאו את ה-Public Key. אם משאירים את הרשימה של חשבונות שולחים ריקה, העובדים ימשיכו לראות רק את אפשרות פתיחת טיוטת המייל הרגילה.
-      </p>
-      <form id="emailjsConfigForm">
-        <div class="field"><label>Public Key</label><input type="text" id="emailjsPublicKey" value="${escapeHtml(draft.publicKey)}" dir="ltr" style="text-align:left;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
-        <div class="field"><label>Template ID</label><input type="text" id="emailjsTemplateId" value="${escapeHtml(draft.templateId)}" dir="ltr" style="text-align:left;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
-        <label style="margin-top:18px;">חשבונות שולחים</label>
-        ${draft.senders.length ? draft.senders.map(s => `
-          <div class="emp-row-form" style="margin-top:8px; align-items:flex-end;">
-            <div class="field" style="margin-top:0;"><label>שם לתצוגה</label><input type="text" data-sender-label="${s.id}" value="${escapeHtml(s.label || '')}" placeholder="למשל: משרד ראשי" /></div>
-            <div class="field" style="margin-top:0;"><label>Service ID</label><input type="text" data-sender-service="${s.id}" value="${escapeHtml(s.serviceId || '')}" dir="ltr" style="text-align:left;" placeholder="service_xxxxxxx" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
-            <div class="field" style="flex:0 0 auto; margin-top:0;"><button type="button" class="btn danger" data-remove-sender="${s.id}">הסרה</button></div>
+
+  const sectionsHtml = {
+    password: () => `
+      <div class="card">
+        <h3>שינוי סיסמת מנהל</h3>
+        <p class="hint" style="font-size:13px; margin-top:-6px;">מחוברים כ: ${escapeHtml(state.adminEmail || '')}</p>
+        <form id="changePassForm">
+          <div class="field"><label>סיסמה נוכחית</label><input type="password" id="curPass" autocomplete="current-password" required /></div>
+          <div class="field"><label>סיסמה חדשה</label><input type="password" id="newPass" autocomplete="new-password" required /></div>
+          <div class="error-msg" id="passErr"></div>
+          <div class="actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn brass">עדכון סיסמה</button>
           </div>
-        `).join('') : '<p class="hint" style="margin-top:6px;">עדיין לא נוספו חשבונות שולחים — העובדים יראו רק את אפשרות פתיחת טיוטת המייל הרגילה.</p>'}
-        <div class="actions" style="justify-content:flex-start; margin-top:12px;">
-          <button type="button" class="btn ghost small" id="addSenderBtn">+ הוספת חשבון שולח</button>
-        </div>
-        <div class="error-msg" id="emailjsErr" style="margin-top:12px;"></div>
-        <div class="actions" style="justify-content:flex-start;">
-          <button type="submit" class="btn brass">שמירת הגדרות שליחה</button>
-        </div>
-      </form>
+        </form>
+      </div>
+      <div class="card">
+        <h3>שחזור סיסמה</h3>
+        <p class="hint" style="font-size:13.5px; margin-top:-6px;">
+          אם תשכחו את הסיסמה, לחצו "שכחת סיסמה?" במסך הכניסה — יישלח מייל אמיתי לכתובת
+          <b>${escapeHtml(state.adminEmail || '')}</b> עם קישור לקביעת סיסמה חדשה. אין צורך בהגדרה נוספת.
+        </p>
+      </div>
+    `,
+    email: () => `
+      <div class="card">
+        <h3>כתובת אימייל לקבלת דוחות שעות</h3>
+        <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
+          כשעובד שולח דוח שעות, זו הכתובת שתופיע כנמען. אפשר להשאיר ריק כדי לבטל את האפשרות אצל העובדים.
+        </p>
+        <form id="managerEmailForm">
+          <div class="field"><label>כתובת אימייל</label><input type="email" id="managerEmailInput" value="${escapeHtml(managerEmail)}" placeholder="${escapeHtml(state.adminEmail || 'name@example.com')}" /></div>
+          <div class="error-msg" id="managerEmailErr"></div>
+          <div class="actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn brass">שינוי כתובת</button>
+          </div>
+        </form>
+      </div>
+    `,
+    autosend: () => `
+      <div class="card">
+        <h3>שליחה אוטומטית של דוחות שעות (EmailJS)</h3>
+        <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
+          זו אפשרות מתקדמת: העובדים ישלחו את דוח השעות ישירות מהאתר, בלי לפתוח אפליקציית מייל, ויוכלו לבחור מבין חשבונות השליחה שתגדירו כאן.
+          דורש חשבון חינמי ב-<b>emailjs.com</b>. הגדרה חד-פעמית: 1) בחשבון ה-EmailJS, תחת "Email Services", חברו חשבון מייל אחד לכל "שולח" שתרצו שיופיע לעובדים, ורשמו לכל אחד את ה-Service ID שלו.
+          2) תחת "Email Templates" צרו תבנית אחת (משותפת לכולם) עם המשתנים <code>{{to_email}}</code>, <code>{{subject}}</code>, <code>{{{message}}}</code> ו-<code>{{employee_name}}</code> בגוף התבנית, ורשמו את ה-Template ID.
+          3) תחת "Account" &gt; "API Keys" מצאו את ה-Public Key. אם משאירים את הרשימה של חשבונות שולחים ריקה, העובדים ימשיכו לראות רק את אפשרות פתיחת טיוטת המייל הרגילה.
+        </p>
+        <form id="emailjsConfigForm">
+          <div class="field"><label>Public Key</label><input type="text" id="emailjsPublicKey" value="${escapeHtml(draft.publicKey)}" dir="ltr" style="text-align:left;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
+          <div class="field"><label>Template ID</label><input type="text" id="emailjsTemplateId" value="${escapeHtml(draft.templateId)}" dir="ltr" style="text-align:left;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
+          <label style="margin-top:18px;">חשבונות שולחים</label>
+          ${draft.senders.length ? draft.senders.map(s => `
+            <div class="emp-row-form" style="margin-top:8px; align-items:flex-end;">
+              <div class="field" style="margin-top:0;"><label>שם לתצוגה</label><input type="text" data-sender-label="${s.id}" value="${escapeHtml(s.label || '')}" placeholder="למשל: משרד ראשי" /></div>
+              <div class="field" style="margin-top:0;"><label>Service ID</label><input type="text" data-sender-service="${s.id}" value="${escapeHtml(s.serviceId || '')}" dir="ltr" style="text-align:left;" placeholder="service_xxxxxxx" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
+              <div class="field" style="flex:0 0 auto; margin-top:0;"><button type="button" class="btn danger" data-remove-sender="${s.id}">הסרה</button></div>
+            </div>
+          `).join('') : '<p class="hint" style="margin-top:6px;">עדיין לא נוספו חשבונות שולחים — העובדים יראו רק את אפשרות פתיחת טיוטת המייל הרגילה.</p>'}
+          <div class="actions" style="justify-content:flex-start; margin-top:12px;">
+            <button type="button" class="btn ghost small" id="addSenderBtn">+ הוספת חשבון שולח</button>
+          </div>
+          <div class="error-msg" id="emailjsErr" style="margin-top:12px;"></div>
+          <div class="actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn brass">עריכת הגדרות שליחה</button>
+          </div>
+        </form>
+      </div>
+    `,
+    announcement: () => `
+      <div class="card">
+        <h3>הודעה לעובדים</h3>
+        <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
+          תמונה וכיתוב שיוצגו לכל עובד בראש הדף שלו כשהוא נכנס למערכת. אפשר למלא רק תמונה, רק כיתוב, או את שניהם.
+        </p>
+        ${announcement.image ? `<img src="${announcement.image}" style="max-width:100%; max-height:220px; border-radius:6px; margin-bottom:12px; display:block;" />` : ''}
+        <form id="announcementForm">
+          <div class="field"><label>${announcement.image ? 'החלפת תמונה' : 'העלאת תמונה'} (לא חובה)</label><input type="file" id="announcementImage" accept="image/*" /></div>
+          ${announcement.image ? '<div class="actions" style="justify-content:flex-start; margin-top:8px;"><button type="button" class="btn danger" id="removeAnnouncementImg">הסרת תמונה</button></div>' : ''}
+          <div class="field" style="margin-top:14px;"><label>כיתוב</label><textarea id="announcementCaption" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:10px 12px; border:1.5px solid var(--line); border-radius:4px; background:var(--paper); color:var(--ink);">${escapeHtml(announcement.caption || '')}</textarea></div>
+          <div class="error-msg" id="announcementErr"></div>
+          <div class="actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn brass">שמירת הודעה</button>
+          </div>
+        </form>
+      </div>
+    `,
+    security: () => `
+      <div class="card">
+        <h3>הערת אבטחה</h3>
+        <p class="hint" style="font-size:13.5px;">
+          פרטי העובדים והשעות שמורים במסד נתונים אמיתי (Firebase Firestore), הפועל כרגע ב"מצב בדיקה" (test mode) –
+          כלומר אין הגבלת הרשאות אמיתית מצד השרת מעבר להתחברות עצמה. כניסת המנהל מוגנת כעת באמצעות
+          Firebase Authentication אמיתי (אימייל+סיסמה), אך כניסת העובדים עדיין מבוססת קוד PIN בממשק בלבד.
+          חשוב לדעת: מצב הבדיקה של Firestore פג אוטומטית אחרי כ-30 יום, ואז הכתיבה לנתונים תיפסק עד שיוגדרו
+          כללי אבטחה (Security Rules) קבועים. מומלץ לשתף את קובץ האתר רק עם אנשי הצוות ולא לפרסם אותו publicly.
+        </p>
+      </div>
+    `
+  };
+
+  content.innerHTML = `
+    <div class="tabs" style="margin-bottom:18px;">
+      ${ADMIN_SETTINGS_TABS.map(t => `<div class="tab${t.key === activeTab ? ' active' : ''}" data-settings-tab="${t.key}">${t.label}</div>`).join('')}
     </div>
-    <div class="card">
-      <h3>הודעה לעובדים</h3>
-      <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
-        תמונה וכיתוב שיוצגו לכל עובד בראש הדף שלו כשהוא נכנס למערכת. אפשר למלא רק תמונה, רק כיתוב, או את שניהם.
-      </p>
-      ${announcement.image ? `<img src="${announcement.image}" style="max-width:100%; max-height:220px; border-radius:6px; margin-bottom:12px; display:block;" />` : ''}
-      <form id="announcementForm">
-        <div class="field"><label>${announcement.image ? 'החלפת תמונה' : 'העלאת תמונה'} (לא חובה)</label><input type="file" id="announcementImage" accept="image/*" /></div>
-        ${announcement.image ? '<div class="actions" style="justify-content:flex-start; margin-top:8px;"><button type="button" class="btn danger" id="removeAnnouncementImg">הסרת תמונה</button></div>' : ''}
-        <div class="field" style="margin-top:14px;"><label>כיתוב</label><textarea id="announcementCaption" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:10px 12px; border:1.5px solid var(--line); border-radius:4px; background:var(--paper); color:var(--ink);">${escapeHtml(announcement.caption || '')}</textarea></div>
-        <div class="error-msg" id="announcementErr"></div>
-        <div class="actions" style="justify-content:flex-start;">
-          <button type="submit" class="btn brass">שמירת הודעה</button>
-        </div>
-      </form>
-    </div>
-    <div class="card">
-      <h3>הערת אבטחה</h3>
-      <p class="hint" style="font-size:13.5px;">
-        פרטי העובדים והשעות שמורים במסד נתונים אמיתי (Firebase Firestore), הפועל כרגע ב"מצב בדיקה" (test mode) –
-        כלומר אין הגבלת הרשאות אמיתית מצד השרת מעבר להתחברות עצמה. כניסת המנהל מוגנת כעת באמצעות
-        Firebase Authentication אמיתי (אימייל+סיסמה), אך כניסת העובדים עדיין מבוססת קוד PIN בממשק בלבד.
-        חשוב לדעת: מצב הבדיקה של Firestore פג אוטומטית אחרי כ-30 יום, ואז הכתיבה לנתונים תיפסק עד שיוגדרו
-        כללי אבטחה (Security Rules) קבועים. מומלץ לשתף את קובץ האתר רק עם אנשי הצוות ולא לפרסם אותו publicly.
-      </p>
-    </div>
+    ${sectionsHtml[activeTab]()}
   `;
+  content.querySelectorAll('[data-settings-tab]').forEach(t => {
+    t.onclick = () => {
+      state._adminSettingsTab = t.dataset.settingsTab;
+      state._emailjsDraft = null;
+      renderAdminSettings();
+    };
+  });
   let removeAnnouncementFlag = false;
   const removeAnnouncementBtn = document.getElementById('removeAnnouncementImg');
   if(removeAnnouncementBtn){
@@ -1843,7 +1933,8 @@ async function renderAdminSettings(){
       removeAnnouncementBtn.disabled = true;
     };
   }
-  document.getElementById('announcementForm').onsubmit = async (e) => {
+  const announcementForm = document.getElementById('announcementForm');
+  if(announcementForm) announcementForm.onsubmit = async (e) => {
     e.preventDefault();
     const errEl = document.getElementById('announcementErr');
     const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -1867,7 +1958,9 @@ async function renderAdminSettings(){
     errEl.textContent = 'ההודעה נשמרה בהצלחה';
     renderAdminSettings();
   };
-  document.getElementById('managerEmailForm').onsubmit = async (e) => {
+
+  const managerEmailForm = document.getElementById('managerEmailForm');
+  if(managerEmailForm) managerEmailForm.onsubmit = async (e) => {
     e.preventDefault();
     const errEl = document.getElementById('managerEmailErr');
     const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -1878,7 +1971,7 @@ async function renderAdminSettings(){
     submitBtn.textContent = 'שומר...';
     const ok = await saveManagerEmail(val);
     submitBtn.disabled = false;
-    submitBtn.textContent = 'שמירת כתובת';
+    submitBtn.textContent = 'שינוי כתובת';
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
     errEl.style.color = '#2F5233';
     errEl.textContent = 'הכתובת נשמרה בהצלחה';
@@ -1898,7 +1991,8 @@ async function renderAdminSettings(){
       if(svcEl) s.serviceId = svcEl.value.trim();
     });
   }
-  document.getElementById('addSenderBtn').onclick = () => {
+  const addSenderBtn = document.getElementById('addSenderBtn');
+  if(addSenderBtn) addSenderBtn.onclick = () => {
     syncEmailjsDraftFromInputs();
     draft.senders.push({ id: uid(), label: '', serviceId: '' });
     renderAdminSettings();
@@ -1910,7 +2004,8 @@ async function renderAdminSettings(){
       renderAdminSettings();
     };
   });
-  document.getElementById('emailjsConfigForm').onsubmit = async (e) => {
+  const emailjsConfigForm = document.getElementById('emailjsConfigForm');
+  if(emailjsConfigForm) emailjsConfigForm.onsubmit = async (e) => {
     e.preventDefault();
     syncEmailjsDraftFromInputs();
     const errEl = document.getElementById('emailjsErr');
@@ -1923,14 +2018,15 @@ async function renderAdminSettings(){
     submitBtn.textContent = 'שומר...';
     const ok = await saveEmailjsConfig({ publicKey: draft.publicKey, templateId: draft.templateId, senders: draft.senders });
     submitBtn.disabled = false;
-    submitBtn.textContent = 'שמירת הגדרות שליחה';
+    submitBtn.textContent = 'עריכת הגדרות שליחה';
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
     state._emailjsDraft = null;
     errEl.style.color = '#2F5233';
     errEl.textContent = 'ההגדרות נשמרו בהצלחה';
   };
 
-  document.getElementById('changePassForm').onsubmit = async (e) => {
+  const changePassForm = document.getElementById('changePassForm');
+  if(changePassForm) changePassForm.onsubmit = async (e) => {
     e.preventDefault();
     const cur = document.getElementById('curPass').value;
     const np = document.getElementById('newPass').value;
