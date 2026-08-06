@@ -1153,7 +1153,11 @@ function showSendHoursModal(ctx){
   return new Promise(resolve => {
     const { emp, month, entries, totalHours, pay, managerEmail, emailjsConfig } = ctx;
     const senders = (emailjsConfig && emailjsConfig.senders) || [];
-    const canAutoSend = !!(emailjsConfig && emailjsConfig.publicKey && emailjsConfig.templateId && senders.length && window.emailjs);
+    const hasBaseConfig = !!(emailjsConfig && emailjsConfig.publicKey && emailjsConfig.templateId && window.emailjs);
+    // If this employee has their own dedicated Service ID (set by the manager in "עריכת עובד"),
+    // skip the "which account?" dropdown entirely and just send from their account directly.
+    const fixedServiceId = emp.emailjsServiceId || null;
+    const canAutoSend = hasBaseConfig && (fixedServiceId || senders.length > 0);
     const subject = `דוח שעות עבודה – ${emp.name} – ${monthLabel(month)}`;
 
     const overlay = document.createElement('div');
@@ -1167,14 +1171,16 @@ function showSendHoursModal(ctx){
           לכלול גם את הסכום הכולל לתשלום (לא רק שעות)
         </label>
         ${canAutoSend ? `
+          ${(!fixedServiceId && senders.length) ? `
           <div class="field" style="margin-top:14px; text-align:right;">
             <label>שליחה מחשבון</label>
             <select id="senderSelect" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:4px; background:var(--paper); color:var(--ink); font-family:'Heebo',sans-serif; font-size:15px;">
               ${senders.map(s => `<option value="${escapeHtml(s.serviceId)}">${escapeHtml(s.label)}</option>`).join('')}
             </select>
           </div>
+          ` : ''}
           <div class="actions" style="justify-content:center; margin-top:16px;">
-            <button type="button" class="btn brass" id="autoSendBtn" style="padding:10px 22px;">🚀 שליחה אוטומטית</button>
+            <button type="button" class="btn brass" id="autoSendBtn" style="padding:10px 22px;">🚀 שליחה אוטומטית${fixedServiceId ? ' מהמייל שלי' : ''}</button>
           </div>
           <p class="hint" style="font-size:12.5px; margin-top:14px; margin-bottom:0;">או לחלופין:</p>
         ` : ''}
@@ -1202,7 +1208,8 @@ function showSendHoursModal(ctx){
       const autoBtn = overlay.querySelector('#autoSendBtn');
       const errEl = overlay.querySelector('#sendHoursErr');
       autoBtn.onclick = async () => {
-        const serviceId = overlay.querySelector('#senderSelect').value;
+        const senderSelect = overlay.querySelector('#senderSelect');
+        const serviceId = fixedServiceId || (senderSelect ? senderSelect.value : null);
         const htmlBody = buildHoursEmailHtml(emp, month, entries, totalHours, pay, includePay());
         errEl.textContent = '';
         autoBtn.disabled = true;
@@ -1652,6 +1659,15 @@ function renderEditEmployee(empId){
           <div class="field"><label>${emp.photo ? 'החלפת תמונה' : 'הוספת תמונה'} (לא חובה)</label><input type="file" id="editPhoto" accept="image/*" /></div>
           ${emp.photo ? '<div class="field" style="flex:0 0 auto; align-self:flex-end;"><label>&nbsp;</label><button type="button" class="btn danger" id="removePhotoBtn">הסרת תמונה</button></div>' : ''}
         </div>
+        <div class="emp-row-form" style="margin-top:14px;">
+          <div class="field">
+            <label>Service ID אישי לשליחה אוטומטית (לא חובה)</label>
+            <input type="text" id="editEmailjsServiceId" value="${escapeHtml(emp.emailjsServiceId || '')}" dir="ltr" style="text-align:left;" placeholder="service_xxxxxxx" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" />
+          </div>
+        </div>
+        <p class="hint" style="font-size:12.5px; margin-top:-8px;">
+          אם ממלאים כאן Service ID (אחרי חיבור חשבון המייל האישי של העובד ב-EmailJS), הדוחות שלו יישלחו אוטומטית מהחשבון הזה בלי שהוא יצטרך לבחור. משאירים ריק כדי שהעובד ימשיך לבחור מרשימת החשבונות המשותפת שבהגדרות.
+        </p>
         <div class="error-msg" id="editEmpErr"></div>
         <div class="actions" style="justify-content:flex-start;">
           <button type="submit" class="btn brass">שמירת שינויים</button>
@@ -1704,6 +1720,7 @@ function renderEditEmployee(empId){
       photo,
       payType: document.getElementById('editPayType').value,
       rate: Number(document.getElementById('editRate').value),
+      emailjsServiceId: document.getElementById('editEmailjsServiceId').value.trim() || null,
     };
     const updatedList = state.employees.map(x => x.id === emp.id ? updatedEmp : x);
     const ok = await saveEmployees(updatedList);
