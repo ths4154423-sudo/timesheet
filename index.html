@@ -426,7 +426,7 @@ async function loadEmployees(){
   try{
     const snap = await withTimeout(getDoc(doc(db, 'meta', 'employees')), 12000, 'loadEmployees');
     return snap.exists() ? (snap.data().list || []) : [];
-  }catch(e){ console.error('loadEmployees error', e); return []; }
+  }catch(e){ console.error('loadEmployees error', e); return null; }
 }
 async function saveEmployees(list){
   try{
@@ -438,7 +438,7 @@ async function loadHours(empId){
   try{
     const snap = await withTimeout(getDoc(doc(db, 'hours', empId)), 12000, 'loadHours');
     return snap.exists() ? snap.data() : {};
-  }catch(e){ console.error('loadHours error', e); return {}; }
+  }catch(e){ console.error('loadHours error', e); return null; }
 }
 async function saveHours(empId, data){
   try{
@@ -900,7 +900,20 @@ function wireNowButton(buttonId, inputId){
 }
 async function init(){
   app.innerHTML = '<div class="empty-state">טוען...</div>';
-  state.employees = await loadEmployees();
+  const loadedEmployees = await loadEmployees();
+  if(loadedEmployees === null){
+    app.innerHTML = `
+      <div class="center-stage">
+        <div class="login-card">
+          <h1>שגיאת התחברות לשרת</h1>
+          <p class="hint">לא הצלחנו לטעון את רשימת העובדים מהשרת (בעיית תקשורת זמנית). כדי להימנע מאובדן מידע, האתר לא ממשיך עד שהטעינה תצליח.</p>
+          <button type="button" class="btn brass" onclick="location.reload()">ניסיון נוסף</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  state.employees = loadedEmployees;
   state.loading = false;
 
   onAuthStateChanged(auth, (user) => {
@@ -1095,6 +1108,10 @@ function renderEmployeeLogin(){
       if(emp && emp.pin === pin){
         saveSession({ role: 'employee', empId: emp.id });
         const hoursData = await loadHours(emp.id);
+        if(hoursData === null){
+          renderEmployeeDashboard(emp, null, false);
+          return;
+        }
         const todayEntries = hoursData[currentMonthStr()] || [];
         const alreadyStarted = !!findOpenEntryToday(todayEntries);
         if(alreadyStarted){
@@ -1439,7 +1456,7 @@ async function renderAdminSummary(){
 
   const rows = [];
   for(const emp of state.employees){
-    const hoursData = await loadHours(emp.id);
+    const hoursData = await loadHours(emp.id) || {};
     const entries = hoursData[month] || [];
     const totalHours = entries.reduce((s,e) => s + (computeEntryHours(e) || 0), 0);
     const pay = calcPay(emp, totalHours);
@@ -2119,6 +2136,19 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   }else{
     app.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
     hoursData = await loadHours(emp.id);
+    if(hoursData === null){
+      // Critical: never fall through to render/save with an empty object here — that's exactly
+      // what silently erased a real employee's hours before this guard existed.
+      app.innerHTML = `
+        <div class="card" style="text-align:center;">
+          <h3 style="color:var(--danger); margin-top:0;">שגיאה בטעינת הנתונים</h3>
+          <p class="hint">לא הצלחנו לטעון את נתוני השעות שלך מהשרת (בעיית תקשורת זמנית). כדי להימנע מאובדן מידע, לא ממשיכים עד שהטעינה תצליח.</p>
+          <button type="button" class="btn brass" id="retryLoadBtn">ניסיון נוסף</button>
+        </div>
+      `;
+      document.getElementById('retryLoadBtn').onclick = () => renderEmployeeDashboard(emp, editingId, false);
+      return;
+    }
   }
   const entries = (hoursData[month] || []).slice().sort((a,b) => a.date.localeCompare(b.date));
   const totalHours = entries.reduce((s,e) => s + (computeEntryHours(e) || 0), 0);
@@ -2426,6 +2456,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       submitBtn.disabled = true;
       submitBtn.textContent = 'שומר...';
       const fresh = await loadHours(emp.id);
+      if(fresh === null){ errEl.textContent = 'שגיאה בטעינת הנתונים מהשרת — לא בוצע שינוי. נסה שוב.'; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
       const tm = currentMonthStr();
       if(!fresh[tm]) fresh[tm] = [];
       if(findOpenEntryToday(fresh[tm])){ errEl.textContent = 'כבר קיים יום עבודה פתוח להיום'; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
@@ -2448,6 +2479,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       startBreakBtn.disabled = true;
       startBreakBtn.textContent = 'שומר...';
       const fresh = await loadHours(emp.id);
+      if(fresh === null){ alert('שגיאה בטעינת הנתונים מהשרת — לא בוצע שינוי. נסה שוב.'); startBreakBtn.disabled=false; startBreakBtn.textContent='☕ התחלת הפסקה'; return; }
       const tm = currentMonthStr();
       const list = fresh[tm] || [];
       const entry = list.find(x => x.id === openEntry.id);
@@ -2470,6 +2502,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       endBreakBtn.disabled = true;
       endBreakBtn.textContent = 'שומר...';
       const fresh = await loadHours(emp.id);
+      if(fresh === null){ alert('שגיאה בטעינת הנתונים מהשרת — לא בוצע שינוי. נסה שוב.'); endBreakBtn.disabled=false; endBreakBtn.textContent=restoreLabel; return; }
       const tm = currentMonthStr();
       const list = fresh[tm] || [];
       const entry = list.find(x => x.id === openEntry.id);
@@ -2489,6 +2522,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       pauseDayBtn.disabled = true;
       pauseDayBtn.textContent = 'שומר...';
       const fresh = await loadHours(emp.id);
+      if(fresh === null){ alert('שגיאה בטעינת הנתונים מהשרת — לא בוצע שינוי. נסה שוב.'); pauseDayBtn.disabled=false; pauseDayBtn.textContent='⏸️ סיום יום עבודה בינתיים'; return; }
       const tm = currentMonthStr();
       const list = fresh[tm] || [];
       const entry = list.find(x => x.id === openEntry.id);
@@ -2515,6 +2549,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       submitBtn.disabled = true;
       submitBtn.textContent = 'שומר...';
       const fresh = await loadHours(emp.id);
+      if(fresh === null){ errEl.textContent = 'שגיאה בטעינת הנתונים מהשרת — לא בוצע שינוי. נסה שוב.'; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
       const tm = currentMonthStr();
       const list = fresh[tm] || [];
       const entry = list.find(x => x.id === openEntry.id);
@@ -2596,6 +2631,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           confirmBtn.disabled = true;
           confirmBtn.textContent = 'מייבא...';
           const fresh = await loadHours(emp.id);
+          if(fresh === null){
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'ייבוא ' + validRows.length + ' רישומים';
+            excelErr.textContent = 'שגיאה בטעינת הנתונים מהשרת — לא בוצע ייבוא. נסה שוב.';
+            return;
+          }
           for(const r of validRows){
             const m = r.date.slice(0,7);
             if(!fresh[m]) fresh[m] = [];
@@ -2702,6 +2743,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       submitBtn.disabled = true;
       submitBtn.textContent = 'שומר...';
       const fresh = await loadHours(emp.id);
+      if(fresh === null){
+        submitBtn.disabled = false;
+        submitBtn.textContent = editingEntry ? 'עדכון שינויים' : 'הוספה';
+        errEl.textContent = 'שגיאה בטעינת הנתונים מהשרת — לא בוצע שינוי. נסה שוב.';
+        return;
+      }
 
       if(editingEntry){
         // remove the old entry from whichever month it was in (it may change if the date changed)
@@ -2737,8 +2784,10 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const confirmed = await showConfirmModal('האם אתה בטוח שברצונך למחוק?');
       if(!confirmed) return;
       const fresh = await loadHours(emp.id);
+      if(fresh === null){ alert('שגיאה בטעינת הנתונים מהשרת — המחיקה בוטלה. נסה שוב.'); return; }
       fresh[month] = (fresh[month] || []).filter(e => e.id !== btn.dataset.delEntry);
-      await saveHours(emp.id, fresh);
+      const ok = await saveHours(emp.id, fresh);
+      if(ok !== true){ alert('שגיאה בשמירה: ' + ok); return; }
       renderEmployeeDashboard(emp, null, fresh);
     };
   });
