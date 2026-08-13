@@ -266,6 +266,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -1923,12 +1924,61 @@ async function renderAdminSummary(){
         </table>
       </div>
     </div>
+    <div class="card">
+      <h3 style="margin-top:0;">שעות עבודה לפי עובד</h3>
+      <div style="position:relative; height:260px;"><canvas id="hoursChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;">עלות שכר לפי עובד</h3>
+      <div style="position:relative; height:260px;"><canvas id="payChart"></canvas></div>
+    </div>
     `}
   `;
   document.getElementById('monthPicker').onchange = (e) => {
     state._adminMonth = e.target.value;
     renderAdminSummary();
   };
+
+  if(rows.length && window.Chart){
+    renderAdminCharts(rows);
+  }
+}
+
+// מצייר את גרפי העמודות של סיכום המנהל (שעות ותשלום לכל עובד). שומר את מופעי הגרפים
+// ב-state כדי שאפשר יהיה להשמיד אותם לפני ציור מחדש (אחרת Chart.js זורק שגיאה על אותו canvas).
+function renderAdminCharts(rows){
+  if(state._charts){
+    if(state._charts.hours) state._charts.hours.destroy();
+    if(state._charts.pay) state._charts.pay.destroy();
+  }
+  state._charts = {};
+  const labels = rows.map(r => r.emp.name);
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--brass').trim() || '#5FBF8F';
+
+  const hoursCtx = document.getElementById('hoursChart');
+  if(hoursCtx){
+    state._charts.hours = new Chart(hoursCtx, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'שעות', data: rows.map(r => Math.round(r.totalHours * 100) / 100), backgroundColor: accent, borderRadius: 6 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  }
+  const payCtx = document.getElementById('payChart');
+  if(payCtx){
+    state._charts.pay = new Chart(payCtx, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'תשלום (₪)', data: rows.map(r => Math.round(r.pay * 100) / 100), backgroundColor: '#8A6D2F', borderRadius: 6 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  }
 }
 
 function renderAdminEmployees(){
