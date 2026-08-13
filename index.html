@@ -1268,26 +1268,29 @@ async function notifyManagerOfRequest(emp, reqId, text){
   }catch(e){ console.error('notifyManagerOfRequest error', e); }
 }
 
-async function showRequestsModal(emp){
-  const overlay = document.createElement('div');
-  overlay.className = 'confirm-overlay';
-  overlay.innerHTML = `<div class="confirm-box" style="max-width:420px;"><div class="empty-state">טוען...</div></div>`;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.onclick = (e) => { if(e.target === overlay) close(); };
+async function renderEmployeeRequests(emp){
+  stopLiveTimer();
+  stopLiveMoneyTimer();
+  stopClockFieldTimers();
+  stopBreakWatchdog();
+  setHeader('בקשה למנהל', '<button class="btn ghost small" id="reqBackBtn">חזרה</button>');
+
+  app.innerHTML = `<div class="empty-state">טוען...</div>`;
+  document.getElementById('reqBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
 
   let list = await loadRequests();
   if(list === null){
-    overlay.querySelector('.confirm-box').innerHTML = `
-      <h3 style="margin-top:0;">שגיאה</h3>
-      <p class="hint">לא הצלחנו לטעון את הבקשות מהשרת. נסו שוב.</p>
-      <div class="actions" style="justify-content:center;"><button type="button" class="btn ghost" id="reqClose">סגירה</button></div>
+    app.innerHTML = `
+      <div class="card" style="text-align:center;">
+        <h3 style="color:var(--danger); margin-top:0;">שגיאה בטעינה</h3>
+        <p class="hint">לא הצלחנו לטעון את הבקשות מהשרת. נסו שוב.</p>
+        <button type="button" class="btn brass" onclick="renderEmployeeRequests(state.currentEmployee)">ניסיון נוסף</button>
+      </div>
     `;
-    overlay.querySelector('#reqClose').onclick = close;
     return;
   }
 
-  // סימון בקשות שנענו כ"נצפו" עבור העובד הזה (מסיר את הנקודה האדומה בפעם הבאה)
+  // סימון בקשות שנענו כ"נצפו" עבור העובד הזה (מסיר את הנקודה האדומה בדשבורד בפעם הבאה)
   let changed = false;
   list.forEach(r => {
     if(r.empId === emp.id && r.status !== 'pending' && r.seenByEmployee === false){
@@ -1302,22 +1305,26 @@ async function showRequestsModal(emp){
   const myRequests = list.filter(r => r.empId === emp.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
   function render(){
-    overlay.querySelector('.confirm-box').style.maxWidth = '460px';
-    overlay.querySelector('.confirm-box').style.textAlign = 'right';
-    overlay.querySelector('.confirm-box').innerHTML = `
-      <h3 style="margin:0 0 4px; text-align:center;">📨 בקשה למנהל</h3>
-      <p class="hint" style="text-align:center; margin:0 0 18px; font-size:13px;">כתוב/י כל בקשה חופשית — יציאה מוקדמת, החלפת משמרת, הערה כללית וכו'.</p>
-      <form id="newRequestForm">
-        <textarea id="requestText" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink); resize:vertical;" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea>
-        <div class="error-msg" id="requestErr" style="margin-top:6px;"></div>
-        <div class="actions" style="justify-content:center; margin-top:12px;">
-          <button type="submit" class="btn brass" style="width:100%; border-radius:10px;">שליחת בקשה</button>
-        </div>
-      </form>
+    app.innerHTML = `
+      <div class="avatar-row" style="margin-bottom:16px;">
+        ${avatarHtml(emp)}
+        <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">📨 בקשה חדשה</h3>
+        <p class="hint" style="margin-top:-6px; font-size:13px;">כתוב/י כל בקשה חופשית — יציאה מוקדמת, החלפת משמרת, הערה כללית וכו'.</p>
+        <form id="newRequestForm">
+          <textarea id="requestText" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); resize:vertical;" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea>
+          <div class="error-msg" id="requestErr" style="margin-top:6px;"></div>
+          <div class="actions" style="justify-content:flex-start; margin-top:12px;">
+            <button type="submit" class="btn brass" style="border-radius:10px;">שליחת בקשה</button>
+          </div>
+        </form>
+      </div>
       ${myRequests.length ? `
-        <div style="margin-top:22px;">
-          <label style="margin-top:0; display:block; font-weight:600; margin-bottom:10px;">הבקשות שלי</label>
-          <div style="display:flex; flex-direction:column; gap:10px; max-height:280px; overflow-y:auto; padding-inline-end:2px;">
+        <div class="card">
+          <h3 style="margin-top:0;">הבקשות שלי</h3>
+          <div style="display:flex; flex-direction:column; gap:10px;">
             ${myRequests.map(r => `
               <div style="background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 14px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -1332,10 +1339,8 @@ async function showRequestsModal(emp){
           </div>
         </div>
       ` : ''}
-      <div class="actions" style="justify-content:center; margin-top:14px;"><button type="button" class="btn ghost" id="reqClose">סגירה</button></div>
     `;
-    overlay.querySelector('#reqClose').onclick = close;
-    overlay.querySelectorAll('[data-delete-my-req]').forEach(btn => {
+    document.querySelectorAll('[data-delete-my-req]').forEach(btn => {
       btn.onclick = async () => {
         const confirmed = await showConfirmModal('למחוק את הבקשה הזו לצמיתות?');
         if(!confirmed) return;
@@ -1350,11 +1355,11 @@ async function showRequestsModal(emp){
         render();
       };
     });
-    overlay.querySelector('#newRequestForm').onsubmit = async (e) => {
+    document.getElementById('newRequestForm').onsubmit = async (e) => {
       e.preventDefault();
-      const errEl = overlay.querySelector('#requestErr');
+      const errEl = document.getElementById('requestErr');
       const submitBtn = e.target.querySelector('button[type="submit"]');
-      const text = overlay.querySelector('#requestText').value.trim();
+      const text = document.getElementById('requestText').value.trim();
       if(!text){ errEl.textContent = 'יש לכתוב תוכן לבקשה'; return; }
       errEl.textContent = '';
       submitBtn.disabled = true;
@@ -2733,7 +2738,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   }
   const myRequestsBtn = document.getElementById('myRequestsBtn');
   if(myRequestsBtn){
-    myRequestsBtn.onclick = () => showRequestsModal(emp);
+    myRequestsBtn.onclick = () => renderEmployeeRequests(emp);
     loadRequests().then(list => {
       if(!list) return;
       const hasUnseen = list.some(r => r.empId === emp.id && r.status !== 'pending' && r.seenByEmployee === false);
