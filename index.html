@@ -175,12 +175,17 @@
   .pill.status-pending{ background:#EFE3D0; color:#8A6D2F; }
   .pill.status-approved{ background:#E4EEE6; color:#2F5233; }
   .pill.status-rejected{ background:#F6DEDA; color:var(--danger); }
-  @keyframes reqMenuSlide{
-    from{ opacity:0; transform:translateY(-10px) scaleY(.88); }
-    to{ opacity:1; transform:translateY(0) scaleY(1); }
+  @keyframes reqSheetUp{
+    from{ transform:translateY(100%); }
+    to{ transform:translateY(0); }
   }
-  .req-filter-menu{ animation:reqMenuSlide .22s cubic-bezier(.2,.8,.3,1); }
-  .req-filter-menu > div:hover{ background:var(--paper-alt); }
+  @keyframes reqBackdropFade{
+    from{ opacity:0; }
+    to{ opacity:1; }
+  }
+  .req-filter-backdrop{ animation:reqBackdropFade .2s ease-out; }
+  .req-filter-sheet{ animation:reqSheetUp .3s cubic-bezier(.2,.85,.3,1); }
+  .req-filter-sheet > div:active{ background:var(--paper-alt); }
 
   .list-item{
     display:flex; justify-content:space-between; align-items:center;
@@ -1282,13 +1287,19 @@ function attachLongPress(el, onLongPress, onClick){
     timer = setTimeout(() => { firedLongPress = true; onLongPress(); }, 550);
   };
   const cancel = () => { if(timer){ clearTimeout(timer); timer = null; } };
-  const end = () => { const wasLong = firedLongPress; cancel(); if(!wasLong) onClick(); };
+  const endTouch = (e) => {
+    if(e && e.cancelable) e.preventDefault(); // מונע מהדפדפן ליצור לחיצת-עכבר מדומה כמה מילישניות אחר כך
+    const wasLong = firedLongPress;
+    cancel();
+    if(!wasLong) onClick();
+  };
+  const endMouse = () => { const wasLong = firedLongPress; cancel(); if(!wasLong) onClick(); };
   el.addEventListener('touchstart', start, { passive: true });
-  el.addEventListener('touchend', end);
+  el.addEventListener('touchend', endTouch);
   el.addEventListener('touchmove', cancel);
   el.addEventListener('touchcancel', cancel);
   el.addEventListener('mousedown', start);
-  el.addEventListener('mouseup', end);
+  el.addEventListener('mouseup', endMouse);
   el.addEventListener('mouseleave', cancel);
 }
 
@@ -1440,21 +1451,8 @@ async function renderEmployeeRequests(emp){
     // ---------- מסך הרשימה הראשי (רשימה אנכית, כמו תיבת דואר) ----------
     const filtered = filterStatus === 'all' ? myRequests : myRequests.filter(r => r.status === filterStatus);
     app.innerHTML = `
-      <div style="position:relative; display:flex; justify-content:flex-start; margin-bottom:14px;">
+      <div style="display:flex; justify-content:flex-start; margin-bottom:14px;">
         <button type="button" id="reqFilterBtn" style="background:var(--surface); border:1px solid var(--line); border-radius:8px; width:40px; height:40px; font-size:19px; line-height:1; cursor:pointer; color:var(--ink);">☰</button>
-        ${menuOpen ? `
-          <div class="req-filter-menu" style="position:absolute; top:calc(100% + 8px); right:0; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.2); z-index:100; overflow:hidden; min-width:170px; transform-origin:top right;">
-            ${CATEGORY_OPTIONS.map(c => `
-              <div data-filter="${c.key}" style="display:flex; align-items:center; gap:9px; padding:13px 18px; cursor:pointer; font-size:16px; font-weight:${filterStatus === c.key ? '700' : '500'}; color:${CATEGORY_COLOR[c.key]}; ${filterStatus === c.key ? 'background:var(--paper-alt);' : ''}">
-                <span style="width:10px; height:10px; border-radius:50%; background:${CATEGORY_COLOR[c.key]}; flex-shrink:0;"></span>${escapeHtml(c.label)}
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
-      </div>
-      <div class="avatar-row" style="margin-bottom:14px;">
-        ${avatarHtml(emp)}
-        <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
       </div>
       ${filterStatus !== 'all' ? `<p class="hint" style="font-size:12.5px; margin-top:-6px;">מסונן לפי: ${escapeHtml(CATEGORY_OPTIONS.find(c => c.key === filterStatus).label)}</p>` : ''}
       <div class="card" style="padding:6px 26px;">
@@ -1471,21 +1469,32 @@ async function renderEmployeeRequests(emp){
         `).join('') : `<div class="empty-state">אין הודעות להצגה.</div>`}
       </div>
       <button type="button" id="newMsgFab" style="position:fixed; bottom:22px; left:20px; background:var(--brass); color:var(--brass-text); border:none; border-radius:24px; padding:13px 20px; font-weight:600; font-size:14px; box-shadow:0 4px 16px rgba(0,0,0,.28); cursor:pointer; z-index:60;">✏️ הודעה חדשה</button>
+      ${menuOpen ? `
+        <div id="reqSheetBackdrop" class="req-filter-backdrop" style="position:fixed; inset:0; background:rgba(10,20,30,.5); z-index:150;"></div>
+        <div class="req-filter-sheet" style="position:fixed; bottom:0; right:0; left:0; background:var(--surface); border-radius:20px 20px 0 0; z-index:151; padding:10px 20px calc(20px + env(safe-area-inset-bottom)); box-shadow:0 -6px 24px rgba(0,0,0,.25);">
+          <div style="width:40px; height:4px; background:var(--line); border-radius:3px; margin:6px auto 16px;"></div>
+          <div style="font-weight:700; font-size:15px; margin-bottom:10px;">סינון לפי סטטוס</div>
+          ${CATEGORY_OPTIONS.map(c => `
+            <div data-filter="${c.key}" style="display:flex; align-items:center; gap:12px; padding:15px 6px; cursor:pointer; font-size:17px; font-weight:${filterStatus === c.key ? '700' : '500'}; color:${CATEGORY_COLOR[c.key]}; border-bottom:1px solid var(--line);">
+              <span style="width:12px; height:12px; border-radius:50%; background:${CATEGORY_COLOR[c.key]}; flex-shrink:0;"></span>${escapeHtml(c.label)}
+              ${filterStatus === c.key ? '<span style="margin-inline-start:auto; font-size:16px;">✓</span>' : ''}
+            </div>
+          `).join('')}
+          <button type="button" id="reqSheetCancel" class="btn ghost" style="width:100%; margin-top:16px; border-radius:12px;">ביטול</button>
+        </div>
+      ` : ''}
     `;
 
     document.getElementById('reqBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
     const filterBtn = document.getElementById('reqFilterBtn');
-    if(filterBtn) filterBtn.onclick = (e) => { e.stopPropagation(); menuOpen = !menuOpen; render(); };
+    if(filterBtn) filterBtn.onclick = () => { menuOpen = true; render(); };
     document.querySelectorAll('[data-filter]').forEach(el => {
       el.onclick = () => { filterStatus = el.dataset.filter; menuOpen = false; render(); };
     });
-    if(menuOpen){
-      // סוגר את התפריט בלחיצה בכל מקום אחר במסך
-      document.addEventListener('click', function onceOutside(ev){
-        document.removeEventListener('click', onceOutside);
-        if(menuOpen){ menuOpen = false; render(); }
-      }, { once: true });
-    }
+    const backdrop = document.getElementById('reqSheetBackdrop');
+    if(backdrop) backdrop.onclick = () => { menuOpen = false; render(); };
+    const sheetCancel = document.getElementById('reqSheetCancel');
+    if(sheetCancel) sheetCancel.onclick = () => { menuOpen = false; render(); };
     document.getElementById('newMsgFab').onclick = () => { view = 'compose'; render(); };
     document.querySelectorAll('[data-row]').forEach(row => {
       attachLongPress(
