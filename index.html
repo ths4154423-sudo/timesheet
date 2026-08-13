@@ -228,7 +228,11 @@
   .welcome-overlay{
     position:fixed; top:0; right:0; bottom:0; left:0; background:rgba(10,20,30,.82);
     display:flex; align-items:center; justify-content:center; flex-direction:column;
-    z-index:2000; padding:24px;
+    z-index:2000; padding:24px; overflow:hidden;
+  }
+  .welcome-overlay .welcome-bg{
+    position:absolute; top:0; right:0; bottom:0; left:0;
+    width:100%; height:100%; object-fit:cover; z-index:-1;
   }
   .welcome-text{
     color:#E8C97A; font-family:'Fraunces', serif; font-weight:700; font-size:24px;
@@ -239,10 +243,6 @@
   @keyframes letter-dance{
     0%, 100%{ transform:translateY(0) rotate(0deg); }
     50%{ transform:translateY(-10px) rotate(-5deg); }
-  }
-  .welcome-overlay img{
-    max-width:88vw; max-height:65vh; border-radius:12px;
-    box-shadow:0 10px 40px rgba(0,0,0,.55);
   }
   .welcome-skip{
     position:absolute; bottom:14px; left:14px; color:rgba(255,255,255,.6);
@@ -1336,8 +1336,8 @@ function showWelcomeSplash(emp, onDone){
       return `<span style="animation-delay:${(i * 0.06).toFixed(2)}s">${shown}</span>`;
     }).join('');
     overlay.innerHTML = `
+      <img src="welcome.png" alt="" class="welcome-bg" />
       <div class="welcome-text">${lettersHtml}</div>
-      <img src="welcome.png" alt="" />
       <button type="button" class="welcome-skip" id="welcomeSkip">דילוג</button>
     `;
     document.body.appendChild(overlay);
@@ -1353,7 +1353,7 @@ function showWelcomeSplash(emp, onDone){
     overlay.querySelector('#welcomeSkip').onclick = finish;
   }catch(e){ onDone(); }
 }
-function showDaySummaryModal(entry, emp){
+async function showDaySummaryModal(entry, emp){
   const hours = computeEntryHours(entry);
   const money = (emp.payType !== 'fixed' && hours !== null) ? hours * emp.rate : null;
   const overlay = document.createElement('div');
@@ -1381,7 +1381,10 @@ function showDaySummaryModal(entry, emp){
     </div>
   `;
   document.body.appendChild(overlay);
-  if(money !== null) playChaChing();
+  if(money !== null){
+    const settings = await getEmpSettings(emp.id);
+    if(!(settings.muteChaChing ?? false)) playChaChing();
+  }
   const close = () => overlay.remove();
   overlay.querySelector('#daySummaryClose').onclick = close;
   overlay.onclick = (e) => { if(e.target === overlay) close(); };
@@ -2563,8 +2566,10 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       entry.end = endTime;
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🔴 סיום יום עבודה'; return; }
-      playSuccessChime();
-      speakHebrew(`${emp.name}, מעריכים אוֹתְךָ על העבודה, ערב טוב`);
+      if(!(empSettings.muteClosingAnnouncement ?? false)){
+        playSuccessChime();
+        speakHebrew(`${emp.name}, מעריכים אוֹתְךָ על העבודה, ערב טוב`);
+      }
       renderEmployeeDashboard(emp, null, fresh);
     };
   }
@@ -2807,6 +2812,22 @@ const EMPLOYEE_SETTINGS_DEFS = [
     type: 'checkbox',
     label: 'השתקת הודעת הפתיחה',
     hint: 'לא ישמעו הצליל וההודעה הקולית ("בוקר טוב...") בעת התחלת יום עבודה.',
+    default: false
+  },
+  {
+    key: 'muteClosingAnnouncement',
+    category: 'sound',
+    type: 'checkbox',
+    label: 'השתקת הודעת הסיום',
+    hint: 'לא ישמעו הצליל וההודעה הקולית ("ערב טוב...") בעת סיום יום עבודה.',
+    default: false
+  },
+  {
+    key: 'muteChaChing',
+    category: 'sound',
+    type: 'checkbox',
+    label: 'השתקת צליל הקופה הרושמת',
+    hint: 'לא יישמע צליל "קופה רושמת" כשפותחים סיכום של יום עם סכום כסף.',
     default: false
   },
   {
