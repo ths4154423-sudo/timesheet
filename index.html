@@ -175,6 +175,12 @@
   .pill.status-pending{ background:#EFE3D0; color:#8A6D2F; }
   .pill.status-approved{ background:#E4EEE6; color:#2F5233; }
   .pill.status-rejected{ background:#F6DEDA; color:var(--danger); }
+  @keyframes reqMenuSlide{
+    from{ opacity:0; transform:translateY(-10px) scaleY(.88); }
+    to{ opacity:1; transform:translateY(0) scaleY(1); }
+  }
+  .req-filter-menu{ animation:reqMenuSlide .22s cubic-bezier(.2,.8,.3,1); }
+  .req-filter-menu > div:hover{ background:var(--paper-alt); }
 
   .list-item{
     display:flex; justify-content:space-between; align-items:center;
@@ -1326,6 +1332,7 @@ async function renderEmployeeRequests(emp){
     { key: 'approved', label: 'אושר' },
     { key: 'rejected', label: 'נדחה' }
   ];
+  const CATEGORY_COLOR = { all: 'var(--ink)', pending: '#B08A2E', approved: '#2F5233', rejected: 'var(--danger)' };
 
   let view = 'list'; // 'list' | 'detail' | 'compose'
   let filterStatus = 'all';
@@ -1433,15 +1440,19 @@ async function renderEmployeeRequests(emp){
     // ---------- מסך הרשימה הראשי (רשימה אנכית, כמו תיבת דואר) ----------
     const filtered = filterStatus === 'all' ? myRequests : myRequests.filter(r => r.status === filterStatus);
     app.innerHTML = `
-      <button type="button" id="reqFilterBtn" style="position:fixed; top:64px; right:16px; z-index:90; background:var(--surface); border:1px solid var(--line); border-radius:8px; width:38px; height:38px; font-size:18px; line-height:1; cursor:pointer; color:var(--ink);">☰</button>
-      ${menuOpen ? `
-        <div style="position:fixed; top:106px; right:16px; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,.18); z-index:100; overflow:hidden; min-width:140px;">
-          ${CATEGORY_OPTIONS.map(c => `
-            <div data-filter="${c.key}" style="padding:11px 16px; cursor:pointer; font-size:14px; ${filterStatus === c.key ? 'background:var(--paper-alt); font-weight:600;' : ''}">${escapeHtml(c.label)}</div>
-          `).join('')}
-        </div>
-      ` : ''}
-      <div class="avatar-row" style="margin-bottom:14px; padding-inline-end:50px;">
+      <div style="position:relative; display:flex; justify-content:flex-start; margin-bottom:14px;">
+        <button type="button" id="reqFilterBtn" style="background:var(--surface); border:1px solid var(--line); border-radius:8px; width:40px; height:40px; font-size:19px; line-height:1; cursor:pointer; color:var(--ink);">☰</button>
+        ${menuOpen ? `
+          <div class="req-filter-menu" style="position:absolute; top:calc(100% + 8px); right:0; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.2); z-index:100; overflow:hidden; min-width:170px; transform-origin:top right;">
+            ${CATEGORY_OPTIONS.map(c => `
+              <div data-filter="${c.key}" style="display:flex; align-items:center; gap:9px; padding:13px 18px; cursor:pointer; font-size:16px; font-weight:${filterStatus === c.key ? '700' : '500'}; color:${CATEGORY_COLOR[c.key]}; ${filterStatus === c.key ? 'background:var(--paper-alt);' : ''}">
+                <span style="width:10px; height:10px; border-radius:50%; background:${CATEGORY_COLOR[c.key]}; flex-shrink:0;"></span>${escapeHtml(c.label)}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+      <div class="avatar-row" style="margin-bottom:14px;">
         ${avatarHtml(emp)}
         <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
       </div>
