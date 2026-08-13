@@ -1303,6 +1303,7 @@ async function renderEmployeeRequests(emp){
   const STATUS_LABEL = { pending: '⏳ ממתינה', approved: '✅ אושרה', rejected: '❌ נדחתה' };
   const STATUS_ICON = { pending: '⏳', approved: '✅', rejected: '❌' };
   const myRequests = list.filter(r => r.empId === emp.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  let activeSubTab = 'new'; // 'new' | 'history' - כמו "כתיבה" מול "דואר נכנס" באפליקציית מייל
 
   function render(){
     app.innerHTML = `
@@ -1310,36 +1311,46 @@ async function renderEmployeeRequests(emp){
         ${avatarHtml(emp)}
         <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
       </div>
-      <div class="card">
-        <h3 style="margin-top:0;">📨 בקשה חדשה</h3>
-        <p class="hint" style="margin-top:-6px; font-size:13px;">כתוב/י כל בקשה חופשית — יציאה מוקדמת, החלפת משמרת, הערה כללית וכו'.</p>
-        <form id="newRequestForm">
-          <textarea id="requestText" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); resize:vertical;" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea>
-          <div class="error-msg" id="requestErr" style="margin-top:6px;"></div>
-          <div class="actions" style="justify-content:flex-start; margin-top:12px;">
-            <button type="submit" class="btn brass" style="border-radius:10px;">שליחת בקשה</button>
-          </div>
-        </form>
+      <div class="tabs" style="margin-bottom:18px;">
+        <div class="tab${activeSubTab === 'new' ? ' active' : ''}" data-sub-tab="new">✏️ בקשה חדשה</div>
+        <div class="tab${activeSubTab === 'history' ? ' active' : ''}" data-sub-tab="history">📋 ההיסטוריה שלי${myRequests.length ? ' (' + myRequests.length + ')' : ''}</div>
       </div>
-      ${myRequests.length ? `
+      ${activeSubTab === 'new' ? `
         <div class="card">
-          <h3 style="margin-top:0;">הבקשות שלי</h3>
-          <div style="display:flex; flex-direction:column; gap:10px;">
-            ${myRequests.map(r => `
-              <div style="background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 14px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                  <span class="pill status-${r.status}">${STATUS_ICON[r.status] || ''} ${STATUS_LABEL[r.status] || r.status}</span>
-                  <span class="hint" style="font-size:11.5px;">${r.createdAt ? new Date(r.createdAt).toLocaleDateString('he-IL') : ''}</span>
-                </div>
-                <p style="margin:10px 0 0; font-size:14px; white-space:pre-wrap; line-height:1.5;">${escapeHtml(r.text || '')}</p>
-                ${r.adminNote ? `<p style="margin:8px 0 0; font-size:13px; background:var(--paper-alt); border-radius:8px; padding:8px 10px;">💬 ${escapeHtml(r.adminNote)}</p>` : ''}
-                <div style="text-align:left; margin-top:8px;"><button type="button" class="btn ghost small" data-delete-my-req="${r.id}" style="font-size:12px; padding:4px 12px;">מחיקה</button></div>
-              </div>
-            `).join('')}
-          </div>
+          <h3 style="margin-top:0;">📨 בקשה חדשה</h3>
+          <p class="hint" style="margin-top:-6px; font-size:13px;">כתוב/י כל בקשה חופשית — יציאה מוקדמת, החלפת משמרת, הערה כללית וכו'.</p>
+          <form id="newRequestForm">
+            <textarea id="requestText" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); resize:vertical;" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea>
+            <div class="error-msg" id="requestErr" style="margin-top:6px;"></div>
+            <div class="actions" style="justify-content:flex-start; margin-top:12px;">
+              <button type="submit" class="btn brass" style="border-radius:10px;">שליחת בקשה</button>
+            </div>
+          </form>
         </div>
-      ` : ''}
+      ` : `
+        <div class="card">
+          <h3 style="margin-top:0;">ההיסטוריה שלי</h3>
+          ${myRequests.length ? `
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              ${myRequests.map(r => `
+                <div style="background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 14px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <span class="pill status-${r.status}">${STATUS_ICON[r.status] || ''} ${STATUS_LABEL[r.status] || r.status}</span>
+                    <span class="hint" style="font-size:11.5px;">${r.createdAt ? new Date(r.createdAt).toLocaleDateString('he-IL') : ''}</span>
+                  </div>
+                  <p style="margin:10px 0 0; font-size:14px; white-space:pre-wrap; line-height:1.5;">${escapeHtml(r.text || '')}</p>
+                  ${r.adminNote ? `<p style="margin:8px 0 0; font-size:13px; background:var(--paper-alt); border-radius:8px; padding:8px 10px;">💬 ${escapeHtml(r.adminNote)}</p>` : ''}
+                  <div style="text-align:left; margin-top:8px;"><button type="button" class="btn ghost small" data-delete-my-req="${r.id}" style="font-size:12px; padding:4px 12px;">מחיקה</button></div>
+                </div>
+              `).join('')}
+            </div>
+          ` : `<p class="hint">עדיין אין לך בקשות. עברו ל"בקשה חדשה" כדי לשלוח אחת.</p>`}
+        </div>
+      `}
     `;
+    document.querySelectorAll('[data-sub-tab]').forEach(t => {
+      t.onclick = () => { activeSubTab = t.dataset.subTab; render(); };
+    });
     document.querySelectorAll('[data-delete-my-req]').forEach(btn => {
       btn.onclick = async () => {
         const confirmed = await showConfirmModal('למחוק את הבקשה הזו לצמיתות?');
@@ -1355,7 +1366,8 @@ async function renderEmployeeRequests(emp){
         render();
       };
     });
-    document.getElementById('newRequestForm').onsubmit = async (e) => {
+    const newRequestForm = document.getElementById('newRequestForm');
+    if(newRequestForm) newRequestForm.onsubmit = async (e) => {
       e.preventDefault();
       const errEl = document.getElementById('requestErr');
       const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -1377,6 +1389,7 @@ async function renderEmployeeRequests(emp){
       list = fresh;
       myRequests.length = 0;
       myRequests.push(...fresh.filter(r => r.empId === emp.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
+      activeSubTab = 'history'; // כמו במייל: אחרי שליחה עוברים לראות את זה ב"נשלחו"
       render();
     };
   }
