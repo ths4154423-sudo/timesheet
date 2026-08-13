@@ -1268,18 +1268,35 @@ async function notifyManagerOfRequest(emp, reqId, text){
   }catch(e){ console.error('notifyManagerOfRequest error', e); }
 }
 
+// לוחצים והחזיקו לזמן קצר = מחיקה; לחיצה רגילה = פתיחה. עובד גם במגע וגם בעכבר.
+function attachLongPress(el, onLongPress, onClick){
+  let timer = null, firedLongPress = false;
+  const start = () => {
+    firedLongPress = false;
+    timer = setTimeout(() => { firedLongPress = true; onLongPress(); }, 550);
+  };
+  const cancel = () => { if(timer){ clearTimeout(timer); timer = null; } };
+  const end = () => { const wasLong = firedLongPress; cancel(); if(!wasLong) onClick(); };
+  el.addEventListener('touchstart', start, { passive: true });
+  el.addEventListener('touchend', end);
+  el.addEventListener('touchmove', cancel);
+  el.addEventListener('touchcancel', cancel);
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup', end);
+  el.addEventListener('mouseleave', cancel);
+}
+
 async function renderEmployeeRequests(emp){
   stopLiveTimer();
   stopLiveMoneyTimer();
   stopClockFieldTimers();
   stopBreakWatchdog();
-  setHeader('בקשה למנהל', '<button class="btn ghost small" id="reqBackBtn">חזרה</button>');
 
   app.innerHTML = `<div class="empty-state">טוען...</div>`;
-  document.getElementById('reqBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
 
   let list = await loadRequests();
   if(list === null){
+    setHeader('בקשה למנהל', '<button class="btn ghost small" id="reqBackBtn">חזרה</button>');
     app.innerHTML = `
       <div class="card" style="text-align:center;">
         <h3 style="color:var(--danger); margin-top:0;">שגיאה בטעינה</h3>
@@ -1287,6 +1304,7 @@ async function renderEmployeeRequests(emp){
         <button type="button" class="btn brass" onclick="renderEmployeeRequests(state.currentEmployee)">ניסיון נוסף</button>
       </div>
     `;
+    document.getElementById('reqBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
     return;
   }
 
@@ -1300,98 +1318,171 @@ async function renderEmployeeRequests(emp){
   });
   if(changed) saveRequests(list); // ברקע, לא חוסם את התצוגה
 
-  const STATUS_LABEL = { pending: '⏳ ממתינה', approved: '✅ אושרה', rejected: '❌ נדחתה' };
+  const STATUS_LABEL = { pending: 'ממתינה', approved: 'אושרה', rejected: 'נדחתה' };
   const STATUS_ICON = { pending: '⏳', approved: '✅', rejected: '❌' };
-  const myRequests = list.filter(r => r.empId === emp.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  let activeSubTab = 'new'; // 'new' | 'history' - כמו "כתיבה" מול "דואר נכנס" באפליקציית מייל
+  const CATEGORY_OPTIONS = [
+    { key: 'all', label: 'הכל' },
+    { key: 'pending', label: 'ממתין' },
+    { key: 'approved', label: 'אושר' },
+    { key: 'rejected', label: 'נדחה' }
+  ];
+
+  let view = 'list'; // 'list' | 'detail' | 'compose'
+  let filterStatus = 'all';
+  let menuOpen = false;
+  let selectedId = null;
+  let myRequests = [];
+
+  function refreshMyRequests(){
+    myRequests = list.filter(r => r.empId === emp.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  }
+  refreshMyRequests();
+
+  async function deleteRequest(id){
+    const confirmed = await showConfirmModal('למחוק את ההודעה הזו לצמיתות?');
+    if(!confirmed) return;
+    const fresh = await loadRequests();
+    if(fresh === null){ alert('שגיאה בטעינת הנתונים מהשרת. נסו שוב.'); return; }
+    const updated = fresh.filter(r => r.id !== id);
+    const ok = await saveRequests(updated);
+    if(ok !== true){ alert('שגיאה בשמירה: ' + ok); return; }
+    list = updated;
+    refreshMyRequests();
+    if(view === 'detail' && selectedId === id) view = 'list';
+    render();
+  }
 
   function render(){
-    app.innerHTML = `
-      <div class="avatar-row" style="margin-bottom:16px;">
-        ${avatarHtml(emp)}
-        <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
-      </div>
-      <div class="tabs" style="margin-bottom:18px;">
-        <div class="tab${activeSubTab === 'new' ? ' active' : ''}" data-sub-tab="new">✏️ בקשה חדשה</div>
-        <div class="tab${activeSubTab === 'history' ? ' active' : ''}" data-sub-tab="history">📋 ההיסטוריה שלי${myRequests.length ? ' (' + myRequests.length + ')' : ''}</div>
-      </div>
-      ${activeSubTab === 'new' ? `
+    // ---------- כותרת העמוד ----------
+    setHeader('בקשה למנהל', '<button class="btn ghost small" id="reqBackBtn">חזרה</button>');
+
+    // ---------- מסך פרטי הודעה (במסך מלא) ----------
+    if(view === 'detail'){
+      const r = myRequests.find(x => x.id === selectedId);
+      if(!r){ view = 'list'; render(); return; }
+      app.innerHTML = `
         <div class="card">
-          <h3 style="margin-top:0;">📨 בקשה חדשה</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <span class="pill status-${r.status}">${STATUS_ICON[r.status] || ''} ${STATUS_LABEL[r.status] || r.status}</span>
+            <span class="hint" style="font-size:12.5px;">${r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : ''}</span>
+          </div>
+          <p style="font-size:16px; white-space:pre-wrap; line-height:1.6; margin:0 0 18px;">${escapeHtml(r.text || '')}</p>
+          ${r.adminNote ? `
+            <div style="background:var(--paper-alt); border-radius:8px; padding:12px 14px; margin-bottom:14px;">
+              <div class="hint" style="font-size:12px; margin-bottom:4px;">💬 תגובת המנהל${r.respondedAt ? ' · ' + new Date(r.respondedAt).toLocaleString('he-IL') : ''}</div>
+              <div style="font-size:14.5px; white-space:pre-wrap;">${escapeHtml(r.adminNote)}</div>
+            </div>
+          ` : ''}
+          <div class="actions" style="justify-content:flex-start; gap:10px;">
+            <button type="button" class="btn ghost" id="detailBackBtn">חזרה לרשימה</button>
+            <button type="button" class="btn danger" id="detailDeleteBtn">מחיקה</button>
+          </div>
+        </div>
+      `;
+      document.getElementById('reqBackBtn').onclick = () => { view = 'list'; render(); };
+      document.getElementById('detailBackBtn').onclick = () => { view = 'list'; render(); };
+      document.getElementById('detailDeleteBtn').onclick = () => deleteRequest(r.id);
+      return;
+    }
+
+    // ---------- מסך כתיבת הודעה חדשה (במסך מלא) ----------
+    if(view === 'compose'){
+      app.innerHTML = `
+        <div class="card">
+          <h3 style="margin-top:0;">✏️ הודעה חדשה למנהל</h3>
           <p class="hint" style="margin-top:-6px; font-size:13px;">כתוב/י כל בקשה חופשית — יציאה מוקדמת, החלפת משמרת, הערה כללית וכו'.</p>
           <form id="newRequestForm">
-            <textarea id="requestText" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); resize:vertical;" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea>
+            <textarea id="requestText" rows="5" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); resize:vertical;" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea>
             <div class="error-msg" id="requestErr" style="margin-top:6px;"></div>
-            <div class="actions" style="justify-content:flex-start; margin-top:12px;">
-              <button type="submit" class="btn brass" style="border-radius:10px;">שליחת בקשה</button>
+            <div class="actions" style="justify-content:flex-start; margin-top:12px; gap:10px;">
+              <button type="submit" class="btn brass" style="border-radius:10px;">שליחה</button>
+              <button type="button" class="btn ghost" id="composeCancelBtn">ביטול</button>
             </div>
           </form>
         </div>
-      ` : `
-        <div class="card">
-          <h3 style="margin-top:0;">ההיסטוריה שלי</h3>
-          ${myRequests.length ? `
-            <div style="display:flex; flex-direction:column; gap:10px;">
-              ${myRequests.map(r => `
-                <div style="background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 14px;">
-                  <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                    <span class="pill status-${r.status}">${STATUS_ICON[r.status] || ''} ${STATUS_LABEL[r.status] || r.status}</span>
-                    <span class="hint" style="font-size:11.5px;">${r.createdAt ? new Date(r.createdAt).toLocaleDateString('he-IL') : ''}</span>
-                  </div>
-                  <p style="margin:10px 0 0; font-size:14px; white-space:pre-wrap; line-height:1.5;">${escapeHtml(r.text || '')}</p>
-                  ${r.adminNote ? `<p style="margin:8px 0 0; font-size:13px; background:var(--paper-alt); border-radius:8px; padding:8px 10px;">💬 ${escapeHtml(r.adminNote)}</p>` : ''}
-                  <div style="text-align:left; margin-top:8px;"><button type="button" class="btn ghost small" data-delete-my-req="${r.id}" style="font-size:12px; padding:4px 12px;">מחיקה</button></div>
-                </div>
-              `).join('')}
-            </div>
-          ` : `<p class="hint">עדיין אין לך בקשות. עברו ל"בקשה חדשה" כדי לשלוח אחת.</p>`}
-        </div>
-      `}
-    `;
-    document.querySelectorAll('[data-sub-tab]').forEach(t => {
-      t.onclick = () => { activeSubTab = t.dataset.subTab; render(); };
-    });
-    document.querySelectorAll('[data-delete-my-req]').forEach(btn => {
-      btn.onclick = async () => {
-        const confirmed = await showConfirmModal('למחוק את הבקשה הזו לצמיתות?');
-        if(!confirmed) return;
+      `;
+      document.getElementById('reqBackBtn').onclick = () => { view = 'list'; render(); };
+      document.getElementById('composeCancelBtn').onclick = () => { view = 'list'; render(); };
+      document.getElementById('newRequestForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const errEl = document.getElementById('requestErr');
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const text = document.getElementById('requestText').value.trim();
+        if(!text){ errEl.textContent = 'יש לכתוב תוכן להודעה'; return; }
+        errEl.textContent = '';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'שולח...';
         const fresh = await loadRequests();
-        if(fresh === null){ alert('שגיאה בטעינת הנתונים מהשרת. נסו שוב.'); return; }
-        const updated = fresh.filter(r => r.id !== btn.dataset.deleteMyReq);
-        const ok = await saveRequests(updated);
-        if(ok !== true){ alert('שגיאה בשמירה: ' + ok); return; }
-        list = updated;
-        myRequests.length = 0;
-        myRequests.push(...updated.filter(r => r.empId === emp.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
+        if(fresh === null){ errEl.textContent = 'שגיאה בטעינת הנתונים מהשרת. נסו שוב.'; submitBtn.disabled=false; submitBtn.textContent='שליחה'; return; }
+        const newReqId = uid();
+        fresh.push({
+          id: newReqId, empId: emp.id, empName: emp.name, text,
+          status: 'pending', createdAt: new Date().toISOString(), adminNote: '', seenByEmployee: true
+        });
+        const ok = await saveRequests(fresh);
+        if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='שליחה'; return; }
+        notifyManagerOfRequest(emp, newReqId, text); // ברקע, לא חוסם ולא מציג שגיאה אם נכשל
+        list = fresh;
+        refreshMyRequests();
+        view = 'list';
         render();
       };
+      return;
+    }
+
+    // ---------- מסך הרשימה הראשי (רשימה אנכית, כמו תיבת דואר) ----------
+    const filtered = filterStatus === 'all' ? myRequests : myRequests.filter(r => r.status === filterStatus);
+    app.innerHTML = `
+      <button type="button" id="reqFilterBtn" style="position:fixed; top:64px; right:16px; z-index:90; background:var(--surface); border:1px solid var(--line); border-radius:8px; width:38px; height:38px; font-size:18px; line-height:1; cursor:pointer; color:var(--ink);">☰</button>
+      ${menuOpen ? `
+        <div style="position:fixed; top:106px; right:16px; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,.18); z-index:100; overflow:hidden; min-width:140px;">
+          ${CATEGORY_OPTIONS.map(c => `
+            <div data-filter="${c.key}" style="padding:11px 16px; cursor:pointer; font-size:14px; ${filterStatus === c.key ? 'background:var(--paper-alt); font-weight:600;' : ''}">${escapeHtml(c.label)}</div>
+          `).join('')}
+        </div>
+      ` : ''}
+      <div class="avatar-row" style="margin-bottom:14px; padding-inline-end:50px;">
+        ${avatarHtml(emp)}
+        <div class="name" style="font-size:18px;">${escapeHtml(emp.name)}</div>
+      </div>
+      ${filterStatus !== 'all' ? `<p class="hint" style="font-size:12.5px; margin-top:-6px;">מסונן לפי: ${escapeHtml(CATEGORY_OPTIONS.find(c => c.key === filterStatus).label)}</p>` : ''}
+      <div class="card" style="padding:6px 26px;">
+        ${filtered.length ? filtered.map(r => `
+          <div class="list-item clickable" data-row="${r.id}" style="user-select:none; -webkit-user-select:none;">
+            <div class="avatar-row">
+              <span class="pill status-${r.status}" style="flex-shrink:0;">${STATUS_ICON[r.status] || ''}</span>
+              <div style="min-width:0;">
+                <div style="font-weight:600; font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60vw;">${escapeHtml(r.text || '')}</div>
+                <div class="meta">${r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : ''}</div>
+              </div>
+            </div>
+          </div>
+        `).join('') : `<div class="empty-state">אין הודעות להצגה.</div>`}
+      </div>
+      <button type="button" id="newMsgFab" style="position:fixed; bottom:22px; left:20px; background:var(--brass); color:var(--brass-text); border:none; border-radius:24px; padding:13px 20px; font-weight:600; font-size:14px; box-shadow:0 4px 16px rgba(0,0,0,.28); cursor:pointer; z-index:60;">✏️ הודעה חדשה</button>
+    `;
+
+    document.getElementById('reqBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
+    const filterBtn = document.getElementById('reqFilterBtn');
+    if(filterBtn) filterBtn.onclick = (e) => { e.stopPropagation(); menuOpen = !menuOpen; render(); };
+    document.querySelectorAll('[data-filter]').forEach(el => {
+      el.onclick = () => { filterStatus = el.dataset.filter; menuOpen = false; render(); };
     });
-    const newRequestForm = document.getElementById('newRequestForm');
-    if(newRequestForm) newRequestForm.onsubmit = async (e) => {
-      e.preventDefault();
-      const errEl = document.getElementById('requestErr');
-      const submitBtn = e.target.querySelector('button[type="submit"]');
-      const text = document.getElementById('requestText').value.trim();
-      if(!text){ errEl.textContent = 'יש לכתוב תוכן לבקשה'; return; }
-      errEl.textContent = '';
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'שולח...';
-      const fresh = await loadRequests();
-      if(fresh === null){ errEl.textContent = 'שגיאה בטעינת הנתונים מהשרת. נסו שוב.'; submitBtn.disabled=false; submitBtn.textContent='שליחת בקשה'; return; }
-      const newReqId = uid();
-      fresh.push({
-        id: newReqId, empId: emp.id, empName: emp.name, text,
-        status: 'pending', createdAt: new Date().toISOString(), adminNote: '', seenByEmployee: true
-      });
-      const ok = await saveRequests(fresh);
-      if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='שליחת בקשה'; return; }
-      notifyManagerOfRequest(emp, newReqId, text); // ברקע, לא חוסם ולא מציג שגיאה אם נכשל
-      list = fresh;
-      myRequests.length = 0;
-      myRequests.push(...fresh.filter(r => r.empId === emp.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
-      activeSubTab = 'history'; // כמו במייל: אחרי שליחה עוברים לראות את זה ב"נשלחו"
-      render();
-    };
+    if(menuOpen){
+      // סוגר את התפריט בלחיצה בכל מקום אחר במסך
+      document.addEventListener('click', function onceOutside(ev){
+        document.removeEventListener('click', onceOutside);
+        if(menuOpen){ menuOpen = false; render(); }
+      }, { once: true });
+    }
+    document.getElementById('newMsgFab').onclick = () => { view = 'compose'; render(); };
+    document.querySelectorAll('[data-row]').forEach(row => {
+      attachLongPress(
+        row,
+        () => deleteRequest(row.dataset.row),
+        () => { selectedId = row.dataset.row; view = 'detail'; render(); }
+      );
+    });
   }
   render();
 }
