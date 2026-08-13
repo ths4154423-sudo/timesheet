@@ -172,6 +172,9 @@
   .collapsible-header .chevron{ color:var(--brass-dark); font-size:14px; transition:transform .15s ease; }
   .pill.hourly{ background:#E4EEE6; color:#2F5233; }
   .pill.fixed{ background:#EFE3D0; color:var(--brass-dark); }
+  .pill.status-pending{ background:#EFE3D0; color:#8A6D2F; }
+  .pill.status-approved{ background:#E4EEE6; color:#2F5233; }
+  .pill.status-rejected{ background:#F6DEDA; color:var(--danger); }
 
   .list-item{
     display:flex; justify-content:space-between; align-items:center;
@@ -1295,31 +1298,38 @@ async function showRequestsModal(emp){
   if(changed) saveRequests(list); // ברקע, לא חוסם את התצוגה
 
   const STATUS_LABEL = { pending: '⏳ ממתינה', approved: '✅ אושרה', rejected: '❌ נדחתה' };
-  const STATUS_COLOR = { pending: 'var(--muted)', approved: '#2F5233', rejected: 'var(--danger)' };
+  const STATUS_ICON = { pending: '⏳', approved: '✅', rejected: '❌' };
   const myRequests = list.filter(r => r.empId === emp.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
   function render(){
+    overlay.querySelector('.confirm-box').style.maxWidth = '460px';
+    overlay.querySelector('.confirm-box').style.textAlign = 'right';
     overlay.querySelector('.confirm-box').innerHTML = `
-      <h3 style="margin-top:0;">בקשה למנהל</h3>
+      <h3 style="margin:0 0 4px; text-align:center;">📨 בקשה למנהל</h3>
+      <p class="hint" style="text-align:center; margin:0 0 18px; font-size:13px;">כתוב/י כל בקשה חופשית — יציאה מוקדמת, החלפת משמרת, הערה כללית וכו'.</p>
       <form id="newRequestForm">
-        <div class="field" style="margin-top:0;"><label>מה תרצה לבקש?</label><textarea id="requestText" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:10px 12px; border:1.5px solid var(--line); border-radius:4px; background:var(--paper); color:var(--ink);" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea></div>
-        <div class="error-msg" id="requestErr"></div>
-        <div class="actions" style="justify-content:flex-start;"><button type="submit" class="btn brass small">שליחת בקשה</button></div>
+        <textarea id="requestText" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink); resize:vertical;" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea>
+        <div class="error-msg" id="requestErr" style="margin-top:6px;"></div>
+        <div class="actions" style="justify-content:center; margin-top:12px;">
+          <button type="submit" class="btn brass" style="width:100%; border-radius:10px;">שליחת בקשה</button>
+        </div>
       </form>
       ${myRequests.length ? `
-        <div style="margin-top:18px; border-top:1px solid var(--line); padding-top:12px; max-height:260px; overflow-y:auto;">
-          <label style="margin-top:0;">הבקשות שלי</label>
-          ${myRequests.map(r => `
-            <div style="margin-top:10px; padding-bottom:10px; border-bottom:1px solid var(--line);">
-              <div style="display:flex; justify-content:space-between; gap:8px;">
-                <span class="hint" style="font-size:12px;">${r.createdAt ? new Date(r.createdAt).toLocaleDateString('he-IL') : ''}</span>
-                <span style="font-weight:600; font-size:13px; color:${STATUS_COLOR[r.status] || 'var(--muted)'};">${STATUS_LABEL[r.status] || r.status}</span>
+        <div style="margin-top:22px;">
+          <label style="margin-top:0; display:block; font-weight:600; margin-bottom:10px;">הבקשות שלי</label>
+          <div style="display:flex; flex-direction:column; gap:10px; max-height:280px; overflow-y:auto; padding-inline-end:2px;">
+            ${myRequests.map(r => `
+              <div style="background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                  <span class="pill status-${r.status}">${STATUS_ICON[r.status] || ''} ${STATUS_LABEL[r.status] || r.status}</span>
+                  <span class="hint" style="font-size:11.5px;">${r.createdAt ? new Date(r.createdAt).toLocaleDateString('he-IL') : ''}</span>
+                </div>
+                <p style="margin:10px 0 0; font-size:14px; white-space:pre-wrap; line-height:1.5;">${escapeHtml(r.text || '')}</p>
+                ${r.adminNote ? `<p style="margin:8px 0 0; font-size:13px; background:var(--paper-alt); border-radius:8px; padding:8px 10px;">💬 ${escapeHtml(r.adminNote)}</p>` : ''}
+                <div style="text-align:left; margin-top:8px;"><button type="button" class="btn ghost small" data-delete-my-req="${r.id}" style="font-size:12px; padding:4px 12px;">מחיקה</button></div>
               </div>
-              <p style="margin:4px 0; font-size:14px; white-space:pre-wrap;">${escapeHtml(r.text || '')}</p>
-              ${r.adminNote ? `<p class="hint" style="font-size:12.5px;">תגובת מנהל: ${escapeHtml(r.adminNote)}</p>` : ''}
-              <div class="actions" style="justify-content:flex-start; margin-top:4px;"><button type="button" class="btn ghost small" data-delete-my-req="${r.id}">מחיקה</button></div>
-            </div>
-          `).join('')}
+            `).join('')}
+          </div>
         </div>
       ` : ''}
       <div class="actions" style="justify-content:center; margin-top:14px;"><button type="button" class="btn ghost" id="reqClose">סגירה</button></div>
