@@ -911,8 +911,61 @@ function wireNowButton(buttonId, inputId){
     btn.onclick = () => { input.value = nowTimeStr(); };
   }
 }
+// מטפל בלחיצה על קישור "אישור"/"דחייה" שהגיע במייל ההתראה למנהל - עובד בלי צורך בהתחברות
+async function handleEmailRequestAction(reqId, action){
+  const showResult = (title, message, isError) => {
+    app.innerHTML = `
+      <div class="center-stage">
+        <div class="login-card">
+          <h1 style="${isError ? 'color:var(--danger);' : ''}">${escapeHtml(title)}</h1>
+          <p class="hint">${escapeHtml(message)}</p>
+          <button type="button" class="btn brass" onclick="location.href = location.pathname">חזרה לאתר</button>
+        </div>
+      </div>
+    `;
+  };
+  const list = await loadRequests();
+  if(list === null){
+    showResult('שגיאת תקשורת', 'לא הצלחנו להתחבר לשרת. נסו שוב בעוד כמה רגעים.', true);
+    return;
+  }
+  const req = list.find(r => r.id === reqId);
+  if(!req){
+    showResult('הבקשה לא נמצאה', 'ייתכן שהיא כבר טופלה או נמחקה.', true);
+    return;
+  }
+  if(req.status !== 'pending'){
+    const STATUS_LABEL = { approved: 'אושרה', rejected: 'נדחתה' };
+    showResult('הבקשה כבר טופלה', `הבקשה של ${req.empName} כבר ${STATUS_LABEL[req.status] || req.status} קודם לכן.`, false);
+    return;
+  }
+  req.status = action === 'approve' ? 'approved' : 'rejected';
+  req.respondedAt = new Date().toISOString();
+  req.seenByEmployee = false;
+  const ok = await saveRequests(list);
+  if(ok !== true){
+    showResult('שגיאה בשמירה', 'שגיאה: ' + ok, true);
+    return;
+  }
+  showResult(
+    action === 'approve' ? '✅ הבקשה אושרה' : '❌ הבקשה נדחתה',
+    `הבקשה של ${req.empName} ("${req.text}") ${action === 'approve' ? 'אושרה' : 'נדחתה'} בהצלחה. העובד יראה את הסטטוס העדכני באתר.`,
+    false
+  );
+}
+
 async function init(){
   app.innerHTML = '<div class="empty-state">טוען...</div>';
+
+  // טיפול בלחיצה על קישור "אישור"/"דחייה" ישירות מתוך מייל ההתראה, בלי צורך בהתחברות
+  const urlParams = new URLSearchParams(window.location.search);
+  const reqId = urlParams.get('req');
+  const reqAction = urlParams.get('action');
+  if(reqId && (reqAction === 'approve' || reqAction === 'reject')){
+    await handleEmailRequestAction(reqId, reqAction);
+    return;
+  }
+
   const loadedEmployees = await loadEmployees();
   if(loadedEmployees === null){
     app.innerHTML = `
@@ -1182,6 +1235,36 @@ function showConfirmModal(message){
 // Lets the employee pick how to send their hours report: automatically via a manager-configured
 // EmailJS sender account (if any are set up), or by opening a regular mailto draft as a fallback.
 // מציג לעובד את הבקשות שלו למנהל (עם סטטוס) ומאפשר לשלוח בקשה חדשה
+// שולח למנהל התראת מייל על בקשה חדשה, עם קישורי אישור/דחייה ישירים. לא חוסם ולא מציג
+// שגיאה לעובד אם זה נכשל - זו רק "התראה נחמד שיהיה", הבקשה עצמה כבר נשמרה במסד הנתונים.
+async function notifyManagerOfRequest(emp, reqId, text){
+  try{
+    const [managerEmail, emailjsConfig] = await Promise.all([loadManagerEmail(), loadEmailjsConfig()]);
+    if(!managerEmail || !emailjsConfig || !emailjsConfig.publicKey || !emailjsConfig.templateId || !window.emailjs) return;
+    const serviceId = emp.emailjsServiceId || (emailjsConfig.senders && emailjsConfig.senders[0] && emailjsConfig.senders[0].serviceId);
+    if(!serviceId) return;
+    const baseUrl = window.location.origin + window.location.pathname;
+    const approveUrl = `${baseUrl}?req=${encodeURIComponent(reqId)}&action=approve`;
+    const rejectUrl = `${baseUrl}?req=${encodeURIComponent(reqId)}&action=reject`;
+    const html = `
+      <div dir="rtl" align="right" style="font-family:Arial,Helvetica,sans-serif; color:#222; max-width:520px; margin:0 0 0 auto;">
+        <p style="font-size:15px;">התקבלה בקשה חדשה מ-<strong>${escapeHtml(emp.name)}</strong>:</p>
+        <p style="font-size:15px; background:#f2f2f2; padding:12px; border-radius:6px; white-space:pre-wrap;">${escapeHtml(text)}</p>
+        <div style="margin-top:18px;">
+          <a href="${approveUrl}" style="display:inline-block; padding:10px 22px; background:#3D9A6C; color:#fff; text-decoration:none; border-radius:5px; font-weight:bold; margin-inline-end:10px;">✅ אישור</a>
+          <a href="${rejectUrl}" style="display:inline-block; padding:10px 22px; background:#A23E30; color:#fff; text-decoration:none; border-radius:5px; font-weight:bold;">❌ דחייה</a>
+        </div>
+        <p style="font-size:12px; color:#888; margin-top:16px;">לחיצה על אחד הכפתורים תעדכן את הבקשה מיידית, בלי צורך להתחבר לאתר.</p>
+      </div>`;
+    await window.emailjs.send(serviceId, emailjsConfig.templateId, {
+      to_email: managerEmail,
+      subject: `בקשה חדשה מ-${emp.name}`,
+      message: html,
+      employee_name: emp.name
+    }, { publicKey: emailjsConfig.publicKey });
+  }catch(e){ console.error('notifyManagerOfRequest error', e); }
+}
+
 async function showRequestsModal(emp){
   const overlay = document.createElement('div');
   overlay.className = 'confirm-overlay';
@@ -1234,6 +1317,7 @@ async function showRequestsModal(emp){
               </div>
               <p style="margin:4px 0; font-size:14px; white-space:pre-wrap;">${escapeHtml(r.text || '')}</p>
               ${r.adminNote ? `<p class="hint" style="font-size:12.5px;">תגובת מנהל: ${escapeHtml(r.adminNote)}</p>` : ''}
+              <div class="actions" style="justify-content:flex-start; margin-top:4px;"><button type="button" class="btn ghost small" data-delete-my-req="${r.id}">מחיקה</button></div>
             </div>
           `).join('')}
         </div>
@@ -1241,6 +1325,21 @@ async function showRequestsModal(emp){
       <div class="actions" style="justify-content:center; margin-top:14px;"><button type="button" class="btn ghost" id="reqClose">סגירה</button></div>
     `;
     overlay.querySelector('#reqClose').onclick = close;
+    overlay.querySelectorAll('[data-delete-my-req]').forEach(btn => {
+      btn.onclick = async () => {
+        const confirmed = await showConfirmModal('למחוק את הבקשה הזו לצמיתות?');
+        if(!confirmed) return;
+        const fresh = await loadRequests();
+        if(fresh === null){ alert('שגיאה בטעינת הנתונים מהשרת. נסו שוב.'); return; }
+        const updated = fresh.filter(r => r.id !== btn.dataset.deleteMyReq);
+        const ok = await saveRequests(updated);
+        if(ok !== true){ alert('שגיאה בשמירה: ' + ok); return; }
+        list = updated;
+        myRequests.length = 0;
+        myRequests.push(...updated.filter(r => r.empId === emp.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
+        render();
+      };
+    });
     overlay.querySelector('#newRequestForm').onsubmit = async (e) => {
       e.preventDefault();
       const errEl = overlay.querySelector('#requestErr');
@@ -1252,12 +1351,14 @@ async function showRequestsModal(emp){
       submitBtn.textContent = 'שולח...';
       const fresh = await loadRequests();
       if(fresh === null){ errEl.textContent = 'שגיאה בטעינת הנתונים מהשרת. נסו שוב.'; submitBtn.disabled=false; submitBtn.textContent='שליחת בקשה'; return; }
+      const newReqId = uid();
       fresh.push({
-        id: uid(), empId: emp.id, empName: emp.name, text,
+        id: newReqId, empId: emp.id, empName: emp.name, text,
         status: 'pending', createdAt: new Date().toISOString(), adminNote: '', seenByEmployee: true
       });
       const ok = await saveRequests(fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='שליחת בקשה'; return; }
+      notifyManagerOfRequest(emp, newReqId, text); // ברקע, לא חוסם ולא מציג שגיאה אם נכשל
       list = fresh;
       myRequests.length = 0;
       myRequests.push(...fresh.filter(r => r.empId === emp.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
@@ -1596,8 +1697,14 @@ async function renderAdminRequests(){
             <div class="actions" style="justify-content:flex-start; gap:8px; margin-top:8px;">
               <button type="button" class="btn brass small" data-approve="${r.id}">אישור</button>
               <button type="button" class="btn danger" data-reject="${r.id}">דחייה</button>
+              <button type="button" class="btn ghost small" data-delete-req="${r.id}">מחיקה</button>
             </div>
-          ` : (r.adminNote ? `<p class="hint" style="font-size:13px;">הערת מנהל: ${escapeHtml(r.adminNote)}</p>` : '')}
+          ` : `
+            ${r.adminNote ? `<p class="hint" style="font-size:13px;">הערת מנהל: ${escapeHtml(r.adminNote)}</p>` : ''}
+            <div class="actions" style="justify-content:flex-start; margin-top:6px;">
+              <button type="button" class="btn ghost small" data-delete-req="${r.id}">מחיקה</button>
+            </div>
+          `}
         </div>
       `).join('')}
     </div>
@@ -1618,6 +1725,17 @@ async function renderAdminRequests(){
     if(ok !== true){ alert('שגיאה בשמירה: ' + ok); return; }
     renderAdminRequests();
   }
+  async function removeRequest(id){
+    const confirmed = await showConfirmModal('למחוק את הבקשה הזו לצמיתות?');
+    if(!confirmed) return;
+    const fresh = await loadRequests();
+    if(fresh === null){ alert('שגיאה בטעינת הנתונים מהשרת. נסו שוב.'); return; }
+    const updated = fresh.filter(r => r.id !== id);
+    const ok = await saveRequests(updated);
+    if(ok !== true){ alert('שגיאה בשמירה: ' + ok); return; }
+    renderAdminRequests();
+  }
+  content.querySelectorAll('[data-delete-req]').forEach(btn => { btn.onclick = () => removeRequest(btn.dataset.deleteReq); });
   content.querySelectorAll('[data-approve]').forEach(btn => { btn.onclick = () => respond(btn.dataset.approve, 'approved'); });
   content.querySelectorAll('[data-reject]').forEach(btn => { btn.onclick = () => respond(btn.dataset.reject, 'rejected'); });
 }
