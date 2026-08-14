@@ -360,7 +360,52 @@
   }
   @keyframes saluteBgFade{ from{ opacity:0; } to{ opacity:1; } }
   @keyframes saluteBgFadeOut{ from{ opacity:1; } to{ opacity:0; } }
+
+  .salute-sunset{
+    position:absolute; inset:0; pointer-events:none; z-index:1;
+    background: linear-gradient(to bottom, rgba(255,183,94,.55) 0%, rgba(255,111,97,.48) 45%, rgba(110,55,105,.42) 100%);
+    opacity:0;
+    animation: sunsetGlow 4.7s ease-in-out forwards;
+  }
+  @keyframes sunsetGlow{
+    0%{ opacity:0; }
+    35%{ opacity:0; }
+    55%{ opacity:.9; }
+    75%{ opacity:.9; }
+    100%{ opacity:0; }
+  }
+
+  .salute-rays{
+    position:absolute; top:50%; left:50%; width:140vmax; height:140vmax;
+    transform:translate(-50%,-50%) rotate(0deg);
+    background: repeating-conic-gradient(from 0deg, rgba(255,255,255,.16) 0deg 6deg, transparent 6deg 18deg);
+    border-radius:50%; pointer-events:none; z-index:2; mix-blend-mode:screen;
+    opacity:0;
+    animation: raysFadeSpin 4.7s ease-in-out forwards;
+  }
+  @keyframes raysFadeSpin{
+    0%{ opacity:0; transform:translate(-50%,-50%) rotate(0deg); }
+    30%{ opacity:.5; }
+    70%{ opacity:.5; }
+    100%{ opacity:0; transform:translate(-50%,-50%) rotate(-260deg); }
+  }
+
+  .salute-stars{ position:absolute; inset:0; pointer-events:none; z-index:2; opacity:0; animation: starsContainerFade 4.7s ease-in-out forwards; }
+  @keyframes starsContainerFade{
+    0%{ opacity:0; } 30%{ opacity:0; } 50%{ opacity:1; } 80%{ opacity:1; } 100%{ opacity:0; }
+  }
+  .salute-stars .star{
+    position:absolute; color:#FFE8B8; font-size:clamp(10px,2.2vw,22px);
+    text-shadow:0 0 6px rgba(255,220,150,.85);
+    opacity:0; animation: starTwinkle 1.8s ease-in-out infinite;
+  }
+  @keyframes starTwinkle{
+    0%,100%{ opacity:0; transform:scale(.4); }
+    50%{ opacity:1; transform:scale(1); }
+  }
+
   .salute-overlay .salute-emoji{
+    position:relative; z-index:3;
     font-size:48px; line-height:1; opacity:0;
     filter: drop-shadow(0 10px 24px rgba(0,0,0,.35));
     animation:
@@ -393,7 +438,7 @@
 
   @media (prefers-reduced-motion: reduce){
     .card, .list-item, .pill, #clockInForm button[type="submit"], .toast, .toast.out{ animation:none !important; }
-    .salute-overlay, .salute-overlay .salute-emoji{ animation:none !important; }
+    .salute-overlay, .salute-overlay .salute-emoji, .salute-sunset, .salute-rays, .salute-stars, .salute-stars .star{ animation:none !important; }
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -475,7 +520,21 @@ new MutationObserver((mutations) => {
 function showSaluteSplash(){
   const overlay = document.createElement('div');
   overlay.className = 'salute-overlay';
-  overlay.innerHTML = `<div class="salute-emoji">🫡</div>`;
+  const starSpots = [
+    {top:'18%', left:'22%', delay:'0s'},
+    {top:'28%', left:'78%', delay:'.3s'},
+    {top:'68%', left:'16%', delay:'.6s'},
+    {top:'74%', left:'82%', delay:'.9s'},
+    {top:'12%', left:'52%', delay:'1.2s'},
+    {top:'85%', left:'50%', delay:'.45s'}
+  ];
+  const starsHtml = starSpots.map(s => `<span class="star" style="top:${s.top}; left:${s.left}; animation-delay:${s.delay};">✦</span>`).join('');
+  overlay.innerHTML = `
+    <div class="salute-sunset"></div>
+    <div class="salute-rays"></div>
+    <div class="salute-stars">${starsHtml}</div>
+    <div class="salute-emoji">🫡</div>
+  `;
   overlay.addEventListener('click', () => overlay.remove());
   document.body.appendChild(overlay);
   setTimeout(() => overlay.remove(), 4750);
