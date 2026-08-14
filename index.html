@@ -353,23 +353,30 @@
   .salute-overlay{
     position:fixed; inset:0; z-index:4000; background:rgba(10,20,30,.55);
     display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
     animation: saluteBgFade .25s ease-out both;
   }
   @keyframes saluteBgFade{ from{ opacity:0; } to{ opacity:1; } }
   .salute-overlay .salute-emoji{
     font-size:min(38vw, 220px); line-height:1;
-    animation: saluteIn .55s cubic-bezier(.34,1.56,.64,1) both, saluteOut .35s ease-in .1s forwards;
-    animation-delay: 0s, 1.5s;
     filter: drop-shadow(0 10px 24px rgba(0,0,0,.35));
+    animation:
+      salutePop .4s cubic-bezier(.34,1.56,.64,1) both,
+      saluteGrow 1.1s cubic-bezier(.55,0,.85,.35) .4s both,
+      saluteSuck .3s cubic-bezier(.6,0,1,.4) 1.5s both;
   }
-  @keyframes saluteIn{
-    0%{ transform:scale(.2) rotate(-8deg); opacity:0; }
-    60%{ transform:scale(1.12) rotate(2deg); opacity:1; }
+  @keyframes salutePop{
+    0%{ transform:scale(.15) rotate(-8deg); opacity:0; }
+    65%{ transform:scale(1.1) rotate(2deg); opacity:1; }
     100%{ transform:scale(1) rotate(0deg); opacity:1; }
   }
-  @keyframes saluteOut{
-    from{ transform:scale(1); opacity:1; }
-    to{ transform:scale(.85); opacity:0; }
+  @keyframes saluteGrow{
+    0%{ transform:scale(1); opacity:1; }
+    100%{ transform:scale(8); opacity:1; }
+  }
+  @keyframes saluteSuck{
+    0%{ transform:scale(8); opacity:1; }
+    100%{ transform:scale(.05); opacity:0; }
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -459,7 +466,7 @@ function showSaluteSplash(){
   overlay.innerHTML = `<div class="salute-emoji">🫡</div>`;
   overlay.addEventListener('click', () => overlay.remove());
   document.body.appendChild(overlay);
-  setTimeout(() => overlay.remove(), 1850);
+  setTimeout(() => overlay.remove(), 1820);
 }
 function showToast(message){
   const t = document.createElement('div');
