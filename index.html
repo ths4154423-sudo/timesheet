@@ -356,7 +356,7 @@
     overflow:hidden;
     animation:
       saluteBgFade .3s ease-out both,
-      saluteBgFadeOut .7s ease-in 2.95s forwards;
+      saluteBgFadeOut .8s ease-in 3.9s forwards;
   }
   @keyframes saluteBgFade{ from{ opacity:0; } to{ opacity:1; } }
   @keyframes saluteBgFadeOut{ from{ opacity:1; } to{ opacity:0; } }
@@ -364,21 +364,31 @@
     font-size:48px; line-height:1; opacity:0;
     filter: drop-shadow(0 10px 24px rgba(0,0,0,.35));
     animation:
-      saluteAppear .35s ease-out both,
-      saluteGrow 2.6s ease-in-out .35s both,
-      saluteFadeOut .7s ease-in 2.95s both;
+      saluteAppear .3s ease-out both,
+      saluteGrowSpin 2s ease-in-out .3s both,
+      saluteShakeMax .4s ease-in-out 2.3s both,
+      saluteShrinkSpin 2s ease-in-out 2.7s both;
   }
   @keyframes saluteAppear{
-    from{ opacity:0; transform:scale(.6); }
-    to{ opacity:1; transform:scale(1); }
+    from{ opacity:0; transform:scale(.6) rotate(0deg); }
+    to{ opacity:1; transform:scale(1) rotate(0deg); }
   }
-  @keyframes saluteGrow{
-    from{ font-size:48px; }
-    to{ font-size:min(95vw, 95vh); }
+  @keyframes saluteGrowSpin{
+    from{ font-size:48px; transform:scale(1) rotate(0deg); }
+    to{ font-size:min(95vw, 95vh); transform:scale(1) rotate(720deg); }
   }
-  @keyframes saluteFadeOut{
-    from{ opacity:1; }
-    to{ opacity:0; }
+  @keyframes saluteShakeMax{
+    0%{ transform:scale(1) rotate(720deg); }
+    20%{ transform:scale(1.02) rotate(715deg); }
+    40%{ transform:scale(.98) rotate(726deg); }
+    60%{ transform:scale(1.02) rotate(714deg); }
+    80%{ transform:scale(.98) rotate(725deg); }
+    100%{ transform:scale(1) rotate(720deg); }
+  }
+  @keyframes saluteShrinkSpin{
+    0%{ font-size:min(95vw, 95vh); transform:scale(1) rotate(720deg); opacity:1; }
+    75%{ font-size:38px; transform:scale(1) rotate(1400deg); opacity:1; }
+    100%{ font-size:1px; transform:scale(1) rotate(1440deg); opacity:0; }
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -468,7 +478,7 @@ function showSaluteSplash(){
   overlay.innerHTML = `<div class="salute-emoji">🫡</div>`;
   overlay.addEventListener('click', () => overlay.remove());
   document.body.appendChild(overlay);
-  setTimeout(() => overlay.remove(), 3700);
+  setTimeout(() => overlay.remove(), 4750);
 }
 function showToast(message){
   const t = document.createElement('div');
