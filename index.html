@@ -364,10 +364,10 @@
     font-size:48px; line-height:1; opacity:0;
     filter: drop-shadow(0 10px 24px rgba(0,0,0,.35));
     animation:
-      saluteAppear .3s ease-out both,
-      saluteGrowSpin 2s ease-in-out .3s both,
-      saluteShakeMax .4s ease-in-out 2.3s both,
-      saluteShrinkSpin 2s ease-in-out 2.7s both;
+      saluteAppear .3s ease-out forwards,
+      saluteGrowSpin 2s ease-in-out .3s forwards,
+      saluteShakeMax .4s ease-in-out 2.3s forwards,
+      saluteShrinkSpin 2s ease-in-out 2.7s forwards;
   }
   @keyframes saluteAppear{
     from{ opacity:0; transform:scale(.6) rotate(0deg); }
