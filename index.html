@@ -349,8 +349,32 @@
     background:var(--brass); color:#fff; font-size:12px; line-height:18px; text-align:center; flex-shrink:0;
   }
 
+  /* ---------- New: end-of-day salute overlay ---------- */
+  .salute-overlay{
+    position:fixed; inset:0; z-index:4000; background:rgba(10,20,30,.55);
+    display:flex; align-items:center; justify-content:center;
+    animation: saluteBgFade .25s ease-out both;
+  }
+  @keyframes saluteBgFade{ from{ opacity:0; } to{ opacity:1; } }
+  .salute-overlay .salute-emoji{
+    font-size:min(38vw, 220px); line-height:1;
+    animation: saluteIn .55s cubic-bezier(.34,1.56,.64,1) both, saluteOut .35s ease-in .1s forwards;
+    animation-delay: 0s, 1.5s;
+    filter: drop-shadow(0 10px 24px rgba(0,0,0,.35));
+  }
+  @keyframes saluteIn{
+    0%{ transform:scale(.2) rotate(-8deg); opacity:0; }
+    60%{ transform:scale(1.12) rotate(2deg); opacity:1; }
+    100%{ transform:scale(1) rotate(0deg); opacity:1; }
+  }
+  @keyframes saluteOut{
+    from{ transform:scale(1); opacity:1; }
+    to{ transform:scale(.85); opacity:0; }
+  }
+
   @media (prefers-reduced-motion: reduce){
     .card, .list-item, .pill, #clockInForm button[type="submit"], .toast, .toast.out{ animation:none !important; }
+    .salute-overlay, .salute-overlay .salute-emoji{ animation:none !important; }
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -428,7 +452,15 @@ new MutationObserver((mutations) => {
   }
 }).observe(app, { subtree:true, characterData:true, childList:true });
 
-// ---------- New: success toast ----------
+// ---------- New: end-of-day salute splash ----------
+function showSaluteSplash(){
+  const overlay = document.createElement('div');
+  overlay.className = 'salute-overlay';
+  overlay.innerHTML = `<div class="salute-emoji">🫡</div>`;
+  overlay.addEventListener('click', () => overlay.remove());
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.remove(), 1850);
+}
 function showToast(message){
   const t = document.createElement('div');
   t.className = 'toast';
@@ -3196,6 +3228,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         speakHebrew(`${emp.name}, מעריכים אוֹתְךָ על העבודה, ערב טוב`);
       }
       showToast('יום העבודה הסתיים בהצלחה');
+      showSaluteSplash();
       renderEmployeeDashboard(emp, null, fresh);
     };
   }
