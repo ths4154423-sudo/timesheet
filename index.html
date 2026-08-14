@@ -412,7 +412,7 @@
       saluteAppear .3s ease-out forwards,
       saluteGrowSpin 2s ease-in-out .3s forwards,
       saluteShakeMax .4s ease-in-out 2.3s forwards,
-      saluteShrinkSpin 2s ease-in-out 2.7s forwards;
+      saluteWaveOut 2s ease-in-out 2.7s forwards;
   }
   @keyframes saluteAppear{
     from{ opacity:0; transform:scale(.6) rotate(0deg); }
@@ -430,10 +430,17 @@
     80%{ transform:scale(.98) rotate(725deg); }
     100%{ transform:scale(1) rotate(720deg); }
   }
-  @keyframes saluteShrinkSpin{
-    0%{ font-size:min(95vw, 95vh); transform:scale(1) rotate(720deg); opacity:1; }
-    75%{ font-size:38px; transform:scale(1) rotate(1400deg); opacity:1; }
-    100%{ font-size:1px; transform:scale(1) rotate(1440deg); opacity:0; }
+  @keyframes saluteWaveOut{
+    0%{ font-size:min(95vw, 95vh); transform:scale(1) rotate(0deg); opacity:1; }
+    10%{ transform:scale(1) rotate(-18deg); }
+    20%{ transform:scale(1) rotate(16deg); }
+    30%{ transform:scale(1) rotate(-16deg); }
+    40%{ transform:scale(1) rotate(14deg); }
+    50%{ font-size:min(70vw, 70vh); transform:scale(1) rotate(-12deg); }
+    60%{ transform:scale(1) rotate(10deg); }
+    72%{ font-size:35vmin; transform:scale(1) rotate(-8deg); opacity:1; }
+    86%{ font-size:14vmin; transform:scale(1) rotate(6deg); opacity:.7; }
+    100%{ font-size:1px; transform:scale(1) rotate(0deg); opacity:0; }
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -537,6 +544,8 @@ function showSaluteSplash(){
   `;
   overlay.addEventListener('click', () => overlay.remove());
   document.body.appendChild(overlay);
+  const emojiEl = overlay.querySelector('.salute-emoji');
+  setTimeout(() => { if(emojiEl) emojiEl.textContent = '👋'; }, 2700);
   setTimeout(() => overlay.remove(), 4750);
 }
 function showToast(message){
