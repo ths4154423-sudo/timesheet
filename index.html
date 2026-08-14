@@ -355,31 +355,30 @@
     display:flex; align-items:center; justify-content:center;
     overflow:hidden;
     animation:
-      saluteBgFade .25s ease-out both,
-      saluteBgFadeOut .55s ease-in 1.75s forwards;
+      saluteBgFade .3s ease-out both,
+      saluteBgFadeOut .7s ease-in 2.95s forwards;
   }
   @keyframes saluteBgFade{ from{ opacity:0; } to{ opacity:1; } }
   @keyframes saluteBgFadeOut{ from{ opacity:1; } to{ opacity:0; } }
   .salute-overlay .salute-emoji{
-    font-size:min(38vw, 220px); line-height:1;
+    font-size:48px; line-height:1; opacity:0;
     filter: drop-shadow(0 10px 24px rgba(0,0,0,.35));
     animation:
-      salutePop .4s cubic-bezier(.34,1.56,.64,1) both,
-      saluteGrow 1s cubic-bezier(.55,0,.85,.35) .75s both,
-      saluteSpinOut .55s ease-in 1.75s both;
+      saluteAppear .35s ease-out both,
+      saluteGrow 2.6s ease-in-out .35s both,
+      saluteFadeOut .7s ease-in 2.95s both;
   }
-  @keyframes salutePop{
-    0%{ transform:scale(.15) rotate(-8deg); opacity:0; }
-    65%{ transform:scale(1.1) rotate(2deg); opacity:1; }
-    100%{ transform:scale(1) rotate(0deg); opacity:1; }
+  @keyframes saluteAppear{
+    from{ opacity:0; transform:scale(.6); }
+    to{ opacity:1; transform:scale(1); }
   }
   @keyframes saluteGrow{
-    0%{ transform:scale(1) rotate(0deg); opacity:1; }
-    100%{ transform:scale(8) rotate(0deg); opacity:1; }
+    from{ font-size:48px; }
+    to{ font-size:min(95vw, 95vh); }
   }
-  @keyframes saluteSpinOut{
-    0%{ transform:scale(8) rotate(0deg); opacity:1; }
-    100%{ transform:scale(0) rotate(560deg); opacity:0; }
+  @keyframes saluteFadeOut{
+    from{ opacity:1; }
+    to{ opacity:0; }
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -469,7 +468,7 @@ function showSaluteSplash(){
   overlay.innerHTML = `<div class="salute-emoji">🫡</div>`;
   overlay.addEventListener('click', () => overlay.remove());
   document.body.appendChild(overlay);
-  setTimeout(() => overlay.remove(), 2350);
+  setTimeout(() => overlay.remove(), 3700);
 }
 function showToast(message){
   const t = document.createElement('div');
