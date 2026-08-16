@@ -3003,18 +3003,16 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     <div class="card">
       <h3>כרטיס נוכחות היום</h3>
       ${!openEntry ? `
-        <p class="hint" style="margin-top:-6px; margin-bottom:16px; font-size:13px;">לחצו כשאתם מגיעים לעבודה — את שעת הסיום תעדכנו בנפרד בסוף היום.</p>
+        <p class="hint" style="margin-top:-6px; margin-bottom:12px; font-size:13px;">לחצו כשאתם מגיעים לעבודה — את שעת הסיום תעדכנו בנפרד בסוף היום.</p>
         <form id="clockInForm" novalidate>
-          <div class="emp-row-form">
-            <div class="field">
+          <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+            <div class="field" style="flex:0 0 auto; min-width:100px; max-width:130px; margin-top:0;">
               <label>שעת הגעה</label>
               <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockInTime" value="${nowTimeStr()}" required style="direction:ltr; text-align:right;" dir="ltr" />
             </div>
-          </div>
-          <div class="error-msg" id="clockInErr"></div>
-          <div class="actions" style="justify-content:flex-start;">
             <button type="submit" class="btn brass">🟢 התחלת יום עבודה</button>
           </div>
+          <div class="error-msg" id="clockInErr"></div>
         </form>
       ` : `
         <p class="hint" style="margin-top:-6px; font-size:14px;">
@@ -3060,17 +3058,15 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         </div>
         ${!onBreak ? `
           <form id="clockOutForm" novalidate style="margin-top:18px; border-top:1px solid var(--line); padding-top:16px;">
-            <div class="emp-row-form">
-              <div class="field">
+            <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+              <div class="field" style="flex:0 0 auto; min-width:100px; max-width:130px; margin-top:0;">
                 <label>שעת סיום</label>
                 <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockOutTime" value="${nowTimeStr()}" required style="direction:ltr; text-align:right;" dir="ltr" />
               </div>
-            </div>
-            <div class="error-msg" id="clockOutErr"></div>
-            <div class="actions" style="justify-content:flex-start; gap:10px;">
               <button type="submit" class="btn brass">🔴 סיום יום עבודה</button>
               <button type="button" class="btn ghost" id="pauseDayBtn">⏸️ סיום יום עבודה בינתיים</button>
             </div>
+            <div class="error-msg" id="clockOutErr"></div>
           </form>
         ` : ''}
       `}
@@ -3358,7 +3354,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         speakHebrew(`${emp.name}, מעריכים אוֹתְךָ על העבודה, ערב טוב`);
       }
       showToast('יום העבודה הסתיים בהצלחה');
-      showSaluteSplash();
+      if(!(empSettings.muteSalute ?? false)) showSaluteSplash();
       renderEmployeeDashboard(emp, null, fresh);
     };
   }
@@ -3617,6 +3613,14 @@ const EMPLOYEE_SETTINGS_DEFS = [
     type: 'checkbox',
     label: 'השתקת צליל הקופה הרושמת',
     hint: 'לא יישמע צליל "קופה רושמת" כשפותחים סיכום של יום עם סכום כסף.',
+    default: false
+  },
+  {
+    key: 'muteSalute',
+    category: 'sound',
+    type: 'checkbox',
+    label: 'הסרת אנימציית ההצדעה בסיום היום',
+    hint: 'לא תוצג אנימציית ההצדעה (🫡👋) עם רקע השקיעה בעת סיום יום עבודה.',
     default: false
   },
   {
