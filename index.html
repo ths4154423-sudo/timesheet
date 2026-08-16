@@ -842,12 +842,16 @@ function getContrastTextColor(hex){ return isLightColor(hex) ? '#1A2733' : '#F5F
 const DEFAULT_THEME_COLOR = '#5FBF8F'; // accent (buttons / highlights)
 const DEFAULT_BG_COLOR = '#EAF3FB';    // page background
 const DEFAULT_INK_COLOR = '#12293F';   // main text color
+const DARK_MODE_BG_COLOR = '#1B2430';  // page background when "מצב כהה" is on
 
 function applyEmployeeTheme(settings){
   settings = settings || {};
   const accent = settings.themeColor || DEFAULT_THEME_COLOR;
-  const bgCustomized = !!settings.bgColor;
-  const bg = settings.bgColor || DEFAULT_BG_COLOR;
+  const darkMode = !!settings.darkMode;
+  // מצב כהה גובר על צבע רקע מותאם אישית כל עוד הוא מופעל, אבל עדיין מכבד צבע טקסט
+  // מותאם אישית אם הוגדר (ואחרת מחשב ניגודיות אוטומטית, בדיוק כמו עם רקע מותאם רגיל).
+  const bgCustomized = darkMode || !!settings.bgColor;
+  const bg = darkMode ? DARK_MODE_BG_COLOR : (settings.bgColor || DEFAULT_BG_COLOR);
   // Only fall back to auto-contrast once the person has actually customized the background;
   // with an untouched background we keep the app's exact original ink tone.
   const text = settings.textColor || (bgCustomized ? getContrastTextColor(bg) : DEFAULT_INK_COLOR);
@@ -1606,7 +1610,7 @@ async function renderEmployeeRequests(emp){
         <button type="button" class="btn brass" onclick="renderEmployeeRequests(state.currentEmployee)">ניסיון נוסף</button>
       </div>
     `;
-    document.getElementById('reqBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
+    document.getElementById('reqBackBtn').onclick = () => renderEmployeeSettings(emp);
     return;
   }
 
@@ -1772,7 +1776,7 @@ async function renderEmployeeRequests(emp){
       ` : ''}
     `;
 
-    document.getElementById('reqBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
+    document.getElementById('reqBackBtn').onclick = () => renderEmployeeSettings(emp);
     const filterBtn = document.getElementById('reqFilterBtn');
     if(filterBtn) filterBtn.onclick = () => { menuOpen = true; render(); };
     document.querySelectorAll('[data-filter]').forEach(el => {
@@ -2995,10 +2999,6 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       <div class="digit-block"><div class="num mono" id="readoutHours">0</div><div class="lbl">סה"כ שעות החודש</div></div>
       <div class="digit-block"><div class="num mono" id="readoutPay">${fmtMoney(0)}</div><div class="lbl">סה"כ לתשלום</div></div>
     </div>
-    <div class="actions" style="justify-content:flex-start; margin-top:-8px; margin-bottom:18px; gap:8px;">
-      <button type="button" class="btn ghost small" id="emailHoursBtn">📧 שליחת דוח שעות</button>
-      <button type="button" class="btn ghost small" id="myRequestsBtn" style="position:relative;">📨 בקשה למנהל<span id="myRequestsBadge" class="pulse-dot" style="display:none; position:absolute; top:-6px; left:-6px; background:var(--danger); color:#fff; border-radius:50%; width:9px; height:9px;"></span></button>
-    </div>
 
     <div class="card">
       <h3>כרטיס נוכחות היום</h3>
@@ -3070,6 +3070,50 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           </form>
         ` : ''}
       `}
+    </div>
+
+    <div class="card">
+      <div class="collapsible-header" id="entriesToggleHeader">
+        <h3 style="margin:0;">רישומי החודש</h3>
+        <span class="chevron">${state._entriesOpen ? '▲' : '▼'}</span>
+      </div>
+      ${state._entriesOpen ? `
+      <div id="entriesList" style="margin-top:14px;">
+        ${entries.length === 0 ? '<div class="empty-state">אין עדיין רישומי שעות לחודש זה.</div>' : `
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>תאריך</th><th>טווח שעות</th><th>הפסקות</th><th>סה"כ שעות</th>${emp.payType !== 'fixed' ? '<th>סה"כ להרוויח</th>' : ''}<th></th></tr></thead>
+            <tbody>
+              ${entries.map((e, i) => {
+                const h = computeEntryHours(e);
+                const breaksCount = (e.breaks || []).filter(b => b.end).length;
+                const delay = Math.min(i, 15) * 35;
+                return `
+                <tr class="stagger-item" style="animation-delay:${delay}ms;">
+                  <td>${e.date}</td>
+                  <td class="mono">${e.start ? (hhmm(e.start) + ' – ' + (e.end ? hhmm(e.end) : '...')) : '—'}</td>
+                  <td class="mono">${breaksCount > 0 ? breaksCount + ' הפסקות' : '—'}</td>
+                  <td class="mono">${h !== null ? fmtHours(h) : '<span class="pill hourly">בעבודה</span>'}</td>
+                  ${emp.payType !== 'fixed' ? `<td class="mono">${h !== null ? fmtMoney(h * emp.rate) : '—'}</td>` : ''}
+                  <td>
+                    <div class="row-actions">
+                      ${h !== null ? `<button class="btn ghost small" data-view-entry="${e.id}">הצגה</button>` : ''}
+                      <button class="btn ghost small" data-edit-entry="${e.id}">עריכה</button>
+                      <button class="btn danger" data-del-entry="${e.id}">מחיקה</button>
+                    </div>
+                  </td>
+                </tr>
+              `;}).join('')}
+            </tbody>
+          </table>
+        </div>
+        `}
+      </div>
+      ` : ''}
+    </div>
+
+    <div class="actions" style="justify-content:flex-start; margin-bottom:18px;">
+      <button type="button" class="btn ghost small" id="emailHoursBtn">📧 שליחת דוח שעות</button>
     </div>
 
     <div class="card">
@@ -3145,42 +3189,6 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       </div>
       ` : ''}
     </div>
-    ${editingEntry ? '' : `
-    <div class="card">
-      <h3>רישומי החודש</h3>
-      <div id="entriesList">
-        ${entries.length === 0 ? '<div class="empty-state">אין עדיין רישומי שעות לחודש זה.</div>' : `
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>תאריך</th><th>טווח שעות</th><th>הפסקות</th><th>סה"כ שעות</th>${emp.payType !== 'fixed' ? '<th>סה"כ להרוויח</th>' : ''}<th></th></tr></thead>
-            <tbody>
-              ${entries.map((e, i) => {
-                const h = computeEntryHours(e);
-                const breaksCount = (e.breaks || []).filter(b => b.end).length;
-                const delay = Math.min(i, 15) * 35;
-                return `
-                <tr class="stagger-item" style="animation-delay:${delay}ms;">
-                  <td>${e.date}</td>
-                  <td class="mono">${e.start ? (hhmm(e.start) + ' – ' + (e.end ? hhmm(e.end) : '...')) : '—'}</td>
-                  <td class="mono">${breaksCount > 0 ? breaksCount + ' הפסקות' : '—'}</td>
-                  <td class="mono">${h !== null ? fmtHours(h) : '<span class="pill hourly">בעבודה</span>'}</td>
-                  ${emp.payType !== 'fixed' ? `<td class="mono">${h !== null ? fmtMoney(h * emp.rate) : '—'}</td>` : ''}
-                  <td>
-                    <div class="row-actions">
-                      ${h !== null ? `<button class="btn ghost small" data-view-entry="${e.id}">הצגה</button>` : ''}
-                      <button class="btn ghost small" data-edit-entry="${e.id}">עריכה</button>
-                      <button class="btn danger" data-del-entry="${e.id}">מחיקה</button>
-                    </div>
-                  </td>
-                </tr>
-              `;}).join('')}
-            </tbody>
-          </table>
-        </div>
-        `}
-      </div>
-    </div>
-    `}
   `;
 
   document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); renderLanding(); };
@@ -3203,16 +3211,6 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       }
       await showSendHoursModal({ emp, month, entries, totalHours, pay, managerEmail, emailjsConfig });
     };
-  }
-  const myRequestsBtn = document.getElementById('myRequestsBtn');
-  if(myRequestsBtn){
-    myRequestsBtn.onclick = () => renderEmployeeRequests(emp);
-    loadRequests().then(list => {
-      if(!list) return;
-      const hasUnseen = list.some(r => r.empId === emp.id && r.status !== 'pending' && r.seenByEmployee === false);
-      const badge = document.getElementById('myRequestsBadge');
-      if(badge && hasUnseen) badge.style.display = 'block';
-    });
   }
   const empMonthPicker = document.getElementById('empMonthPicker');
   if(empMonthPicker){
@@ -3448,6 +3446,10 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   }
 
 
+  const entriesToggleHeader = document.getElementById('entriesToggleHeader');
+  if(entriesToggleHeader){
+    entriesToggleHeader.onclick = () => { state._entriesOpen = !state._entriesOpen; renderEmployeeDashboard(emp, null, true); };
+  }
   const excelToggleHeader = document.getElementById('excelToggleHeader');
   if(excelToggleHeader){
     excelToggleHeader.onclick = () => { state._excelOpen = !state._excelOpen; renderEmployeeDashboard(emp, null, true); };
@@ -3588,7 +3590,9 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 // renders the right field type automatically, no other code changes needed.
 const SETTINGS_CATEGORIES = [
   { key: 'sound', icon: '🔊', label: 'קול והתראות', hint: 'הודעות קוליות וצלילים בזמן העבודה' },
-  { key: 'appearance', icon: '🎨', label: 'עיצוב וצבעים', hint: 'צבעי הרקע, הטקסט וההדגשים באתר' }
+  { key: 'appearance', icon: '🎨', label: 'עיצוב וצבעים', hint: 'צבעי הרקע, הטקסט וההדגשים באתר' },
+  { key: 'display', icon: '🖥️', label: 'תצוגה', hint: 'מצב כהה ואפשרויות תצוגה נוספות' },
+  { key: 'requests', icon: '📨', label: 'בקשה למנהל', hint: 'שליחת הודעה חופשית וצפייה בסטטוס בקשות קודמות', action: true }
 ];
 const EMPLOYEE_SETTINGS_DEFS = [
   {
@@ -3646,6 +3650,14 @@ const EMPLOYEE_SETTINGS_DEFS = [
     label: 'צבע הטקסט באתר',
     hint: 'אפשר לבחור צבע טקסט ספציפי, או להשאיר על "התאמה אוטומטית" — ואז הטקסט יהיה בהיר או כהה בהתאם לצבע הרקע שנבחר, כדי שתמיד יהיה קריא.',
     default: null
+  },
+  {
+    key: 'darkMode',
+    category: 'display',
+    type: 'checkbox',
+    label: 'מצב כהה',
+    hint: 'האתר יעבור לערכת נושא כהה (רקע כהה, טקסט בהיר) אצלך בלבד. אם בחרת גם צבעי רקע/טקסט מותאמים אישית בעיצוב וצבעים, מצב כהה גובר עליהם כל עוד הוא מופעל.',
+    default: false
   }
 ];
 
@@ -3668,9 +3680,9 @@ async function renderEmployeeSettings(emp){
     <div class="card">
       <h3>הגדרות</h3>
       ${SETTINGS_CATEGORIES.map((cat, i) => `
-        <button type="button" class="btn ghost" data-open-category="${cat.key}" style="width:100%; text-align:right; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 16px; margin-top:${i === 0 ? '0' : '10px'};">
+        <button type="button" class="btn ghost" data-open-category="${cat.key}" style="width:100%; text-align:right; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 16px; margin-top:${i === 0 ? '0' : '10px'}; position:relative;">
           <span>
-            <span style="display:block; font-weight:600;">${cat.icon} ${escapeHtml(cat.label)}</span>
+            <span style="display:block; font-weight:600;">${cat.icon} ${escapeHtml(cat.label)}${cat.key === 'requests' ? '<span id="settingsRequestsBadge" class="pulse-dot" style="display:none; margin-inline-start:8px; background:var(--danger); color:#fff; border-radius:50%; width:8px; height:8px;"></span>' : ''}</span>
             <span class="hint" style="display:block; margin-top:2px; font-size:13px;">${escapeHtml(cat.hint)}</span>
           </span>
           <span style="font-size:18px;">‹</span>
@@ -3680,8 +3692,18 @@ async function renderEmployeeSettings(emp){
   `;
 
   document.getElementById('settingsBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
+  loadRequests().then(list => {
+    if(!list) return;
+    const hasUnseen = list.some(r => r.empId === emp.id && r.status !== 'pending' && r.seenByEmployee === false);
+    const badge = document.getElementById('settingsRequestsBadge');
+    if(badge && hasUnseen) badge.style.display = 'inline-block';
+  });
   document.querySelectorAll('[data-open-category]').forEach(btn => {
-    btn.onclick = () => renderEmployeeSettingsCategory(emp, btn.dataset.openCategory);
+    btn.onclick = () => {
+      const cat = SETTINGS_CATEGORIES.find(c => c.key === btn.dataset.openCategory);
+      if(cat && cat.action && cat.key === 'requests'){ renderEmployeeRequests(emp); return; }
+      renderEmployeeSettingsCategory(emp, btn.dataset.openCategory);
+    };
   });
 }
 
