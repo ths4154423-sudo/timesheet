@@ -98,10 +98,10 @@
 
   input, select{
     font-family:'Heebo',sans-serif; font-size:15px; padding:10px 12px;
-    border:1.5px solid var(--line); border-radius:4px; background:var(--paper);
+    border:none; border-radius:8px; background:var(--paper-alt);
     color:var(--ink); width:100%;
   }
-  input:focus, select:focus{ outline:2px solid var(--brass); outline-offset:1px; border-color:var(--brass); }
+  input:focus, select:focus{ outline:2px solid var(--brass); outline-offset:1px; }
   label{ display:block; font-size:13px; color:var(--muted); margin-bottom:5px; margin-top:14px; }
   .field:first-of-type label{ margin-top:0; }
   form .actions{ margin-top:22px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;}
@@ -1687,7 +1687,7 @@ async function renderEmployeeRequests(emp){
           <h3 style="margin-top:0;">✏️ הודעה חדשה למנהל</h3>
           <p class="hint" style="margin-top:-6px; font-size:13px;">כתוב/י כל בקשה חופשית — יציאה מוקדמת, החלפת משמרת, הערה כללית וכו'.</p>
           <form id="newRequestForm">
-            <textarea id="requestText" rows="5" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); resize:vertical;" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea>
+            <textarea id="requestText" rows="5" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:12px 14px; border:none; border-radius:10px; background:var(--paper-alt); color:var(--ink); resize:vertical;" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea>
             <div class="error-msg" id="requestErr" style="margin-top:6px;"></div>
             <div class="actions" style="justify-content:flex-start; margin-top:12px; gap:10px;">
               <button type="submit" class="btn brass" style="border-radius:10px;">שליחה</button>
@@ -1730,7 +1730,7 @@ async function renderEmployeeRequests(emp){
     const filtered = filterStatus === 'all' ? myRequests : myRequests.filter(r => r.status === filterStatus);
     app.innerHTML = `
       <div style="display:flex; justify-content:flex-start; margin-bottom:14px;">
-        <button type="button" id="reqFilterBtn" style="background:var(--surface); border:1px solid var(--line); border-radius:8px; width:40px; height:40px; font-size:19px; line-height:1; cursor:pointer; color:var(--ink);">☰</button>
+        <button type="button" id="reqFilterBtn" style="background:var(--paper-alt); border:none; border-radius:8px; width:40px; height:40px; font-size:19px; line-height:1; cursor:pointer; color:var(--ink);">☰</button>
       </div>
       ${filterStatus !== 'all' ? `<p class="hint" style="font-size:12.5px; margin-top:-6px;">מסונן לפי: ${escapeHtml(CATEGORY_OPTIONS.find(c => c.key === filterStatus).label)}</p>` : ''}
       <div class="card" style="padding:6px 26px;">
@@ -1810,7 +1810,7 @@ function showSendHoursModal(ctx){
           ${(!fixedServiceId && senders.length) ? `
           <div class="field" style="margin-top:14px; text-align:right;">
             <label>שליחה מחשבון</label>
-            <select id="senderSelect" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:4px; background:var(--paper); color:var(--ink); font-family:'Heebo',sans-serif; font-size:15px;">
+            <select id="senderSelect" style="width:100%; padding:10px 12px; border:none; border-radius:8px; background:var(--paper-alt); color:var(--ink); font-family:'Heebo',sans-serif; font-size:15px;">
               ${senders.map(s => `<option value="${escapeHtml(s.serviceId)}">${escapeHtml(s.label)}</option>`).join('')}
             </select>
           </div>
@@ -2697,7 +2697,7 @@ async function renderAdminSettings(){
         <form id="announcementForm">
           <div class="field"><label>${announcement.image ? 'החלפת תמונה' : 'העלאת תמונה'} (לא חובה)</label><input type="file" id="announcementImage" accept="image/*" /></div>
           ${announcement.image ? '<div class="actions" style="justify-content:flex-start; margin-top:8px;"><button type="button" class="btn danger" id="removeAnnouncementImg">הסרת תמונה</button></div>' : ''}
-          <div class="field" style="margin-top:14px;"><label>כיתוב</label><textarea id="announcementCaption" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:10px 12px; border:1.5px solid var(--line); border-radius:4px; background:var(--paper); color:var(--ink);">${escapeHtml(announcement.caption || '')}</textarea></div>
+          <div class="field" style="margin-top:14px;"><label>כיתוב</label><textarea id="announcementCaption" rows="3" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:10px 12px; border:none; border-radius:8px; background:var(--paper-alt); color:var(--ink);">${escapeHtml(announcement.caption || '')}</textarea></div>
           <div class="error-msg" id="announcementErr"></div>
           <div class="actions" style="justify-content:flex-start;">
             <button type="submit" class="btn brass">שמירת הודעה</button>
@@ -3713,7 +3713,7 @@ async function renderEmployeeSettingsCategory(emp, categoryKey){
           <span style="display:block; font-weight:600;">${escapeHtml(def.label)}</span>
           ${def.hint ? `<span class="hint" style="display:block; margin-top:2px; margin-bottom:8px; font-size:13px;">${escapeHtml(def.hint)}</span>` : ''}
           <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
-            <input type="color" id="setting_${def.key}" data-setting-key="${def.key}" value="${currentVal}" style="width:52px; height:40px; padding:2px; border:1.5px solid var(--line); border-radius:6px; cursor:pointer; background:var(--white);" />
+            <input type="color" id="setting_${def.key}" data-setting-key="${def.key}" value="${currentVal}" style="width:52px; height:40px; padding:2px; border:none; border-radius:8px; cursor:pointer; background:var(--paper-alt);" />
             <button type="button" class="btn ghost small" id="reset_${def.key}">איפוס לצבע ברירת מחדל</button>
           </div>
         </div>
@@ -3731,7 +3731,7 @@ async function renderEmployeeSettingsCategory(emp, categoryKey){
               <input type="checkbox" id="auto_${def.key}" ${isAuto ? 'checked' : ''} style="width:16px; height:16px;" />
               התאמה אוטומטית לפי צבע הרקע
             </label>
-            <input type="color" id="setting_${def.key}" data-setting-key="${def.key}" value="${previewColor}" ${isAuto ? 'disabled' : ''} style="width:52px; height:40px; padding:2px; border:1.5px solid var(--line); border-radius:6px; cursor:pointer; background:var(--white);" />
+            <input type="color" id="setting_${def.key}" data-setting-key="${def.key}" value="${previewColor}" ${isAuto ? 'disabled' : ''} style="width:52px; height:40px; padding:2px; border:none; border-radius:8px; cursor:pointer; background:var(--paper-alt);" />
           </div>
         </div>
       `;
