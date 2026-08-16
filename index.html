@@ -187,6 +187,20 @@
   .req-filter-sheet{ animation:reqSheetUp .3s cubic-bezier(.2,.85,.3,1); }
   .req-filter-sheet > div:active{ background:var(--paper-alt); }
 
+  /* ---------- animations: staggered list entrance ---------- */
+  @keyframes staggerIn{
+    from{ opacity:0; transform:translateY(8px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+  .stagger-item{ animation:staggerIn .35s ease-out both; }
+
+  /* ---------- animations: gentle pulse for notification badges ---------- */
+  @keyframes gentlePulse{
+    0%, 100%{ transform:scale(1); box-shadow:0 0 0 0 rgba(162,62,48,.55); }
+    50%{ transform:scale(1.25); box-shadow:0 0 0 4px rgba(162,62,48,0); }
+  }
+  .pulse-dot{ animation:gentlePulse 1.6s ease-in-out infinite; }
+
   .list-item{
     display:flex; justify-content:space-between; align-items:center;
     padding:14px 4px; border-bottom:1px solid var(--line);
@@ -1462,6 +1476,21 @@ function renderEmployeeLogin(){
   }
 }
 
+// מאנים מספר מ-0 לערך האמתי בתוך אלמנט טקסט, עם עקומת האטה בסוף
+function animateCountUp(el, target, formatter, duration){
+  if(!el) return;
+  duration = duration || 900;
+  const start = performance.now();
+  function step(now){
+    const progress = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = formatter(target * eased);
+    if(progress < 1) requestAnimationFrame(step);
+    else el.textContent = formatter(target);
+  }
+  requestAnimationFrame(step);
+}
+
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -1623,6 +1652,7 @@ async function renderEmployeeRequests(emp){
     list = updated;
     refreshMyRequests();
     if(view === 'detail' && selectedId === id) view = 'list';
+    showToast('ההודעה נמחקה');
     render();
   }
 
@@ -1699,6 +1729,7 @@ async function renderEmployeeRequests(emp){
         list = fresh;
         refreshMyRequests();
         view = 'list';
+        showToast('הבקשה נשלחה');
         render();
       };
       return;
@@ -1712,8 +1743,8 @@ async function renderEmployeeRequests(emp){
       </div>
       ${filterStatus !== 'all' ? `<p class="hint" style="font-size:12.5px; margin-top:-6px;">מסונן לפי: ${escapeHtml(CATEGORY_OPTIONS.find(c => c.key === filterStatus).label)}</p>` : ''}
       <div class="card" style="padding:6px 26px;">
-        ${filtered.length ? filtered.map(r => `
-          <div class="list-item clickable" data-row="${r.id}" style="user-select:none; -webkit-user-select:none;">
+        ${filtered.length ? filtered.map((r, i) => `
+          <div class="list-item clickable stagger-item" data-row="${r.id}" style="user-select:none; -webkit-user-select:none; animation-delay:${Math.min(i, 15) * 35}ms;">
             <div class="avatar-row">
               <span class="pill status-${r.status}" style="flex-shrink:0;">${STATUS_ICON[r.status] || ''}</span>
               <div style="min-width:0;">
@@ -2077,8 +2108,8 @@ async function renderAdminRequests(){
   content.innerHTML = sorted.length ? `
     <div class="card">
       <h3>בקשות מעובדים</h3>
-      ${sorted.map(r => `
-        <div style="border-top:1px solid var(--line); padding:14px 0;">
+      ${sorted.map((r, i) => `
+        <div class="stagger-item" style="border-top:1px solid var(--line); padding:14px 0; animation-delay:${Math.min(i, 15) * 35}ms;">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
             <div>
               <b>${escapeHtml(r.empName || '')}</b>
@@ -2118,6 +2149,7 @@ async function renderAdminRequests(){
     req.seenByEmployee = false;
     const ok = await saveRequests(fresh);
     if(ok !== true){ alert('שגיאה בשמירה: ' + ok); return; }
+    showToast(status === 'approved' ? 'הבקשה אושרה' : 'הבקשה נדחתה');
     renderAdminRequests();
   }
   async function removeRequest(id){
@@ -2128,6 +2160,7 @@ async function renderAdminRequests(){
     const updated = fresh.filter(r => r.id !== id);
     const ok = await saveRequests(updated);
     if(ok !== true){ alert('שגיאה בשמירה: ' + ok); return; }
+    showToast('הבקשה נמחקה');
     renderAdminRequests();
   }
   content.querySelectorAll('[data-delete-req]').forEach(btn => { btn.onclick = () => removeRequest(btn.dataset.deleteReq); });
@@ -2172,8 +2205,8 @@ async function renderAdminSummary(){
             `).join('')}
             <tr class="total-row">
               <td colspan="2">סה"כ לכל העובדים</td>
-              <td class="mono">${fmtHours(grandHours)}</td>
-              <td class="mono">${fmtMoney(grandPay)}</td>
+              <td class="mono" id="grandHoursCell">0</td>
+              <td class="mono" id="grandPayCell">${fmtMoney(0)}</td>
             </tr>
           </tbody>
         </table>
@@ -2193,6 +2226,8 @@ async function renderAdminSummary(){
     state._adminMonth = e.target.value;
     renderAdminSummary();
   };
+  animateCountUp(document.getElementById('grandHoursCell'), grandHours, fmtHours);
+  animateCountUp(document.getElementById('grandPayCell'), grandPay, fmtMoney);
 
   if(rows.length && window.Chart){
     renderAdminCharts(rows);
@@ -2332,6 +2367,7 @@ function renderAddEmployeePage(){
     submitBtn.textContent = 'הוסף עובד';
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
     state.employees = updated;
+    showToast('העובד נוסף בהצלחה');
     renderAdminDashboard('employees');
   };
 }
@@ -2403,6 +2439,7 @@ function renderEmpList(){
       if(!confirm('למחוק את העובד? כל נתוני השעות שלו יישארו במערכת אך לא יהיו נגישים דרך הכניסה.')) return;
       state.employees = state.employees.filter(x => x.id !== btn.dataset.del);
       await saveEmployees(state.employees);
+      showToast('העובד נמחק');
       renderAdminEmployees();
     };
   });
@@ -2536,6 +2573,7 @@ function renderEditEmployee(empId){
     submitBtn.textContent = 'שמירת שינויים';
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
     state.employees = updatedList;
+    showToast('הפרטים נשמרו');
     renderAdminDashboard('employees');
   };
 }
@@ -2763,6 +2801,7 @@ async function renderAdminSettings(){
     submitBtn.textContent = 'שמירה';
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
     state._emailEditMode = false;
+    showToast('הכתובת נשמרה');
     renderAdminSettings();
   };
 
@@ -2811,6 +2850,7 @@ async function renderAdminSettings(){
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
     state._emailjsDraft = null;
     state._autosendEditMode = false;
+    showToast('הגדרות השליחה נשמרו');
     renderAdminSettings();
   };
 
@@ -2952,12 +2992,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       <span class="subtitle">${monthLabel(month)} · ${emp.payType === 'hourly' ? 'שכר שעתי · ' + fmtMoney(emp.rate) + ' לשעה' : 'שכר חודשי קבוע'}</span>
     </div>
     <div class="readout">
-      <div class="digit-block"><div class="num mono">${fmtHours(totalHours)}</div><div class="lbl">סה"כ שעות החודש</div></div>
-      <div class="digit-block"><div class="num mono">${fmtMoney(pay)}</div><div class="lbl">סה"כ לתשלום</div></div>
+      <div class="digit-block"><div class="num mono" id="readoutHours">0</div><div class="lbl">סה"כ שעות החודש</div></div>
+      <div class="digit-block"><div class="num mono" id="readoutPay">${fmtMoney(0)}</div><div class="lbl">סה"כ לתשלום</div></div>
     </div>
     <div class="actions" style="justify-content:flex-start; margin-top:-8px; margin-bottom:18px; gap:8px;">
       <button type="button" class="btn ghost small" id="emailHoursBtn">📧 שליחת דוח שעות</button>
-      <button type="button" class="btn ghost small" id="myRequestsBtn" style="position:relative;">📨 בקשה למנהל<span id="myRequestsBadge" style="display:none; position:absolute; top:-6px; left:-6px; background:var(--danger); color:#fff; border-radius:50%; width:9px; height:9px;"></span></button>
+      <button type="button" class="btn ghost small" id="myRequestsBtn" style="position:relative;">📨 בקשה למנהל<span id="myRequestsBadge" class="pulse-dot" style="display:none; position:absolute; top:-6px; left:-6px; background:var(--danger); color:#fff; border-radius:50%; width:9px; height:9px;"></span></button>
     </div>
 
     <div class="card">
@@ -3118,11 +3158,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           <table>
             <thead><tr><th>תאריך</th><th>טווח שעות</th><th>הפסקות</th><th>סה"כ שעות</th>${emp.payType !== 'fixed' ? '<th>סה"כ להרוויח</th>' : ''}<th></th></tr></thead>
             <tbody>
-              ${entries.map(e => {
+              ${entries.map((e, i) => {
                 const h = computeEntryHours(e);
                 const breaksCount = (e.breaks || []).filter(b => b.end).length;
+                const delay = Math.min(i, 15) * 35;
                 return `
-                <tr>
+                <tr class="stagger-item" style="animation-delay:${delay}ms;">
                   <td>${e.date}</td>
                   <td class="mono">${e.start ? (hhmm(e.start) + ' – ' + (e.end ? hhmm(e.end) : '...')) : '—'}</td>
                   <td class="mono">${breaksCount > 0 ? breaksCount + ' הפסקות' : '—'}</td>
@@ -3149,6 +3190,8 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); renderLanding(); };
   document.getElementById('settingsBtn').onclick = () => renderEmployeeSettings(emp);
 
+  animateCountUp(document.getElementById('readoutHours'), totalHours, fmtHours);
+  animateCountUp(document.getElementById('readoutPay'), pay, fmtMoney);
   const emailHoursBtn = document.getElementById('emailHoursBtn');
   if(emailHoursBtn){
     emailHoursBtn.onclick = async () => {
@@ -3719,6 +3762,7 @@ async function renderEmployeeSettingsCategory(emp, categoryKey){
     state._settingsCache = { empId: emp.id, settings: updated };
     settings[key] = value;
     savedMsg.style.display = 'block';
+    showToast('ההגדרה נשמרה');
     setTimeout(() => { const m = document.getElementById('settingsSavedMsg'); if(m) m.style.display = 'none'; }, 2000);
     return true;
   }
