@@ -842,7 +842,7 @@ function getContrastTextColor(hex){ return isLightColor(hex) ? '#1A2733' : '#F5F
 const DEFAULT_THEME_COLOR = '#5FBF8F'; // accent (buttons / highlights)
 const DEFAULT_BG_COLOR = '#EAF3FB';    // page background
 const DEFAULT_INK_COLOR = '#12293F';   // main text color
-const DARK_MODE_BG_COLOR = '#1B2430';  // page background when "מצב כהה" is on
+const DARK_MODE_BG_COLOR = '#000000';  // page background when "מצב כהה" is on — שחור אמיתי, לא גוון כחלחל
 
 function applyEmployeeTheme(settings){
   settings = settings || {};
@@ -856,10 +856,10 @@ function applyEmployeeTheme(settings){
   // with an untouched background we keep the app's exact original ink tone.
   const text = settings.textColor || (bgCustomized ? getContrastTextColor(bg) : DEFAULT_INK_COLOR);
   const bgIsLight = isLightColor(bg);
-  // Card/modal "surface" stays in the same light-or-dark family as the background (so the auto-picked
-  // text color, chosen to contrast with the background, also reads fine on top of these panels) —
-  // but defaults to plain white when the background hasn't been customized, matching the original look.
-  const surface = bgCustomized ? mixHexColors(bg, bgIsLight ? '#FFFFFF' : '#000000', bgIsLight ? 0.75 : 0.15) : '#FFFFFF';
+  // Card/modal "surface" is lightened slightly relative to a dark background so cards visually
+  // "lift" off the page (the standard dark-UI convention) — but defaults to plain white when the
+  // background hasn't been customized, matching the original look.
+  const surface = bgCustomized ? mixHexColors(bg, '#FFFFFF', bgIsLight ? 0.75 : 0.1) : '#FFFFFF';
   const root = document.documentElement.style;
   root.setProperty('--brass', accent);
   root.setProperty('--brass-dark', darkenHexColor(accent));
@@ -1478,21 +1478,6 @@ function renderEmployeeLogin(){
       }
     };
   }
-}
-
-// מאנים מספר מ-0 לערך האמתי בתוך אלמנט טקסט, עם עקומת האטה בסוף
-function animateCountUp(el, target, formatter, duration){
-  if(!el) return;
-  duration = duration || 900;
-  const start = performance.now();
-  function step(now){
-    const progress = Math.min((now - start) / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    el.textContent = formatter(target * eased);
-    if(progress < 1) requestAnimationFrame(step);
-    else el.textContent = formatter(target);
-  }
-  requestAnimationFrame(step);
 }
 
 function escapeHtml(s){
@@ -2230,8 +2215,8 @@ async function renderAdminSummary(){
     state._adminMonth = e.target.value;
     renderAdminSummary();
   };
-  animateCountUp(document.getElementById('grandHoursCell'), grandHours, fmtHours);
-  animateCountUp(document.getElementById('grandPayCell'), grandPay, fmtMoney);
+  document.getElementById('grandHoursCell').textContent = fmtHours(grandHours);
+  document.getElementById('grandPayCell').textContent = fmtMoney(grandPay);
 
   if(rows.length && window.Chart){
     renderAdminCharts(rows);
@@ -3007,8 +2992,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         <form id="clockInForm" novalidate>
           <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
             <div class="field" style="flex:0 0 auto; min-width:100px; max-width:130px; margin-top:0;">
-              <label>שעת הגעה</label>
-              <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockInTime" value="${nowTimeStr()}" required style="direction:ltr; text-align:right;" dir="ltr" />
+              <input type="text" inputmode="numeric" pattern="^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$" id="clockInTime" value="${nowTimeStr()}" required style="direction:ltr; text-align:right; border:none;" dir="ltr" />
             </div>
             <button type="submit" class="btn brass">🟢 התחלת יום עבודה</button>
           </div>
@@ -3194,8 +3178,8 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); renderLanding(); };
   document.getElementById('settingsBtn').onclick = () => renderEmployeeSettings(emp);
 
-  animateCountUp(document.getElementById('readoutHours'), totalHours, fmtHours);
-  animateCountUp(document.getElementById('readoutPay'), pay, fmtMoney);
+  document.getElementById('readoutHours').textContent = fmtHours(totalHours);
+  document.getElementById('readoutPay').textContent = fmtMoney(pay);
   const emailHoursBtn = document.getElementById('emailHoursBtn');
   if(emailHoursBtn){
     emailHoursBtn.onclick = async () => {
