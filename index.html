@@ -743,6 +743,20 @@ async function saveRequests(list){
     return true;
   }catch(e){ console.error('saveRequests error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
 }
+// ---------- voice messages (each recording lives in its own document, kept separate from the
+// shared meta/requests list doc so a handful of recordings can't blow past its 1MB size limit) ----------
+async function saveVoiceMessage(id, audioDataUrl){
+  try{
+    await withTimeout(setDoc(doc(db, 'voiceMessages', id), { audio: audioDataUrl, createdAt: new Date().toISOString() }), 15000, 'saveVoiceMessage');
+    return true;
+  }catch(e){ console.error('saveVoiceMessage error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
+async function loadVoiceMessage(id){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'voiceMessages', id)), 15000, 'loadVoiceMessage');
+    return snap.exists() ? snap.data().audio : null;
+  }catch(e){ console.error('loadVoiceMessage error', e); return null; }
+}
 async function loadHours(empId){
   try{
     const snap = await withTimeout(getDoc(doc(db, 'hours', empId)), 12000, 'loadHours');
@@ -1593,6 +1607,89 @@ function attachLongPress(el, onLongPress, onClick){
   el.addEventListener('mouseleave', cancel);
 }
 
+// מסך נגן מוזיקה: מעלים קבצי שמע מהמכשיר ומנגנים אותם. הקבצים חיים רק בזיכרון הדפדפן
+// (Object URL) ולא נשמרים לשרת בכלל - צריך לבחור אותם מחדש בכל כניסה למסך.
+async function renderMusicPlayer(emp){
+  stopLiveTimer();
+  stopLiveMoneyTimer();
+  stopClockFieldTimers();
+  stopBreakWatchdog();
+  setHeader('נגן מוזיקה', '<button class="btn ghost small" id="musicBackBtn">חזרה</button>');
+
+  let playlist = []; // { id, name, url }
+  let currentIndex = -1;
+
+  function render(){
+    app.innerHTML = `
+      <div class="card">
+        <h3 style="margin-top:0;">🎵 נגן מוזיקה</h3>
+        <p class="hint" style="margin-top:-6px; font-size:13px;">בחרו קבצי שמע (MP3 וכו') מהמכשיר שלכם. הקבצים לא נשמרים באתר בכלל — הם מתנגנים ישירות מהמכשיר, וצריך לבחור אותם מחדש בכל כניסה למסך הזה.</p>
+        <input type="file" id="musicFileInput" accept="audio/*" multiple style="padding:10px 0;" />
+        <audio id="musicAudioPlayer" controls style="width:100%; margin-top:16px; border-radius:8px;"></audio>
+        ${playlist.length ? `
+          <div style="margin-top:16px; display:flex; flex-direction:column; gap:6px;">
+            ${playlist.map((track, i) => `
+              <div data-track="${i}" class="list-item clickable" style="border-radius:10px; padding:10px 14px; background:${i === currentIndex ? 'var(--paper-alt)' : 'transparent'};">
+                <div class="avatar-row">
+                  <span style="flex-shrink:0;">${i === currentIndex ? '🔊' : '🎵'}</span>
+                  <div style="font-size:14px; font-weight:${i === currentIndex ? '700' : '500'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:65vw;">${escapeHtml(track.name)}</div>
+                </div>
+                <button type="button" class="btn ghost small" data-remove-track="${i}">הסרה</button>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<p class="hint" style="margin-top:14px;">עדיין לא נבחרו קבצים.</p>'}
+      </div>
+    `;
+    document.getElementById('musicBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
+
+    const audioPlayer = document.getElementById('musicAudioPlayer');
+    document.getElementById('musicFileInput').onchange = (e) => {
+      const files = Array.from(e.target.files || []);
+      files.forEach(file => {
+        playlist.push({ id: uid(), name: file.name, url: URL.createObjectURL(file) });
+      });
+      if(currentIndex === -1 && playlist.length){
+        currentIndex = 0;
+        audioPlayer.src = playlist[0].url;
+      }
+      render();
+    };
+    document.querySelectorAll('[data-track]').forEach(row => {
+      row.onclick = (e) => {
+        if(e.target.closest('[data-remove-track]')) return;
+        currentIndex = Number(row.dataset.track);
+        render();
+        const player = document.getElementById('musicAudioPlayer');
+        player.src = playlist[currentIndex].url;
+        player.play().catch(() => {});
+      };
+    });
+    document.querySelectorAll('[data-remove-track]').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const idx = Number(btn.dataset.removeTrack);
+        URL.revokeObjectURL(playlist[idx].url);
+        playlist.splice(idx, 1);
+        if(currentIndex === idx){ currentIndex = -1; }
+        else if(currentIndex > idx){ currentIndex--; }
+        render();
+      };
+    });
+    if(currentIndex >= 0 && playlist[currentIndex]) audioPlayer.src = playlist[currentIndex].url;
+    audioPlayer.addEventListener('ended', () => {
+      if(currentIndex < playlist.length - 1){
+        currentIndex++;
+        render();
+        const player = document.getElementById('musicAudioPlayer');
+        player.src = playlist[currentIndex].url;
+        player.play().catch(() => {});
+      }
+    });
+  }
+  render();
+}
+
 async function renderEmployeeRequests(emp){
   stopLiveTimer();
   stopLiveMoneyTimer();
@@ -1636,6 +1733,20 @@ async function renderEmployeeRequests(emp){
   const CATEGORY_COLOR = { all: 'var(--ink)', pending: '#B08A2E', approved: '#2F5233', rejected: 'var(--danger)' };
 
   let view = 'list'; // 'list' | 'detail' | 'compose'
+  let recordedAudioBlob = null;
+  let recordedAudioUrl = null;
+  let mediaRecorder = null;
+  let recordingSeconds = 0;
+  let recordingTimerId = null;
+  const MAX_RECORDING_SECONDS = 120;
+  function stopRecordingCleanup(){
+    if(mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+    if(recordingTimerId) clearInterval(recordingTimerId);
+    if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+    recordedAudioBlob = null;
+    recordedAudioUrl = null;
+    recordingSeconds = 0;
+  }
   let filterStatus = 'all';
   let menuOpen = false;
   let selectedId = null;
@@ -1676,6 +1787,7 @@ async function renderEmployeeRequests(emp){
             <span class="hint" style="font-size:12.5px;">${r.createdAt ? new Date(r.createdAt).toLocaleString('he-IL') : ''}</span>
           </div>
           <p style="font-size:16px; white-space:pre-wrap; line-height:1.6; margin:0 0 18px;">${escapeHtml(r.text || '')}</p>
+          ${r.voiceMessageId ? `<div id="voiceMsgSlot" style="margin-bottom:14px;"><button type="button" class="btn ghost" id="playVoiceBtn">🎤 הפעלת הודעה קולית</button></div>` : ''}
           ${r.adminNote ? `
             <div style="background:var(--paper-alt); border-radius:8px; padding:12px 14px; margin-bottom:14px;">
               <div class="hint" style="font-size:12px; margin-bottom:4px;">💬 תגובת המנהל${r.respondedAt ? ' · ' + new Date(r.respondedAt).toLocaleString('he-IL') : ''}</div>
@@ -1691,6 +1803,15 @@ async function renderEmployeeRequests(emp){
       document.getElementById('reqBackBtn').onclick = () => { view = 'list'; render(); };
       document.getElementById('detailBackBtn').onclick = () => { view = 'list'; render(); };
       document.getElementById('detailDeleteBtn').onclick = () => deleteRequest(r.id);
+      const playVoiceBtn = document.getElementById('playVoiceBtn');
+      if(playVoiceBtn) playVoiceBtn.onclick = async () => {
+        playVoiceBtn.disabled = true;
+        playVoiceBtn.textContent = 'טוען...';
+        const audioDataUrl = await loadVoiceMessage(r.voiceMessageId);
+        const slot = document.getElementById('voiceMsgSlot');
+        if(!audioDataUrl){ if(slot) slot.innerHTML = '<p class="hint" style="color:var(--danger);">שגיאה בטעינת ההקלטה.</p>'; return; }
+        if(slot) slot.innerHTML = `<audio controls autoplay src="${audioDataUrl}" style="width:100%; border-radius:8px;"></audio>`;
+      };
       return;
     }
 
@@ -1699,9 +1820,27 @@ async function renderEmployeeRequests(emp){
       app.innerHTML = `
         <div class="card">
           <h3 style="margin-top:0;">✏️ הודעה חדשה למנהל</h3>
-          <p class="hint" style="margin-top:-6px; font-size:13px;">כתוב/י כל בקשה חופשית — יציאה מוקדמת, החלפת משמרת, הערה כללית וכו'.</p>
+          <p class="hint" style="margin-top:-6px; font-size:13px;">כתוב/י כל בקשה חופשית — יציאה מוקדמת, החלפת משמרת, הערה כללית וכו'. אפשר גם טקסט, גם הודעה קולית, או שניהם.</p>
           <form id="newRequestForm">
             <textarea id="requestText" rows="5" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:12px 14px; border:none; border-radius:10px; background:var(--paper-alt); color:var(--ink); resize:vertical;" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea>
+
+            <div style="margin-top:16px; padding:14px; background:var(--paper-alt); border-radius:10px;">
+              <label style="margin-top:0; display:block; font-weight:600; margin-bottom:8px;">🎤 הודעה קולית (לא חובה)</label>
+              ${recordedAudioUrl ? `
+                <audio controls src="${recordedAudioUrl}" style="width:100%; border-radius:8px;"></audio>
+                <div class="actions" style="justify-content:flex-start; margin-top:8px;">
+                  <button type="button" class="btn ghost small" id="deleteRecordingBtn">מחיקת ההקלטה</button>
+                </div>
+              ` : `
+                <div class="actions" style="justify-content:flex-start; align-items:center; gap:12px;">
+                  <button type="button" class="btn ${mediaRecorder && mediaRecorder.state === 'recording' ? 'danger' : 'ghost'}" id="recordBtn">
+                    ${mediaRecorder && mediaRecorder.state === 'recording' ? '⏹️ עצירת הקלטה' : '🎤 התחלת הקלטה'}
+                  </button>
+                  ${mediaRecorder && mediaRecorder.state === 'recording' ? `<span class="mono pulse-dot" style="color:var(--danger); font-weight:600;">${String(Math.floor(recordingSeconds/60)).padStart(2,'0')}:${String(recordingSeconds%60).padStart(2,'0')} / 02:00</span>` : `<span class="hint" style="font-size:12.5px;">עד 2 דקות</span>`}
+                </div>
+              `}
+            </div>
+
             <div class="error-msg" id="requestErr" style="margin-top:6px;"></div>
             <div class="actions" style="justify-content:flex-start; margin-top:12px; gap:10px;">
               <button type="submit" class="btn brass" style="border-radius:10px;">שליחה</button>
@@ -1710,27 +1849,88 @@ async function renderEmployeeRequests(emp){
           </form>
         </div>
       `;
-      document.getElementById('reqBackBtn').onclick = () => { view = 'list'; render(); };
-      document.getElementById('composeCancelBtn').onclick = () => { view = 'list'; render(); };
+      document.getElementById('reqBackBtn').onclick = () => { stopRecordingCleanup(); view = 'list'; render(); };
+      document.getElementById('composeCancelBtn').onclick = () => { stopRecordingCleanup(); view = 'list'; render(); };
+
+      const recordBtn = document.getElementById('recordBtn');
+      if(recordBtn) recordBtn.onclick = async () => {
+        if(mediaRecorder && mediaRecorder.state === 'recording'){
+          mediaRecorder.stop();
+          return;
+        }
+        try{
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const chunks = [];
+          mediaRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 24000 });
+          mediaRecorder.ondataavailable = (e) => { if(e.data.size > 0) chunks.push(e.data); };
+          mediaRecorder.onstop = () => {
+            stream.getTracks().forEach(t => t.stop());
+            clearInterval(recordingTimerId);
+            recordingTimerId = null;
+            recordedAudioBlob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+            recordedAudioUrl = URL.createObjectURL(recordedAudioBlob);
+            recordingSeconds = 0;
+            render();
+          };
+          mediaRecorder.start();
+          recordingSeconds = 0;
+          render();
+          recordingTimerId = setInterval(() => {
+            recordingSeconds++;
+            if(recordingSeconds >= MAX_RECORDING_SECONDS){ mediaRecorder.stop(); return; }
+            const timeEl = document.querySelector('#recordBtn')?.nextElementSibling;
+            if(timeEl) timeEl.textContent = `${String(Math.floor(recordingSeconds/60)).padStart(2,'0')}:${String(recordingSeconds%60).padStart(2,'0')} / 02:00`;
+          }, 1000);
+        }catch(err){
+          console.error('mic access error', err);
+          document.getElementById('requestErr').textContent = 'לא ניתן לגשת למיקרופון. יש לאשר הרשאה בדפדפן.';
+        }
+      };
+      const deleteRecordingBtn = document.getElementById('deleteRecordingBtn');
+      if(deleteRecordingBtn) deleteRecordingBtn.onclick = () => {
+        if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+        recordedAudioBlob = null;
+        recordedAudioUrl = null;
+        render();
+      };
+
       document.getElementById('newRequestForm').onsubmit = async (e) => {
         e.preventDefault();
         const errEl = document.getElementById('requestErr');
         const submitBtn = e.target.querySelector('button[type="submit"]');
         const text = document.getElementById('requestText').value.trim();
-        if(!text){ errEl.textContent = 'יש לכתוב תוכן להודעה'; return; }
+        if(!text && !recordedAudioBlob){ errEl.textContent = 'יש לכתוב תוכן או להקליט הודעה קולית'; return; }
         errEl.textContent = '';
         submitBtn.disabled = true;
+        submitBtn.textContent = 'שולח...';
+
+        let voiceMessageId = null;
+        if(recordedAudioBlob){
+          submitBtn.textContent = 'מעלה הקלטה...';
+          const audioDataUrl = await new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.readAsDataURL(recordedAudioBlob);
+          });
+          voiceMessageId = uid();
+          const voiceOk = await saveVoiceMessage(voiceMessageId, audioDataUrl);
+          if(voiceOk !== true){ errEl.textContent = 'שגיאה בהעלאת ההקלטה: ' + voiceOk; submitBtn.disabled=false; submitBtn.textContent='שליחה'; return; }
+        }
+
         submitBtn.textContent = 'שולח...';
         const fresh = await loadRequests();
         if(fresh === null){ errEl.textContent = 'שגיאה בטעינת הנתונים מהשרת. נסו שוב.'; submitBtn.disabled=false; submitBtn.textContent='שליחה'; return; }
         const newReqId = uid();
         fresh.push({
-          id: newReqId, empId: emp.id, empName: emp.name, text,
+          id: newReqId, empId: emp.id, empName: emp.name, text, voiceMessageId,
           status: 'pending', createdAt: new Date().toISOString(), adminNote: '', seenByEmployee: true
         });
         const ok = await saveRequests(fresh);
         if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='שליחה'; return; }
-        notifyManagerOfRequest(emp, newReqId, text); // ברקע, לא חוסם ולא מציג שגיאה אם נכשל
+        notifyManagerOfRequest(emp, newReqId, text || '(הודעה קולית)'); // ברקע, לא חוסם ולא מציג שגיאה אם נכשל
+        if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+        recordedAudioBlob = null;
+        recordedAudioUrl = null;
         list = fresh;
         refreshMyRequests();
         view = 'list';
@@ -2123,6 +2323,7 @@ async function renderAdminRequests(){
             <span style="font-weight:600; color:${STATUS_COLOR[r.status] || 'var(--muted)'};">${STATUS_LABEL[r.status] || r.status}</span>
           </div>
           <p style="margin:8px 0; white-space:pre-wrap;">${escapeHtml(r.text || '')}</p>
+          ${r.voiceMessageId ? `<div id="voiceMsgSlot_${r.id}" style="margin-bottom:8px;"><button type="button" class="btn ghost small" data-play-voice="${r.id}">🎤 הפעלת הודעה קולית</button></div>` : ''}
           ${r.status === 'pending' ? `
             <div class="field" style="margin-top:8px;"><label>הערה לעובד (לא חובה)</label><input type="text" data-note="${r.id}" placeholder="למשל: אושר, תודה!" /></div>
             <div class="actions" style="justify-content:flex-start; gap:8px; margin-top:8px;">
@@ -2171,6 +2372,19 @@ async function renderAdminRequests(){
   content.querySelectorAll('[data-delete-req]').forEach(btn => { btn.onclick = () => removeRequest(btn.dataset.deleteReq); });
   content.querySelectorAll('[data-approve]').forEach(btn => { btn.onclick = () => respond(btn.dataset.approve, 'approved'); });
   content.querySelectorAll('[data-reject]').forEach(btn => { btn.onclick = () => respond(btn.dataset.reject, 'rejected'); });
+  content.querySelectorAll('[data-play-voice]').forEach(btn => {
+    btn.onclick = async () => {
+      const reqId = btn.dataset.playVoice;
+      const req = sorted.find(r => r.id === reqId);
+      if(!req) return;
+      btn.disabled = true;
+      btn.textContent = 'טוען...';
+      const audioDataUrl = await loadVoiceMessage(req.voiceMessageId);
+      const slot = document.getElementById('voiceMsgSlot_' + reqId);
+      if(!audioDataUrl){ if(slot) slot.innerHTML = '<p class="hint" style="color:var(--danger); font-size:12.5px;">שגיאה בטעינת ההקלטה.</p>'; return; }
+      if(slot) slot.innerHTML = `<audio controls autoplay src="${audioDataUrl}" style="width:100%; max-width:340px; border-radius:8px;"></audio>`;
+    };
+  });
 }
 
 async function renderAdminSummary(){
@@ -3592,7 +3806,8 @@ const SETTINGS_CATEGORIES = [
   { key: 'sound', icon: '🔊', label: 'קול והתראות', hint: 'הודעות קוליות וצלילים בזמן העבודה' },
   { key: 'appearance', icon: '🎨', label: 'עיצוב וצבעים', hint: 'צבעי הרקע, הטקסט וההדגשים באתר' },
   { key: 'display', icon: '🖥️', label: 'תצוגה', hint: 'מצב כהה ואפשרויות תצוגה נוספות' },
-  { key: 'requests', icon: '📨', label: 'בקשה למנהל', hint: 'שליחת הודעה חופשית וצפייה בסטטוס בקשות קודמות', action: true }
+  { key: 'requests', icon: '📨', label: 'בקשה למנהל', hint: 'שליחת הודעה חופשית וצפייה בסטטוס בקשות קודמות', action: true },
+  { key: 'music', icon: '🎵', label: 'נגן מוזיקה', hint: 'האזנה למוזיקה שמעלים מהמכשיר, לא נשמר באתר', action: true }
 ];
 const EMPLOYEE_SETTINGS_DEFS = [
   {
@@ -3702,6 +3917,7 @@ async function renderEmployeeSettings(emp){
     btn.onclick = () => {
       const cat = SETTINGS_CATEGORIES.find(c => c.key === btn.dataset.openCategory);
       if(cat && cat.action && cat.key === 'requests'){ renderEmployeeRequests(emp); return; }
+      if(cat && cat.action && cat.key === 'music'){ renderMusicPlayer(emp); return; }
       renderEmployeeSettingsCategory(emp, btn.dataset.openCategory);
     };
   });
