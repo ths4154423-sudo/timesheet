@@ -75,7 +75,7 @@
   .btn:disabled{ opacity:.5; cursor:not-allowed; }
 
   .card{
-    background:var(--surface); border:1px solid var(--line); border-radius:6px;
+    background:var(--surface); border:1px solid var(--line); border-radius:16px;
     padding:26px; margin-bottom:22px;
   }
   .card h2, .card h3{ font-family:'Fraunces',serif; margin-top:0; }
@@ -860,6 +860,9 @@ function applyEmployeeTheme(settings){
   // "lift" off the page (the standard dark-UI convention) — but defaults to plain white when the
   // background hasn't been customized, matching the original look.
   const surface = bgCustomized ? mixHexColors(bg, '#FFFFFF', bgIsLight ? 0.75 : 0.1) : '#FFFFFF';
+  // גבול הכרטיסים (--line): כשהרקע מותאם אישית, מחשבים קו עדין שנגזר מהמשטח והטקסט —
+  // כך שברקע כהה זה יהיה קו אפור-כהה בקושי נראה, לא הכחול הבהיר המקורי המיועד לרקע בהיר.
+  const line = bgCustomized ? mixHexColors(surface, text, 0.14) : '#B9D3E3';
   const root = document.documentElement.style;
   root.setProperty('--brass', accent);
   root.setProperty('--brass-dark', darkenHexColor(accent));
@@ -869,9 +872,10 @@ function applyEmployeeTheme(settings){
   root.setProperty('--ink', text);
   root.setProperty('--ink-soft', mixHexColors(text, bg, 0.35));
   root.setProperty('--surface', surface);
+  root.setProperty('--line', line);
 }
 function resetTheme(){
-  ['--brass', '--brass-dark', '--brass-text', '--paper', '--paper-alt', '--ink', '--ink-soft', '--surface'].forEach(v => {
+  ['--brass', '--brass-dark', '--brass-text', '--paper', '--paper-alt', '--ink', '--ink-soft', '--surface', '--line'].forEach(v => {
     document.documentElement.style.removeProperty(v);
   });
 }
