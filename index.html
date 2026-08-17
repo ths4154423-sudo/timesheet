@@ -1619,13 +1619,26 @@ async function renderMusicPlayer(emp){
   let playlist = []; // { id, name, url }
   let currentIndex = -1;
 
+  // תמיד שולף מחדש את אלמנט ה-audio הנוכחי בפועל מה-DOM (לא רפרנס ישן), כי render() בונה
+  // אותו מחדש בכל פעם - זה בדיוק מה שהיה שבור קודם וגרם לזה "לא להתנגן בכלל".
+  function playTrack(index){
+    if(index < 0 || index >= playlist.length) return;
+    currentIndex = index;
+    render();
+    const player = document.getElementById('musicAudioPlayer');
+    if(!player) return;
+    player.src = playlist[index].url;
+    player.play().catch(() => {});
+  }
+
   function render(){
     app.innerHTML = `
       <div class="card">
         <h3 style="margin-top:0;">🎵 נגן מוזיקה</h3>
         <p class="hint" style="margin-top:-6px; font-size:13px;">בחרו קבצי שמע (MP3 וכו') מהמכשיר שלכם. הקבצים לא נשמרים באתר בכלל — הם מתנגנים ישירות מהמכשיר, וצריך לבחור אותם מחדש בכל כניסה למסך הזה.</p>
-        <input type="file" id="musicFileInput" accept="audio/*" multiple style="padding:10px 0;" />
-        <audio id="musicAudioPlayer" controls style="width:100%; margin-top:16px; border-radius:8px;"></audio>
+        <input type="file" id="musicFileInput" accept="audio/*" multiple style="display:none;" />
+        <button type="button" class="btn brass" id="chooseMusicBtn" style="border-radius:10px;">📂 בחירת קבצי מוזיקה</button>
+        <audio id="musicAudioPlayer" controls style="width:100%; margin-top:16px; border-radius:8px; display:${playlist.length ? 'block' : 'none'};"></audio>
         ${playlist.length ? `
           <div style="margin-top:16px; display:flex; flex-direction:column; gap:6px;">
             ${playlist.map((track, i) => `
@@ -1642,27 +1655,23 @@ async function renderMusicPlayer(emp){
       </div>
     `;
     document.getElementById('musicBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
+    document.getElementById('chooseMusicBtn').onclick = () => document.getElementById('musicFileInput').click();
 
-    const audioPlayer = document.getElementById('musicAudioPlayer');
     document.getElementById('musicFileInput').onchange = (e) => {
       const files = Array.from(e.target.files || []);
+      if(!files.length) return;
+      const wasEmpty = playlist.length === 0;
       files.forEach(file => {
         playlist.push({ id: uid(), name: file.name, url: URL.createObjectURL(file) });
       });
-      if(currentIndex === -1 && playlist.length){
-        currentIndex = 0;
-        audioPlayer.src = playlist[0].url;
-      }
-      render();
+      // מתחילים לנגן אוטומטית את הקובץ הראשון שנבחר, אם עדיין לא ניגן שום דבר
+      if(wasEmpty) playTrack(0);
+      else render();
     };
     document.querySelectorAll('[data-track]').forEach(row => {
       row.onclick = (e) => {
         if(e.target.closest('[data-remove-track]')) return;
-        currentIndex = Number(row.dataset.track);
-        render();
-        const player = document.getElementById('musicAudioPlayer');
-        player.src = playlist[currentIndex].url;
-        player.play().catch(() => {});
+        playTrack(Number(row.dataset.track));
       };
     });
     document.querySelectorAll('[data-remove-track]').forEach(btn => {
@@ -1671,20 +1680,14 @@ async function renderMusicPlayer(emp){
         const idx = Number(btn.dataset.removeTrack);
         URL.revokeObjectURL(playlist[idx].url);
         playlist.splice(idx, 1);
-        if(currentIndex === idx){ currentIndex = -1; }
-        else if(currentIndex > idx){ currentIndex--; }
-        render();
+        if(currentIndex === idx){ currentIndex = -1; render(); }
+        else{ if(currentIndex > idx) currentIndex--; render(); }
       };
     });
+    const audioPlayer = document.getElementById('musicAudioPlayer');
     if(currentIndex >= 0 && playlist[currentIndex]) audioPlayer.src = playlist[currentIndex].url;
     audioPlayer.addEventListener('ended', () => {
-      if(currentIndex < playlist.length - 1){
-        currentIndex++;
-        render();
-        const player = document.getElementById('musicAudioPlayer');
-        player.src = playlist[currentIndex].url;
-        player.play().catch(() => {});
-      }
+      if(currentIndex < playlist.length - 1) playTrack(currentIndex + 1);
     });
   }
   render();
