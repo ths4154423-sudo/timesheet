@@ -214,6 +214,27 @@
   }
   .pulse-dot{ animation:gentlePulse 1.6s ease-in-out infinite; }
 
+  /* ---------- persistent mini music player bar (survives navigation between screens) ---------- */
+  #miniPlayerBar{
+    position:fixed; bottom:0; right:0; left:0; z-index:500;
+    background:var(--surface); border-top:1px solid var(--line);
+    box-shadow:0 -4px 16px rgba(0,0,0,.15);
+    padding:10px 16px; display:flex; align-items:center; gap:12px;
+    font-family:'Heebo',sans-serif;
+  }
+  #miniPlayerBar .mp-name{
+    flex:1; min-width:0; font-size:13.5px; font-weight:600; color:var(--ink);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;
+  }
+  #miniPlayerBar button{
+    background:none; border:none; cursor:pointer; font-size:19px; color:var(--ink);
+    padding:4px 6px; line-height:1; flex-shrink:0;
+  }
+  #miniPlayerBar .mp-progress{
+    position:absolute; top:-2px; right:0; left:0; height:2px; background:var(--line);
+  }
+  #miniPlayerBar .mp-progress-fill{ height:100%; background:var(--brass); }
+
   .list-item{
     display:flex; justify-content:space-between; align-items:center;
     padding:14px 4px; border-bottom:1px solid var(--line);
@@ -488,6 +509,8 @@
     <div id="headerActions"></div>
   </header>
   <div id="app"></div>
+  <audio id="globalMusicPlayer" style="display:none;"></audio>
+  <div id="miniPlayerBar" style="display:none;"></div>
 </div>
 
 <script type="module">
@@ -586,6 +609,110 @@ function showToast(message){
 }
 const headerActions = document.getElementById('headerActions');
 const headerSubtitle = document.getElementById('headerSubtitle');
+
+// ---------- global music player engine (lives outside #app, survives navigation between screens) ----------
+const musicPlayer = {
+  playlist: [], // { id, name, url }
+  currentIndex: -1,
+  shuffle: false,
+  repeat: 'off', // 'off' | 'one' | 'all'
+  history: [] // for "previous" when shuffle is on
+};
+const musicAudioEl = document.getElementById('globalMusicPlayer');
+
+function musicAddFiles(files){
+  files.forEach(file => {
+    musicPlayer.playlist.push({ id: uid(), name: file.name, url: URL.createObjectURL(file) });
+  });
+  if(musicPlayer.currentIndex === -1 && musicPlayer.playlist.length) musicPlayTrack(0);
+  else renderMiniPlayer();
+}
+function musicPlayTrack(index){
+  if(index < 0 || index >= musicPlayer.playlist.length) return;
+  if(musicPlayer.currentIndex >= 0) musicPlayer.history.push(musicPlayer.currentIndex);
+  musicPlayer.currentIndex = index;
+  musicAudioEl.src = musicPlayer.playlist[index].url;
+  musicAudioEl.play().catch(() => {});
+}
+function musicTogglePlayPause(){
+  if(musicPlayer.currentIndex === -1) return;
+  if(musicAudioEl.paused) musicAudioEl.play().catch(() => {});
+  else musicAudioEl.pause();
+}
+function musicNext(){
+  if(!musicPlayer.playlist.length) return;
+  if(musicPlayer.shuffle){
+    if(musicPlayer.playlist.length === 1){ musicPlayTrack(0); return; }
+    let next;
+    do{ next = Math.floor(Math.random() * musicPlayer.playlist.length); }while(next === musicPlayer.currentIndex);
+    musicPlayTrack(next);
+  }else if(musicPlayer.currentIndex < musicPlayer.playlist.length - 1){
+    musicPlayTrack(musicPlayer.currentIndex + 1);
+  }else if(musicPlayer.repeat === 'all'){
+    musicPlayTrack(0);
+  }
+}
+function musicPrev(){
+  if(musicPlayer.history.length){
+    const prevIndex = musicPlayer.history.pop();
+    musicPlayer.currentIndex = prevIndex;
+    musicAudioEl.src = musicPlayer.playlist[prevIndex].url;
+    musicAudioEl.play().catch(() => {});
+  }else if(musicPlayer.currentIndex > 0){
+    musicPlayTrack(musicPlayer.currentIndex - 1);
+  }
+}
+function musicRemoveTrack(idx){
+  URL.revokeObjectURL(musicPlayer.playlist[idx].url);
+  musicPlayer.playlist.splice(idx, 1);
+  musicPlayer.history = musicPlayer.history.filter(h => h !== idx).map(h => h > idx ? h - 1 : h);
+  if(musicPlayer.currentIndex === idx){
+    musicAudioEl.pause();
+    musicAudioEl.src = '';
+    musicPlayer.currentIndex = -1;
+  }else if(musicPlayer.currentIndex > idx){
+    musicPlayer.currentIndex--;
+  }
+  renderMiniPlayer();
+}
+musicAudioEl.addEventListener('ended', () => {
+  if(musicPlayer.repeat === 'one'){ musicAudioEl.currentTime = 0; musicAudioEl.play().catch(() => {}); return; }
+  musicNext();
+});
+musicAudioEl.addEventListener('play', renderMiniPlayer);
+musicAudioEl.addEventListener('pause', renderMiniPlayer);
+musicAudioEl.addEventListener('timeupdate', () => {
+  const fill = document.querySelector('#miniPlayerBar .mp-progress-fill');
+  if(fill && musicAudioEl.duration) fill.style.width = (musicAudioEl.currentTime / musicAudioEl.duration * 100) + '%';
+});
+
+// מצייר/מעדכן את סרגל "מתנגן עכשיו" הקבוע - קיים תמיד מחוץ ל-#app, אז לא נמחק בניווט בין מסכים.
+function renderMiniPlayer(){
+  const bar = document.getElementById('miniPlayerBar');
+  if(musicPlayer.currentIndex === -1){ bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  const track = musicPlayer.playlist[musicPlayer.currentIndex];
+  bar.style.display = 'flex';
+  bar.innerHTML = `
+    <div class="mp-progress"><div class="mp-progress-fill" style="width:0%;"></div></div>
+    <button type="button" id="mpPrev" title="הקודם">⏮️</button>
+    <button type="button" id="mpPlayPause" title="נגן/עצור">${musicAudioEl.paused ? '▶️' : '⏸️'}</button>
+    <button type="button" id="mpNext" title="הבא">⏭️</button>
+    <div class="mp-name" id="mpName">🎵 ${escapeHtml(track.name)}</div>
+    <button type="button" id="mpShuffle" title="ניגון אקראי" style="opacity:${musicPlayer.shuffle ? '1' : '.4'};">🔀</button>
+    <button type="button" id="mpRepeat" title="חזרה">${musicPlayer.repeat === 'one' ? '🔂' : musicPlayer.repeat === 'all' ? '🔁' : '<span style="opacity:.4;">🔁</span>'}</button>
+  `;
+  document.getElementById('mpPrev').onclick = musicPrev;
+  document.getElementById('mpPlayPause').onclick = musicTogglePlayPause;
+  document.getElementById('mpNext').onclick = musicNext;
+  document.getElementById('mpShuffle').onclick = () => { musicPlayer.shuffle = !musicPlayer.shuffle; renderMiniPlayer(); };
+  document.getElementById('mpRepeat').onclick = () => {
+    musicPlayer.repeat = musicPlayer.repeat === 'off' ? 'all' : (musicPlayer.repeat === 'all' ? 'one' : 'off');
+    renderMiniPlayer();
+  };
+  document.getElementById('mpName').onclick = () => {
+    if(state.currentEmployee) renderMusicPlayer(state.currentEmployee);
+  };
+}
 
 let state = {
   view: 'landing',
@@ -1632,82 +1759,82 @@ async function renderMusicPlayer(emp){
   stopBreakWatchdog();
   setHeader('נגן מוזיקה', '<button class="btn ghost small" id="musicBackBtn">חזרה</button>');
 
-  let playlist = []; // { id, name, url }
-  let currentIndex = -1;
-
-  // תמיד שולף מחדש את אלמנט ה-audio הנוכחי בפועל מה-DOM (לא רפרנס ישן), כי render() בונה
-  // אותו מחדש בכל פעם - זה בדיוק מה שהיה שבור קודם וגרם לזה "לא להתנגן בכלל".
-  function playTrack(index){
-    if(index < 0 || index >= playlist.length) return;
-    currentIndex = index;
-    render();
-    const player = document.getElementById('musicAudioPlayer');
-    if(!player) return;
-    player.src = playlist[index].url;
-    player.play().catch(() => {});
-  }
-
   function render(){
+    const pl = musicPlayer.playlist;
+    const cur = musicPlayer.currentIndex;
     app.innerHTML = `
       <div class="card">
         <h3 style="margin-top:0;">🎵 נגן מוזיקה</h3>
-        <p class="hint" style="margin-top:-6px; font-size:13px;">בחרו קבצי שמע (MP3 וכו') מהמכשיר שלכם. הקבצים לא נשמרים באתר בכלל — הם מתנגנים ישירות מהמכשיר, וצריך לבחור אותם מחדש בכל כניסה למסך הזה.</p>
+        <p class="hint" style="margin-top:-6px; font-size:13px;">בחרו קבצי שמע מהמכשיר שלכם. הקבצים לא נשמרים באתר בכלל — הם מתנגנים ישירות מהמכשיר. הניגון ממשיך גם אם תעברו למסכים אחרים באתר (יש סרגל ניגון קבוע למטה).</p>
         <input type="file" id="musicFileInput" accept="audio/*" multiple style="display:none;" />
         <button type="button" class="btn brass" id="chooseMusicBtn" style="border-radius:10px;">📂 בחירת קבצי מוזיקה</button>
-        <audio id="musicAudioPlayer" controls style="width:100%; margin-top:16px; border-radius:8px; display:${playlist.length ? 'block' : 'none'};"></audio>
-        ${playlist.length ? `
-          <div style="margin-top:16px; display:flex; flex-direction:column; gap:6px;">
-            ${playlist.map((track, i) => `
-              <div data-track="${i}" class="list-item clickable" style="border-radius:10px; padding:10px 14px; background:${i === currentIndex ? 'var(--paper-alt)' : 'transparent'};">
-                <div class="avatar-row">
-                  <span style="flex-shrink:0;">${i === currentIndex ? '🔊' : '🎵'}</span>
-                  <div style="font-size:14px; font-weight:${i === currentIndex ? '700' : '500'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:65vw;">${escapeHtml(track.name)}</div>
+
+        ${cur >= 0 ? `
+          <div style="margin-top:18px; text-align:center; padding:18px; background:var(--paper-alt); border-radius:14px;">
+            <div style="font-size:15px; font-weight:700; margin-bottom:4px;">🎵 ${escapeHtml(pl[cur].name)}</div>
+            <div class="hint" style="font-size:12px; margin-bottom:14px;">מתנגן ${cur + 1} מתוך ${pl.length}</div>
+            <div style="display:flex; justify-content:center; align-items:center; gap:18px;">
+              <button type="button" id="bigShuffleBtn" style="background:none; border:none; font-size:20px; cursor:pointer; opacity:${musicPlayer.shuffle ? '1' : '.4'};" title="ניגון אקראי">🔀</button>
+              <button type="button" id="bigPrevBtn" style="background:none; border:none; font-size:26px; cursor:pointer;">⏮️</button>
+              <button type="button" id="bigPlayPauseBtn" style="background:var(--brass); color:var(--brass-text); border:none; border-radius:50%; width:56px; height:56px; font-size:24px; cursor:pointer;">${musicAudioEl.paused ? '▶️' : '⏸️'}</button>
+              <button type="button" id="bigNextBtn" style="background:none; border:none; font-size:26px; cursor:pointer;">⏭️</button>
+              <button type="button" id="bigRepeatBtn" style="background:none; border:none; font-size:20px; cursor:pointer; opacity:${musicPlayer.repeat === 'off' ? '.4' : '1'};" title="חזרה">${musicPlayer.repeat === 'one' ? '🔂' : '🔁'}</button>
+            </div>
+          </div>
+        ` : ''}
+
+        ${pl.length ? `
+          <div style="margin-top:18px;">
+            <label style="margin-top:0; display:block; font-weight:600; margin-bottom:8px;">כל השירים (${pl.length})</label>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              ${pl.map((track, i) => `
+                <div data-track="${i}" class="list-item clickable" style="border-radius:10px; padding:10px 14px; background:${i === cur ? 'var(--paper-alt)' : 'transparent'};">
+                  <div class="avatar-row">
+                    <span style="flex-shrink:0;">${i === cur ? (musicAudioEl.paused ? '⏸️' : '🔊') : '🎵'}</span>
+                    <div style="font-size:14px; font-weight:${i === cur ? '700' : '500'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60vw;">${escapeHtml(track.name)}</div>
+                  </div>
+                  <button type="button" class="btn ghost small" data-remove-track="${i}">הסרה</button>
                 </div>
-                <button type="button" class="btn ghost small" data-remove-track="${i}">הסרה</button>
-              </div>
-            `).join('')}
+              `).join('')}
+            </div>
           </div>
         ` : '<p class="hint" style="margin-top:14px;">עדיין לא נבחרו קבצים.</p>'}
       </div>
     `;
     document.getElementById('musicBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
     document.getElementById('chooseMusicBtn').onclick = () => document.getElementById('musicFileInput').click();
-
     document.getElementById('musicFileInput').onchange = (e) => {
       const files = Array.from(e.target.files || []);
-      if(!files.length) return;
-      const wasEmpty = playlist.length === 0;
-      files.forEach(file => {
-        playlist.push({ id: uid(), name: file.name, url: URL.createObjectURL(file) });
-      });
-      // מתחילים לנגן אוטומטית את הקובץ הראשון שנבחר, אם עדיין לא ניגן שום דבר
-      if(wasEmpty) playTrack(0);
-      else render();
+      if(files.length) musicAddFiles(files);
+      render();
     };
     document.querySelectorAll('[data-track]').forEach(row => {
       row.onclick = (e) => {
         if(e.target.closest('[data-remove-track]')) return;
-        playTrack(Number(row.dataset.track));
+        musicPlayTrack(Number(row.dataset.track));
+        render();
       };
     });
     document.querySelectorAll('[data-remove-track]').forEach(btn => {
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        const idx = Number(btn.dataset.removeTrack);
-        URL.revokeObjectURL(playlist[idx].url);
-        playlist.splice(idx, 1);
-        if(currentIndex === idx){ currentIndex = -1; render(); }
-        else{ if(currentIndex > idx) currentIndex--; render(); }
-      };
+      btn.onclick = (e) => { e.stopPropagation(); musicRemoveTrack(Number(btn.dataset.removeTrack)); render(); };
     });
-    const audioPlayer = document.getElementById('musicAudioPlayer');
-    if(currentIndex >= 0 && playlist[currentIndex]) audioPlayer.src = playlist[currentIndex].url;
-    audioPlayer.addEventListener('ended', () => {
-      if(currentIndex < playlist.length - 1) playTrack(currentIndex + 1);
-    });
+    const bigPlayPauseBtn = document.getElementById('bigPlayPauseBtn');
+    if(bigPlayPauseBtn) bigPlayPauseBtn.onclick = () => { musicTogglePlayPause(); setTimeout(render, 50); };
+    const bigPrevBtn = document.getElementById('bigPrevBtn');
+    if(bigPrevBtn) bigPrevBtn.onclick = () => { musicPrev(); render(); };
+    const bigNextBtn = document.getElementById('bigNextBtn');
+    if(bigNextBtn) bigNextBtn.onclick = () => { musicNext(); render(); };
+    const bigShuffleBtn = document.getElementById('bigShuffleBtn');
+    if(bigShuffleBtn) bigShuffleBtn.onclick = () => { musicPlayer.shuffle = !musicPlayer.shuffle; render(); };
+    const bigRepeatBtn = document.getElementById('bigRepeatBtn');
+    if(bigRepeatBtn) bigRepeatBtn.onclick = () => {
+      musicPlayer.repeat = musicPlayer.repeat === 'off' ? 'all' : (musicPlayer.repeat === 'all' ? 'one' : 'off');
+      render();
+    };
   }
   render();
 }
+
 
 async function renderEmployeeRequests(emp){
   stopLiveTimer();
@@ -2829,7 +2956,7 @@ function renderEditEmployee(empId){
 
 const ADMIN_SETTINGS_TABS = [
   { key: 'password', label: 'סיסמה' },
-  { key: 'email', label: 'כתובת אימייל' },
+  { key: 'email', label: 'כתובת אימייל / וואטסאפ' },
   { key: 'autosend', label: 'שליחה אוטומטית' },
   { key: 'announcement', label: 'הודעה לעובדים' },
   { key: 'security', label: 'אבטחה' }
