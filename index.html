@@ -801,6 +801,22 @@ async function loadManagerEmail(){
 async function saveManagerEmail(managerEmail){
   return saveContactConfig({ managerEmail });
 }
+async function loadManagerWhatsapp(){
+  const cfg = await loadContactConfig();
+  return cfg.managerWhatsapp || '';
+}
+async function saveManagerWhatsapp(managerWhatsapp){
+  return saveContactConfig({ managerWhatsapp });
+}
+// ממיר מספר טלפון ישראלי (בכל פורמט שהוא: 050-1234567, 0501234567, +972501234567 וכו')
+// לפורמט הבינלאומי הנקי שדורש wa.me (בלי + ובלי אפסים מובילים).
+function normalizePhoneForWhatsapp(raw){
+  const digits = (raw || '').replace(/\D/g, '');
+  if(!digits) return '';
+  if(digits.startsWith('972')) return digits;
+  if(digits.startsWith('0')) return '972' + digits.slice(1);
+  return digits;
+}
 async function loadEmailjsConfig(){
   const cfg = await loadContactConfig();
   return cfg.emailjs || { publicKey: '', templateId: '', senders: [] };
@@ -2004,13 +2020,13 @@ async function renderEmployeeRequests(emp){
 
 function showSendHoursModal(ctx){
   return new Promise(resolve => {
-    const { emp, month, entries, totalHours, pay, managerEmail, emailjsConfig } = ctx;
+    const { emp, month, entries, totalHours, pay, managerEmail, managerWhatsapp, emailjsConfig } = ctx;
     const senders = (emailjsConfig && emailjsConfig.senders) || [];
     const hasBaseConfig = !!(emailjsConfig && emailjsConfig.publicKey && emailjsConfig.templateId && window.emailjs);
     // If this employee has their own dedicated Service ID (set by the manager in "עריכת עובד"),
     // skip the "which account?" dropdown entirely and just send from their account directly.
     const fixedServiceId = emp.emailjsServiceId || null;
-    const canAutoSend = hasBaseConfig && (fixedServiceId || senders.length > 0);
+    const canAutoSend = hasBaseConfig && (fixedServiceId || senders.length > 0) && managerEmail;
     const subject = `דוח שעות עבודה – ${emp.name} – ${monthLabel(month)}`;
 
     const overlay = document.createElement('div');
@@ -2039,7 +2055,8 @@ function showSendHoursModal(ctx){
         ` : ''}
         <div class="error-msg" id="sendHoursErr" style="margin-top:10px;"></div>
         <div class="actions" style="justify-content:center; flex-wrap:wrap; margin-top:${canAutoSend ? '4px' : '14px'};">
-          <button type="button" class="btn ghost" id="mailtoSendBtn">📧 פתיחת טיוטת מייל</button>
+          ${managerEmail ? '<button type="button" class="btn ghost" id="mailtoSendBtn">📧 פתיחת טיוטת מייל</button>' : ''}
+          ${managerWhatsapp ? '<button type="button" class="btn ghost" id="whatsappSendBtn">💬 שליחה בוואטסאפ</button>' : ''}
           <button type="button" class="btn ghost" id="cancelSendBtn">ביטול</button>
         </div>
       </div>
@@ -2050,10 +2067,20 @@ function showSendHoursModal(ctx){
     overlay.querySelector('#cancelSendBtn').onclick = cleanup;
     const includePay = () => overlay.querySelector('#includePaySend').checked;
 
-    overlay.querySelector('#mailtoSendBtn').onclick = () => {
+    const mailtoSendBtn = overlay.querySelector('#mailtoSendBtn');
+    if(mailtoSendBtn) mailtoSendBtn.onclick = () => {
       const body = buildHoursEmailBody(emp, month, entries, totalHours, pay, includePay());
       const mailtoUrl = `mailto:${managerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.location.href = mailtoUrl;
+      cleanup();
+    };
+
+    const whatsappSendBtn = overlay.querySelector('#whatsappSendBtn');
+    if(whatsappSendBtn) whatsappSendBtn.onclick = () => {
+      const body = buildHoursEmailBody(emp, month, entries, totalHours, pay, includePay());
+      const phone = normalizePhoneForWhatsapp(managerWhatsapp);
+      const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(subject + '\n\n' + body)}`;
+      window.open(waUrl, '_blank');
       cleanup();
     };
 
@@ -2814,6 +2841,7 @@ async function renderAdminSettings(){
   const activeTab = state._adminSettingsTab || 'password';
   const announcement = activeTab === 'announcement' ? await loadAnnouncement() : null;
   const managerEmail = activeTab === 'email' ? await loadManagerEmail() : null;
+  const managerWhatsapp = activeTab === 'email' ? await loadManagerWhatsapp() : null;
   const emailjsConfig = activeTab === 'autosend' ? await loadEmailjsConfig() : null;
   if(activeTab === 'autosend' && !state._emailjsDraft){
     state._emailjsDraft = {
@@ -2865,6 +2893,27 @@ async function renderAdminSettings(){
           <p style="font-size:15.5px; margin:6px 0 16px;">${managerEmail ? `<span class="mono" dir="ltr" style="display:inline-block;">${escapeHtml(managerEmail)}</span>` : '<span class="hint">לא הוגדרה כתובת</span>'}</p>
           <div class="actions" style="justify-content:flex-start;">
             <button type="button" class="btn ghost" id="startEmailEdit">עריכה</button>
+          </div>
+        `}
+      </div>
+      <div class="card">
+        <h3>מספר וואטסאפ לקבלת דוחות שעות</h3>
+        <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
+          כשעובד שולח דוח שעות, יוכל גם לבחור לשלוח אותו בוואטסאפ למספר הזה — נפתח וואטסאפ עם ההודעה כבר כתובה, והעובד רק לוחץ שליחה. אפשר להשאיר ריק כדי לבטל את האפשרות אצל העובדים.
+        </p>
+        ${state._whatsappEditMode ? `
+          <form id="managerWhatsappForm">
+            <div class="field"><label>מספר טלפון</label><input type="tel" id="managerWhatsappInput" value="${escapeHtml(managerWhatsapp)}" placeholder="050-1234567" dir="ltr" style="text-align:left;" /></div>
+            <div class="error-msg" id="managerWhatsappErr"></div>
+            <div class="actions" style="justify-content:flex-start; gap:10px;">
+              <button type="submit" class="btn brass">שמירה</button>
+              <button type="button" class="btn ghost" id="cancelWhatsappEdit">ביטול</button>
+            </div>
+          </form>
+        ` : `
+          <p style="font-size:15.5px; margin:6px 0 16px;">${managerWhatsapp ? `<span class="mono" dir="ltr" style="display:inline-block;">${escapeHtml(managerWhatsapp)}</span>` : '<span class="hint">לא הוגדר מספר</span>'}</p>
+          <div class="actions" style="justify-content:flex-start;">
+            <button type="button" class="btn ghost" id="startWhatsappEdit">עריכה</button>
           </div>
         `}
       </div>
@@ -2961,6 +3010,7 @@ async function renderAdminSettings(){
       state._adminSettingsTab = t.dataset.settingsTab;
       state._emailjsDraft = null;
       state._emailEditMode = false;
+      state._whatsappEditMode = false;
       state._autosendEditMode = false;
       renderAdminSettings();
     };
@@ -2969,6 +3019,10 @@ async function renderAdminSettings(){
   if(startEmailEdit) startEmailEdit.onclick = () => { state._emailEditMode = true; renderAdminSettings(); };
   const cancelEmailEdit = document.getElementById('cancelEmailEdit');
   if(cancelEmailEdit) cancelEmailEdit.onclick = () => { state._emailEditMode = false; renderAdminSettings(); };
+  const startWhatsappEdit = document.getElementById('startWhatsappEdit');
+  if(startWhatsappEdit) startWhatsappEdit.onclick = () => { state._whatsappEditMode = true; renderAdminSettings(); };
+  const cancelWhatsappEdit = document.getElementById('cancelWhatsappEdit');
+  if(cancelWhatsappEdit) cancelWhatsappEdit.onclick = () => { state._whatsappEditMode = false; renderAdminSettings(); };
   const startAutosendEdit = document.getElementById('startAutosendEdit');
   if(startAutosendEdit) startAutosendEdit.onclick = () => { state._autosendEditMode = true; renderAdminSettings(); };
   const cancelAutosendEdit = document.getElementById('cancelAutosendEdit');
@@ -3024,6 +3078,24 @@ async function renderAdminSettings(){
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
     state._emailEditMode = false;
     showToast('הכתובת נשמרה');
+    renderAdminSettings();
+  };
+  const managerWhatsappForm = document.getElementById('managerWhatsappForm');
+  if(managerWhatsappForm) managerWhatsappForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('managerWhatsappErr');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const val = document.getElementById('managerWhatsappInput').value.trim();
+    errEl.style.color = '';
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שומר...';
+    const ok = await saveManagerWhatsapp(val);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'שמירה';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state._whatsappEditMode = false;
+    showToast('המספר נשמר');
     renderAdminSettings();
   };
 
@@ -3419,14 +3491,14 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const originalLabel = emailHoursBtn.textContent;
       emailHoursBtn.disabled = true;
       emailHoursBtn.textContent = 'מכין...';
-      const [managerEmail, emailjsConfig] = await Promise.all([loadManagerEmail(), loadEmailjsConfig()]);
+      const [managerEmail, managerWhatsapp, emailjsConfig] = await Promise.all([loadManagerEmail(), loadManagerWhatsapp(), loadEmailjsConfig()]);
       emailHoursBtn.disabled = false;
       emailHoursBtn.textContent = originalLabel;
-      if(!managerEmail){
-        alert('לא הוגדרה כתובת אימייל לקבלת דוחות שעות. יש לבקש מהמנהל להגדיר אותה במסך "הגדרות" שלו.');
+      if(!managerEmail && !managerWhatsapp){
+        alert('לא הוגדרה כתובת אימייל או מספר וואטסאפ לקבלת דוחות שעות. יש לבקש מהמנהל להגדיר אותם במסך "הגדרות" שלו.');
         return;
       }
-      await showSendHoursModal({ emp, month, entries, totalHours, pay, managerEmail, emailjsConfig });
+      await showSendHoursModal({ emp, month, entries, totalHours, pay, managerEmail, managerWhatsapp, emailjsConfig });
     };
   }
   const empMonthPicker = document.getElementById('empMonthPicker');
