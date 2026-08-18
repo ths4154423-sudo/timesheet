@@ -2572,7 +2572,9 @@ function renderAdminDashboard(tab){
   });
   document.getElementById('logoutBtn').onclick = async () => {
     state.isAdmin = false;
-    try{ localStorage.removeItem('trustedAdminDevice'); }catch(e){}
+    // הערה: לא מוחקים כאן את סימון "המכשיר המהימן" - "יציאה" כאן משמשת גם כניווט חזרה למסך
+    // הראשי (למשל כדי להגיע לדשבורד של עובד), לא רק כניתוק אמיתי. ניתוק מלא של המכשיר נמצא
+    // בנפרד בהגדרות → אבטחה, בשביל מקרה של אובדן/מכירת המכשיר.
     try{ await signOut(auth); }catch(e){ console.error('sign-out error', e); }
     renderLanding();
   };
@@ -3264,6 +3266,16 @@ async function renderAdminSettings(){
           כללי אבטחה (Security Rules) קבועים. מומלץ לשתף את קובץ האתר רק עם אנשי הצוות ולא לפרסם אותו publicly.
         </p>
       </div>
+      <div class="card">
+        <h3>מכשיר מהימן (כניסה ללא אינטרנט)</h3>
+        <p class="hint" style="font-size:13.5px;">
+          כדי לאפשר כניסת מנהל גם כשאין אינטרנט, המכשיר הזה מסומן כ"מהימן" מאז ההתחברות האחרונה שלך —
+          כניסה חוזרת אליו (למשל אחרי לחיצה על "יציאה" כדי להגיע לדשבורד של עובד) לא תדרוש סיסמה כשאין
+          חיבור. אם המכשיר הזה אבד, נמכר, או שאתה חולק אותו עם מישהו שלא אמור לגשת לניהול — לחץ כאן כדי
+          לבטל את הסימון. כניסה הבאה, גם עם אינטרנט, תדרוש סיסמה מחדש.
+        </p>
+        <button type="button" class="btn danger" id="revokeTrustedDeviceBtn">ניתוק מכשיר זה מכניסה ללא אינטרנט</button>
+      </div>
     `
   };
 
@@ -3285,6 +3297,13 @@ async function renderAdminSettings(){
   });
   const startEmailEdit = document.getElementById('startEmailEdit');
   if(startEmailEdit) startEmailEdit.onclick = () => { state._emailEditMode = true; renderAdminSettings(); };
+  const revokeTrustedDeviceBtn = document.getElementById('revokeTrustedDeviceBtn');
+  if(revokeTrustedDeviceBtn) revokeTrustedDeviceBtn.onclick = async () => {
+    const confirmed = await showConfirmModal('לנתק את המכשיר הזה? כניסה הבאה, גם עם אינטרנט, תדרוש הזנת סיסמה מחדש.');
+    if(!confirmed) return;
+    try{ localStorage.removeItem('trustedAdminDevice'); }catch(e){}
+    showToast('המכשיר נותק בהצלחה');
+  };
   const cancelEmailEdit = document.getElementById('cancelEmailEdit');
   if(cancelEmailEdit) cancelEmailEdit.onclick = () => { state._emailEditMode = false; renderAdminSettings(); };
   const startWhatsappEdit = document.getElementById('startWhatsappEdit');
