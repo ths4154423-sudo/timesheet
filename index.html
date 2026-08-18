@@ -515,7 +515,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
@@ -529,9 +529,13 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 // Force long-polling: many corporate networks/firewalls/antivirus block the
 // streaming connection Firestore uses by default, causing writes to hang forever.
+// persistentLocalCache: שומר את כל הנתונים ב-IndexedDB של המכשיר. כשאין אינטרנט, קריאות
+// (למשל טעינת שעות/עובדים) חוזרות מהעותק המקומי, וכתיבות (החתמות, עריכות) נשמרות מקומית
+// ומסתנכרנות לבד עם השרת ברגע שהחיבור חוזר - כולל אחרי סגירת האתר/רענון.
 const db = initializeFirestore(fbApp, {
   experimentalForceLongPolling: true,
   useFetchStreams: false,
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
 const auth = getAuth(fbApp);
 
