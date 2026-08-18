@@ -1526,34 +1526,41 @@ async function init(){
   onAuthStateChanged(auth, (user) => {
     if(authReady) return; // only handle the initial resolution; explicit sign-in/out render themselves
     authReady = true;
-    if(user){
-      state.isAdmin = true;
-      state.adminEmail = user.email;
-      renderAdminDashboard('summary');
-      return;
-    }
-    // אין אינטרנט ו-Firebase Auth לא הצליח לאשר שיש משתמש מחובר (אף שבפועל יש) - אם המכשיר
-    // הזה כבר סומן כמהימן מכניסת מנהל קודמת, נכנסים בכל זאת. ברגע שהאינטרנט יחזור, Firebase
-    // יאשש את המצב האמיתי מול השרת כרגיל.
-    if(!navigator.onLine){
-      try{
-        const trusted = JSON.parse(localStorage.getItem('trustedAdminDevice') || 'null');
-        if(trusted && trusted.email){
-          state.isAdmin = true;
-          state.adminEmail = trusted.email;
-          renderAdminDashboard('summary');
-          return;
-        }
-      }catch(e){}
-    }
+    // סשן עובד שמור במפורש (כניסה עם PIN) משקף את הפעולה המכוונת האחרונה של המשתמש - הוא גובר
+    // על מצב Firebase Auth, כי signOut() לא תמיד מצליח להתעדכן באופן מלא כשאין אינטרנט, מה שיכול
+    // "לגרור" בטעות בחזרה לפאנל הניהול גם כשבפועל המשתמש עבר במכוון לצפות בדשבורד של עובד.
     const session = loadSession();
     if(session && session.role === 'employee'){
       const emp = state.employees.find(x => x.id === session.empId);
       if(emp){ renderEmployeeDashboard(emp); return; }
       clearSession();
     }
+    if(user){
+      state.isAdmin = true;
+      state.adminEmail = user.email;
+      renderAdminDashboard('summary');
+      return;
+    }
+    if(tryTrustedDeviceAdminLogin()) return;
     renderLanding();
   });
+}
+
+// בודק אם המכשיר הזה סומן כ"מהימן" מכניסת מנהל קודמת, ואם כן ומצליח - נכנס ישירות לפאנל
+// הניהול בלי צורך בסיסמה. משמש גם ב-init() (טעינת דף) וגם בלחיצה על "כניסת מנהל" עצמה,
+// כדי שהכניסה האוטומטית תעבוד מיד בלי צורך ברענון ידני של הדף.
+function tryTrustedDeviceAdminLogin(){
+  if(navigator.onLine) return false; // כשיש אינטרנט, תמיד עוברים דרך האימות האמיתי של Firebase
+  try{
+    const trusted = JSON.parse(localStorage.getItem('trustedAdminDevice') || 'null');
+    if(trusted && trusted.email){
+      state.isAdmin = true;
+      state.adminEmail = trusted.email;
+      renderAdminDashboard('summary');
+      return true;
+    }
+  }catch(e){}
+  return false;
 }
 
 function setHeader(subtitle, actionsHtml){
@@ -1585,6 +1592,7 @@ function renderLanding(){
 
 // ---------- ADMIN LOGIN ----------
 function renderAdminLogin(){
+  if(tryTrustedDeviceAdminLogin()) return; // כשאין אינטרנט והמכשיר מהימן - נכנס ישר, בלי להציג טופס
   setHeader('כניסת מנהל', '');
   app.innerHTML = `
     <div class="center-stage">
@@ -3260,10 +3268,19 @@ async function renderAdminSettings(){
         <h3>הערת אבטחה</h3>
         <p class="hint" style="font-size:13.5px;">
           פרטי העובדים והשעות שמורים במסד נתונים אמיתי (Firebase Firestore), הפועל כרגע ב"מצב בדיקה" (test mode) –
-          כלומר אין הגבלת הרשאות אמיתית מצד השרת מעבר להתחברות עצמה. כניסת המנהל מוגנת כעת באמצעות
-          Firebase Authentication אמיתי (אימייל+סיסמה), אך כניסת העובדים עדיין מבוססת קוד PIN בממשק בלבד.
-          חשוב לדעת: מצב הבדיקה של Firestore פג אוטומטית אחרי כ-30 יום, ואז הכתיבה לנתונים תיפסק עד שיוגדרו
-          כללי אבטחה (Security Rules) קבועים. מומלץ לשתף את קובץ האתר רק עם אנשי הצוות ולא לפרסם אותו publicly.
+          כלומר אין הגבלת הרשאות אמיתית מצד השרת מעבר להתחברות עצמה: כל מי שיש לו את קוד האתר (הגלוי לכולם
+          ב-GitHub) יכול טכנית לגשת ישירות למסד הנתונים. כניסת המנהל מוגנת באמצעות Firebase Authentication
+          אמיתי (אימייל+סיסמה), אך כניסת העובדים עדיין מבוססת קוד PIN בממשק בלבד.
+          חשוב לדעת: כללי הגישה (Security Rules) של Firestore מוגדרים לפוג בתאריך קבוע שנקבע ידנית בעבר -
+          כדאי לבדוק מדי כמה חודשים ב-Firebase Console → Firestore → Rules שהתאריך שם עדיין רחוק מספיק
+          ולא עומד לפוג בקרוב. מומלץ לשתף את קובץ האתר רק עם אנשי הצוות ולא לפרסם אותו publicly.
+        </p>
+      </div>
+      <div class="card">
+        <h3>גישה ללא אינטרנט</h3>
+        <p class="hint" style="font-size:13.5px;">
+          האתר תומך בעבודה גם ללא חיבור לאינטרנט (קריאה וכתיבה כאחד) - הנתונים נשמרים מקומית במכשיר
+          ומסתנכרנים אוטומטית לשרת ברגע שהחיבור חוזר.
         </p>
       </div>
       <div class="card">
