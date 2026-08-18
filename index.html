@@ -1532,6 +1532,20 @@ async function init(){
       renderAdminDashboard('summary');
       return;
     }
+    // אין אינטרנט ו-Firebase Auth לא הצליח לאשר שיש משתמש מחובר (אף שבפועל יש) - אם המכשיר
+    // הזה כבר סומן כמהימן מכניסת מנהל קודמת, נכנסים בכל זאת. ברגע שהאינטרנט יחזור, Firebase
+    // יאשש את המצב האמיתי מול השרת כרגיל.
+    if(!navigator.onLine){
+      try{
+        const trusted = JSON.parse(localStorage.getItem('trustedAdminDevice') || 'null');
+        if(trusted && trusted.email){
+          state.isAdmin = true;
+          state.adminEmail = trusted.email;
+          renderAdminDashboard('summary');
+          return;
+        }
+      }catch(e){}
+    }
     const session = loadSession();
     if(session && session.role === 'employee'){
       const emp = state.employees.find(x => x.id === session.empId);
@@ -1611,6 +1625,9 @@ function renderAdminLogin(){
       await signInWithEmailAndPassword(auth, email, pass);
       state.isAdmin = true;
       state.adminEmail = email;
+      // מסמן את המכשיר הזה כ"מהימן" - מאפשר כניסה אוטומטית במצב לא-מקוון בעתיד,
+      // כי Firebase Auth (בשונה מ-Firestore) לא תמיד מצליח לאשש חיבור קיים בלי אינטרנט.
+      try{ localStorage.setItem('trustedAdminDevice', JSON.stringify({ email, ts: Date.now() })); }catch(e){}
       renderAdminDashboard('summary');
     }catch(err){
       submitBtn.disabled = false;
@@ -2555,6 +2572,7 @@ function renderAdminDashboard(tab){
   });
   document.getElementById('logoutBtn').onclick = async () => {
     state.isAdmin = false;
+    try{ localStorage.removeItem('trustedAdminDevice'); }catch(e){}
     try{ await signOut(auth); }catch(e){ console.error('sign-out error', e); }
     renderLanding();
   };
