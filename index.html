@@ -931,6 +931,21 @@ function withTimeout(promise, ms, label){
     new Promise((_, reject) => setTimeout(() => reject(new Error('timeout:' + label)), ms))
   ]);
 }
+// עוטף כל פעולת setDoc. חשוב: ל-Firestore יש התנהגות מוכרת ומתועדת - ה-Promise שהוא מחזיר
+// "נפתר" (resolve) רק כשהשרת עצמו מאשר את הכתיבה, גם אם הנתון כבר נשמר מיידית במטמון המקומי.
+// כלומר במצב לא-מקוון ה-Promise פשוט "תקוע" עד שהאינטרנט חוזר - למרות שהשמירה בפועל הצליחה.
+// לכן: אם אין אינטרנט כרגע, לא מחכים לאישור השרת בכלל - משאירים את הכתיבה לרוץ ברקע (תסתנכרן
+// לבד כשהחיבור יחזור) ומחזירים הצלחה מיד, כי אנחנו יודעים שהמטמון המקומי כבר עודכן.
+async function saveDoc(promiseFn, label){
+  if(!navigator.onLine){
+    promiseFn().catch(e => console.error(label + ' (offline, will sync automatically later)', e));
+    return true;
+  }
+  try{
+    await withTimeout(promiseFn(), 30000, label);
+    return true;
+  }catch(e){ console.error(label + ' error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+}
 async function loadEmployees(){
   try{
     const snap = await withTimeout(getDoc(doc(db, 'meta', 'employees')), 30000, 'loadEmployees');
@@ -938,10 +953,7 @@ async function loadEmployees(){
   }catch(e){ console.error('loadEmployees error', e); return null; }
 }
 async function saveEmployees(list){
-  try{
-    await withTimeout(setDoc(doc(db, 'meta', 'employees'), { list }), 30000, 'saveEmployees');
-    return true;
-  }catch(e){ console.error('saveEmployees error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+  return saveDoc(() => setDoc(doc(db, 'meta', 'employees'), { list }), 'saveEmployees');
 }
 // ---------- employee -> manager free-text requests ----------
 async function loadRequests(){
@@ -951,18 +963,12 @@ async function loadRequests(){
   }catch(e){ console.error('loadRequests error', e); return null; }
 }
 async function saveRequests(list){
-  try{
-    await withTimeout(setDoc(doc(db, 'meta', 'requests'), { list }), 30000, 'saveRequests');
-    return true;
-  }catch(e){ console.error('saveRequests error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+  return saveDoc(() => setDoc(doc(db, 'meta', 'requests'), { list }), 'saveRequests');
 }
 // ---------- voice messages (each recording lives in its own document, kept separate from the
 // shared meta/requests list doc so a handful of recordings can't blow past its 1MB size limit) ----------
 async function saveVoiceMessage(id, audioDataUrl){
-  try{
-    await withTimeout(setDoc(doc(db, 'voiceMessages', id), { audio: audioDataUrl, createdAt: new Date().toISOString() }), 30000, 'saveVoiceMessage');
-    return true;
-  }catch(e){ console.error('saveVoiceMessage error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+  return saveDoc(() => setDoc(doc(db, 'voiceMessages', id), { audio: audioDataUrl, createdAt: new Date().toISOString() }), 'saveVoiceMessage');
 }
 async function loadVoiceMessage(id){
   try{
@@ -977,10 +983,7 @@ async function loadHours(empId){
   }catch(e){ console.error('loadHours error', e); return null; }
 }
 async function saveHours(empId, data){
-  try{
-    await withTimeout(setDoc(doc(db, 'hours', empId), data), 30000, 'saveHours');
-    return true;
-  }catch(e){ console.error('saveHours error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+  return saveDoc(() => setDoc(doc(db, 'hours', empId), data), 'saveHours');
 }
 async function loadAnnouncement(){
   try{
@@ -989,10 +992,7 @@ async function loadAnnouncement(){
   }catch(e){ console.error('loadAnnouncement error', e); return { image: null, caption: '' }; }
 }
 async function saveAnnouncement(image, caption){
-  try{
-    await withTimeout(setDoc(doc(db, 'meta', 'announcement'), { image, caption }), 30000, 'saveAnnouncement');
-    return true;
-  }catch(e){ console.error('saveAnnouncement error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+  return saveDoc(() => setDoc(doc(db, 'meta', 'announcement'), { image, caption }), 'saveAnnouncement');
 }
 // ---------- manager contact + automatic email sending config (shared "meta/contact" doc) ----------
 async function loadContactConfig(){
@@ -1002,10 +1002,7 @@ async function loadContactConfig(){
   }catch(e){ console.error('loadContactConfig error', e); return {}; }
 }
 async function saveContactConfig(partial){
-  try{
-    await withTimeout(setDoc(doc(db, 'meta', 'contact'), partial, { merge: true }), 30000, 'saveContactConfig');
-    return true;
-  }catch(e){ console.error('saveContactConfig error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+  return saveDoc(() => setDoc(doc(db, 'meta', 'contact'), partial, { merge: true }), 'saveContactConfig');
 }
 async function loadManagerEmail(){
   const cfg = await loadContactConfig();
@@ -1045,10 +1042,7 @@ async function loadSettings(empId){
   }catch(e){ console.error('loadSettings error', e); return {}; }
 }
 async function saveSettings(empId, data){
-  try{
-    await withTimeout(setDoc(doc(db, 'settings', empId), data), 30000, 'saveSettings');
-    return true;
-  }catch(e){ console.error('saveSettings error', e); return (e && e.message) || 'שגיאה לא ידועה'; }
+  return saveDoc(() => setDoc(doc(db, 'settings', empId), data), 'saveSettings');
 }
 // Cache so we don't hit the network on every dashboard render — only refreshed on employee switch or explicit save.
 async function getEmpSettings(empId){
