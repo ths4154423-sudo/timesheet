@@ -3736,7 +3736,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       ${(editingEntry || state._manualOpen) ? `
       <div style="margin-top:14px;">
         <p class="hint" style="margin-top:0; margin-bottom:16px; font-size:13px;">${editingOpenEntry ? 'ניתן לתקן את שעת ההתחלה. השאירו את "עד שעה" ריק אם עדיין נמצאים באמצע יום העבודה.' : 'לתיקון רישום ישן או הוספת יום שלם בבת אחת — הזינו תאריך, שעת התחלה ושעת סיום.'}</p>
-        <form id="addHoursForm">
+        <form id="addHoursForm" novalidate>
           <div class="emp-row-form">
             <div class="field"><label>תאריך</label><input type="date" id="hoursDate" value="${draftDate}" required /></div>
           </div>
@@ -4111,15 +4111,15 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const start = startInput.value;
       const end = endInput.value;
       const errEl = document.getElementById('addHoursErr');
+      const fail = (msg) => { errEl.style.color = ''; errEl.textContent = msg; try{ errEl.scrollIntoView({ block:'center', behavior:'smooth' }); }catch(_){} };
       const submitBtn = e.target.querySelector('button[type="submit"]');
       const hoursVal = computeHoursFromRange(start, end);
-      if(!date || !start){ errEl.textContent = 'יש להזין תאריך ושעת התחלה תקינים'; return; }
+      if(!date || !start){ fail('יש להזין תאריך ושעת התחלה תקינים'); return; }
       if(end){
-        if(hoursVal === null || hoursVal <= 0){ errEl.textContent = 'שעת הסיום שהוזנה אינה תקינה'; return; }
-        if(hoursVal > 24){ errEl.textContent = 'טווח השעות ארוך מ-24 שעות, בדקו את השעות שהוזנו'; return; }
+        if(hoursVal === null || hoursVal <= 0){ fail('שעת הסיום שהוזנה אינה תקינה'); return; }
+        if(hoursVal > 24){ fail('טווח השעות ארוך מ-24 שעות, בדקו את השעות שהוזנו'); return; }
       } else if(!editingOpenEntry){
-        errEl.textContent = 'יש להזין תאריך, שעת התחלה ושעת סיום תקינים';
-        return;
+        fail('יש להזין תאריך, שעת התחלה ושעת סיום תקינים'); return;
       }
       const entryMonth = date.slice(0,7);
       const breaksToSave = (state._editBreaks || []).map(b => ({...b}));
