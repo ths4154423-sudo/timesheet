@@ -3787,8 +3787,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); renderLanding(); };
   document.getElementById('settingsBtn').onclick = () => renderEmployeeSettings(emp);
 
-  document.getElementById('readoutHours').textContent = fmtHours(totalHours);
-  document.getElementById('readoutPay').textContent = fmtMoney(pay);
+  // במצב עריכה אזור הסיכום לא מוצג, ולכן הרכיבים האלה לא קיימים. בלי הבדיקה הזו נזרקה כאן שגיאה,
+  // שעצרה את המשך הפונקציה - ולכן כפתור "עדכון שינויים" בעריכה לא עשה כלום.
+  const readoutHoursEl = document.getElementById('readoutHours');
+  if(readoutHoursEl) readoutHoursEl.textContent = fmtHours(totalHours);
+  const readoutPayEl = document.getElementById('readoutPay');
+  if(readoutPayEl) readoutPayEl.textContent = fmtMoney(pay);
   const emailHoursBtn = document.getElementById('emailHoursBtn');
   if(emailHoursBtn){
     emailHoursBtn.onclick = async () => {
