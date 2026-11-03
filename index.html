@@ -4185,10 +4185,27 @@ const SETTINGS_CATEGORIES = [
   { key: 'sound', icon: '🔊', label: 'קול והתראות', hint: 'הודעות קוליות וצלילים בזמן העבודה' },
   { key: 'appearance', icon: '🎨', label: 'עיצוב וצבעים', hint: 'צבעי הרקע, הטקסט וההדגשים באתר' },
   { key: 'display', icon: '🖥️', label: 'תצוגה', hint: 'מצב כהה ואפשרויות תצוגה נוספות' },
+  { key: 'phone', icon: '📞', label: 'תזכורות בטלפון', hint: 'צלצולי תזכורת לדיווח כניסה ויציאה' },
   { key: 'requests', icon: '📨', label: 'בקשה למנהל', hint: 'שליחת הודעה חופשית וצפייה בסטטוס בקשות קודמות', action: true },
   { key: 'music', icon: '🎵', label: 'נגן מוזיקה', hint: 'האזנה למוזיקה שמעלים מהמכשיר, לא נשמר באתר', action: true }
 ];
 const EMPLOYEE_SETTINGS_DEFS = [
+  {
+    key: 'noEntryReminder',
+    category: 'phone',
+    type: 'checkbox',
+    label: 'לא לקבל צלצול תזכורת לכניסה',
+    hint: 'כשמסומן, לא תקבל/י צלצול תזכורת בבוקר אם עדיין לא דיווחת כניסה.',
+    default: false
+  },
+  {
+    key: 'noExitReminder',
+    category: 'phone',
+    type: 'checkbox',
+    label: 'לא לקבל צלצול תזכורת ליציאה',
+    hint: 'כשמסומן, לא תקבל/י צלצול תזכורת בערב אם עדיין לא דיווחת יציאה.',
+    default: false
+  },
   {
     key: 'muteOpeningAnnouncement',
     category: 'sound',
