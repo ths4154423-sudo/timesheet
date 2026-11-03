@@ -3568,6 +3568,69 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     lastBreak = null;
   }
 
+  const entriesTableHtml = `
+      <div id="entriesList">
+        ${entries.length === 0 ? '<div class="empty-state">אין עדיין רישומי שעות לחודש זה.</div>' : `
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>תאריך</th><th>טווח שעות</th><th>הפסקות</th><th>סה"כ שעות</th>${emp.payType !== 'fixed' ? '<th>סה"כ להרוויח</th>' : ''}<th></th></tr></thead>
+            <tbody>
+              ${entries.map((e, i) => {
+                const h = computeEntryHours(e);
+                const breaksCount = (e.breaks || []).filter(b => b.end).length;
+                const delay = Math.min(i, 15) * 35;
+                return `
+                <tr class="stagger-item" style="animation-delay:${delay}ms;">
+                  <td>${e.date}</td>
+                  <td class="mono">${e.start ? (hhmm(e.start) + ' – ' + (e.end ? hhmm(e.end) : '...')) : '—'}</td>
+                  <td class="mono">${breaksCount > 0 ? breaksCount + ' הפסקות' : '—'}</td>
+                  <td class="mono">${h !== null ? fmtHours(h) : '<span class="pill hourly">בעבודה</span>'}</td>
+                  ${emp.payType !== 'fixed' ? `<td class="mono">${h !== null ? fmtMoney(h * emp.rate) : '—'}</td>` : ''}
+                  <td>
+                    <div class="row-actions">
+                      ${h !== null ? `<button class="btn ghost small" data-view-entry="${e.id}">הצגה</button>` : ''}
+                      <button class="btn ghost small" data-edit-entry="${e.id}">עריכה</button>
+                      <button class="btn danger" data-del-entry="${e.id}">מחיקה</button>
+                    </div>
+                  </td>
+                </tr>
+              `;}).join('')}
+            </tbody>
+          </table>
+        </div>
+        `}
+      </div>
+  `;
+
+  // ---- דף נפרד: רישומי החודש + גרף שעות לכל יום ----
+  if(state._entriesPage && !editingEntry){
+    const [yy, mm] = month.split('-').map(Number);
+    const daysInMonth = new Date(yy, mm, 0).getDate();
+    app.innerHTML = `
+      <div class="top-actions" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+        <button type="button" class="btn ghost small" id="entriesBackBtn">→ חזרה</button>
+        <input type="month" class="month-picker" id="empMonthPicker" value="${month}" />
+        <span class="subtitle">${monthLabel(month)} · ${fmtHours(totalHours)} שעות${emp.payType !== 'fixed' ? ' · ' + fmtMoney(pay) : ''}</span>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">שעות עבודה לפי יום</h3>
+        ${entries.length === 0 ? '<div class="empty-state">אין נתונים להצגה בגרף.</div>' : '<div style="position:relative; height:260px;"><canvas id="dailyHoursChart"></canvas></div>'}
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">רישומי החודש</h3>
+        ${entriesTableHtml}
+      </div>
+    `;
+    document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; state._entriesPage = false; clearSession(); renderLanding(); };
+    document.getElementById('settingsBtn').onclick = () => { state._entriesPage = false; renderEmployeeSettings(emp); };
+    document.getElementById('entriesBackBtn').onclick = () => { state._entriesPage = false; renderEmployeeDashboard(emp, null, true); window.scrollTo(0, 0); };
+    const picker = document.getElementById('empMonthPicker');
+    if(picker) picker.onchange = (e) => { state._empMonth = e.target.value; renderEmployeeDashboard(emp, null, true); };
+    renderDailyHoursChart(entries, yy, mm, daysInMonth);
+    bindEntryRowButtons(emp, entries, month);
+    return;
+  }
+
   app.innerHTML = `
     ${editingEntry ? '' : `
     <div class="avatar-row" style="margin-bottom:16px;">
@@ -3668,41 +3731,9 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     <div class="card">
       <div class="collapsible-header" id="entriesToggleHeader">
         <h3 style="margin:0;">רישומי החודש</h3>
-        <span class="chevron">${state._entriesOpen ? '▲' : '▼'}</span>
+        <span class="chevron">◀</span>
       </div>
-      ${state._entriesOpen ? `
-      <div id="entriesList" style="margin-top:14px;">
-        ${entries.length === 0 ? '<div class="empty-state">אין עדיין רישומי שעות לחודש זה.</div>' : `
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>תאריך</th><th>טווח שעות</th><th>הפסקות</th><th>סה"כ שעות</th>${emp.payType !== 'fixed' ? '<th>סה"כ להרוויח</th>' : ''}<th></th></tr></thead>
-            <tbody>
-              ${entries.map((e, i) => {
-                const h = computeEntryHours(e);
-                const breaksCount = (e.breaks || []).filter(b => b.end).length;
-                const delay = Math.min(i, 15) * 35;
-                return `
-                <tr class="stagger-item" style="animation-delay:${delay}ms;">
-                  <td>${e.date}</td>
-                  <td class="mono">${e.start ? (hhmm(e.start) + ' – ' + (e.end ? hhmm(e.end) : '...')) : '—'}</td>
-                  <td class="mono">${breaksCount > 0 ? breaksCount + ' הפסקות' : '—'}</td>
-                  <td class="mono">${h !== null ? fmtHours(h) : '<span class="pill hourly">בעבודה</span>'}</td>
-                  ${emp.payType !== 'fixed' ? `<td class="mono">${h !== null ? fmtMoney(h * emp.rate) : '—'}</td>` : ''}
-                  <td>
-                    <div class="row-actions">
-                      ${h !== null ? `<button class="btn ghost small" data-view-entry="${e.id}">הצגה</button>` : ''}
-                      <button class="btn ghost small" data-edit-entry="${e.id}">עריכה</button>
-                      <button class="btn danger" data-del-entry="${e.id}">מחיקה</button>
-                    </div>
-                  </td>
-                </tr>
-              `;}).join('')}
-            </tbody>
-          </table>
-        </div>
-        `}
-      </div>
-      ` : ''}
+
     </div>
 
     <div class="actions" style="justify-content:flex-start; margin-bottom:18px;">
@@ -4045,7 +4076,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 
   const entriesToggleHeader = document.getElementById('entriesToggleHeader');
   if(entriesToggleHeader){
-    entriesToggleHeader.onclick = () => { state._entriesOpen = !state._entriesOpen; renderEmployeeDashboard(emp, null, true); };
+    entriesToggleHeader.onclick = () => { state._entriesPage = true; renderEmployeeDashboard(emp, null, true); window.scrollTo(0, 0); };
   }
   const excelToggleHeader = document.getElementById('excelToggleHeader');
   if(excelToggleHeader){
@@ -4159,6 +4190,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       renderEmployeeDashboard(emp, null, fresh);
     };
   }
+  bindEntryRowButtons(emp, entries, month);
+}
+
+
+// כפתורי השורות בטבלת הרישומים (הצגה / עריכה / מחיקה) - משמש גם בדשבורד וגם בדף רישומי החודש
+function bindEntryRowButtons(emp, entries, month){
   document.querySelectorAll('[data-view-entry]').forEach(btn => {
     btn.onclick = () => {
       const entry = entries.find(e => e.id === btn.dataset.viewEntry);
@@ -4179,6 +4216,38 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       if(ok !== true){ alert('שגיאה בשמירה: ' + ok); return; }
       renderEmployeeDashboard(emp, null, fresh);
     };
+  });
+}
+
+// גרף עמודות: סה"כ שעות לכל יום בחודש (ימים בלי עבודה מוצגים כ-0)
+function renderDailyHoursChart(entries, yy, mm, daysInMonth){
+  const canvas = document.getElementById('dailyHoursChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+  if(state._dailyChart){ try{ state._dailyChart.destroy(); }catch(e){} }
+  const perDay = new Array(daysInMonth).fill(0);
+  entries.forEach(e => {
+    const h = computeEntryHours(e);
+    const d = Number(String(e.date).slice(8, 10));
+    if(h !== null && d >= 1 && d <= daysInMonth) perDay[d - 1] += h;
+  });
+  const labels = perDay.map((_, i) => String(i + 1));
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--brass').trim() || '#5FBF8F';
+  const weekendColor = 'rgba(138,109,47,.35)';
+  const colors = perDay.map((_, i) => {
+    const wd = new Date(yy, mm - 1, i + 1).getDay();
+    return (wd === 5 || wd === 6) ? weekendColor : accent;
+  });
+  state._dailyChart = new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'שעות', data: perDay.map(v => Math.round(v * 100) / 100), backgroundColor: colors, borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { title: (items) => items[0].label + ' ב' + monthLabel(yy + '-' + String(mm).padStart(2, '0')), label: (item) => fmtHours(item.raw) + ' שעות' } }
+      },
+      scales: { y: { beginAtZero: true, title: { display: true, text: 'שעות' } }, x: { title: { display: true, text: 'יום בחודש' } } }
+    }
   });
 }
 
