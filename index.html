@@ -3624,11 +3624,18 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           ${showPay ? `<div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; font-size:13px;">
             ${PAY_COLOR_BANDS.map(b => `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:14px; border-radius:3px; background:${b.color}; display:inline-block;"></span>${b.label}</span>`).join('')}
           </div>` : ''}
+          <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:8px; font-size:13px;">
+            <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:14px; border-radius:3px; background:rgba(100,116,139,.35); display:inline-block;"></span>שישי ושבת</span>
+            <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:14px; border-radius:3px; background:rgba(139,92,246,.4); display:inline-block;"></span>חג / ערב חג</span>
+          </div>
         `}
       </div>
       <div class="card">
-        <h3 style="margin-top:0;">סיכום לפי חודשים (12 החודשים האחרונים)</h3>
-        <div style="position:relative; height:170px;"><canvas id="monthlyChart"></canvas></div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <h3 style="margin:0;">סיכום לפי חודשים (12 החודשים האחרונים)</h3>
+          <button type="button" class="btn ghost small" id="monthlyChartToggle">${getMonthlyChartType() === 'pie' ? '📊 עמודות' : '🥧 עוגה'}</button>
+        </div>
+        <div style="position:relative; height:${getMonthlyChartType() === 'pie' ? 280 : 170}px; margin-top:12px;"><canvas id="monthlyChart"></canvas></div>
       </div>
       <div class="card">
         <h3 style="margin-top:0;">רישומי החודש</h3>
@@ -3649,6 +3656,10 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     document.getElementById('nextMonthBtn').onclick = () => shiftMonth(1);
     renderDailyHoursChart(entries, yy, mm, daysInMonth, showPay ? emp.rate : null);
     renderMonthlyChart(emp, hoursData);
+    document.getElementById('monthlyChartToggle').onclick = () => {
+      setMonthlyChartType(getMonthlyChartType() === 'pie' ? 'bar' : 'pie');
+      renderEmployeeDashboard(emp, null, true);
+    };
     bindEntryRowButtons(emp, entries, month);
     return;
   }
@@ -4252,6 +4263,72 @@ function payBandColor(amount){
   return (PAY_COLOR_BANDS.find(b => amount <= b.max) || PAY_COLOR_BANDS[PAY_COLOR_BANDS.length - 1]).color;
 }
 
+// ימים מיוחדים בגרף היומי: שישי, שבת, חגים וערבי חג (לפי הלוח העברי, כמנהג ארץ ישראל)
+const HEB_SPECIAL_DAYS = {
+  'Elul-29': 'ערב ראש השנה',
+  'Tishri-1': 'ראש השנה', 'Tishri-2': 'ראש השנה',
+  'Tishri-9': 'ערב יום הכיפורים', 'Tishri-10': 'יום הכיפורים',
+  'Tishri-14': 'ערב סוכות', 'Tishri-15': 'סוכות',
+  'Tishri-16': 'חול המועד', 'Tishri-17': 'חול המועד', 'Tishri-18': 'חול המועד', 'Tishri-19': 'חול המועד', 'Tishri-20': 'חול המועד',
+  'Tishri-21': 'הושענא רבה', 'Tishri-22': 'שמחת תורה',
+  'Adar-14': 'פורים', 'Adar II-14': 'פורים', 'Adar-15': 'שושן פורים', 'Adar II-15': 'שושן פורים',
+  'Nisan-14': 'ערב פסח', 'Nisan-15': 'פסח',
+  'Nisan-16': 'חול המועד', 'Nisan-17': 'חול המועד', 'Nisan-18': 'חול המועד', 'Nisan-19': 'חול המועד',
+  'Nisan-20': 'ערב שביעי של פסח', 'Nisan-21': 'שביעי של פסח',
+  'Sivan-5': 'ערב שבועות', 'Sivan-6': 'שבועות',
+  'Av-9': 'תשעה באב'
+};
+let _hebFmt = null;
+function specialDayLabel(yy, mm, dd){
+  const dt = new Date(yy, mm - 1, dd, 12);
+  const wd = dt.getDay();
+  let holiday = null;
+  try{
+    if(!_hebFmt) _hebFmt = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'long' });
+    const parts = _hebFmt.formatToParts(dt);
+    const hd = Number(parts.find(p => p.type === 'day').value);
+    const hm = parts.find(p => p.type === 'month').value;
+    holiday = HEB_SPECIAL_DAYS[hm + '-' + hd] || null;
+    if(hm === 'Av' && hd === 9 && wd === 6) holiday = null;          // תשעה באב שחל בשבת נדחה...
+    if(hm === 'Av' && hd === 10 && wd === 0) holiday = 'תשעה באב';    // ...ליום ראשון
+  }catch(e){}
+  if(holiday) return { text: holiday, kind: 'holiday' };
+  if(wd === 6) return { text: 'שבת', kind: 'weekend' };
+  if(wd === 5) return { text: 'שישי', kind: 'weekend' };
+  return null;
+}
+const SPECIAL_DAY_STYLE = {
+  weekend: { band: 'rgba(100,116,139,.14)', text: '#475569' },
+  holiday: { band: 'rgba(139,92,246,.17)', text: '#6D28D9' }
+};
+// פלאגין של Chart.js: צובע ברקע את הטור של יום מיוחד, וכותב עליו את שם היום מלמעלה למטה
+const specialDaysPlugin = {
+  id: 'specialDays',
+  beforeDatasetsDraw(chart, args, opts){
+    const days = opts && opts.days; if(!days) return;
+    const { ctx, chartArea, scales: { x } } = chart;
+    const n = chart.data.labels.length; if(!n) return;
+    const colW = (chartArea.right - chartArea.left) / n;
+    days.forEach((d, i) => {
+      if(!d) return;
+      const st = SPECIAL_DAY_STYLE[d.kind];
+      const cx = x.getPixelForValue(i);
+      ctx.save();
+      ctx.fillStyle = st.band;
+      ctx.fillRect(cx - colW / 2, chartArea.top, colW, chartArea.bottom - chartArea.top);
+      ctx.translate(cx, chartArea.top + 6);
+      ctx.rotate(Math.PI / 2);
+      ctx.fillStyle = st.text;
+      ctx.font = '600 11px Heebo, Arial, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.direction = 'rtl';
+      ctx.fillText(d.text, 0, 0);
+      ctx.restore();
+    });
+  }
+};
+
 // גרף עמודות: סה"כ שעות לכל יום בחודש. צבע העמודה לפי הסכום היומי (בשכר שעתי).
 function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate){
   const canvas = document.getElementById('dailyHoursChart');
@@ -4267,15 +4344,18 @@ function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate){
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--brass').trim() || '#5FBF8F';
   const colors = perDay.map(h => rate != null ? payBandColor(h * rate) : accent);
   const monthKey = yy + '-' + String(mm).padStart(2, '0');
+  const specialDays = perDay.map((_, i) => specialDayLabel(yy, mm, i + 1));
   state._dailyChart = new Chart(canvas, {
     type: 'bar',
+    plugins: [specialDaysPlugin],
     data: { labels, datasets: [{ label: 'שעות', data: perDay.map(v => Math.round(v * 100) / 100), backgroundColor: colors, borderRadius: 4 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
+        specialDays: { days: specialDays },
         legend: { display: false },
         tooltip: { callbacks: {
-          title: (items) => items[0].label + ' ב' + monthLabel(monthKey),
+          title: (items) => items[0].label + ' ב' + monthLabel(monthKey) + (specialDays[items[0].dataIndex] ? ' · ' + specialDays[items[0].dataIndex].text : ''),
           label: (item) => {
             const lines = [fmtHours(item.raw) + ' שעות'];
             if(rate != null) lines.push(fmtMoney(item.raw * rate));
@@ -4288,7 +4368,16 @@ function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate){
   });
 }
 
-// גרף קטן של 12 החודשים האחרונים (עד החודש הנוכחי). לא תלוי בחודש שנבחר בדף.
+// סוג גרף החודשים: 'pie' (עוגה, ברירת מחדל) או 'bar' (עמודות). הבחירה נשמרת במכשיר.
+function getMonthlyChartType(){
+  try{ return localStorage.getItem('monthlyChartType') === 'bar' ? 'bar' : 'pie'; }catch(e){ return 'pie'; }
+}
+function setMonthlyChartType(t){
+  try{ localStorage.setItem('monthlyChartType', t); }catch(e){}
+}
+const MONTH_SLICE_COLORS = ['#60A5FA','#F59E0B','#10B981','#F472B6','#A78BFA','#F87171','#34D399','#FBBF24','#38BDF8','#FB923C','#818CF8','#4ADE80'];
+
+// גרף 12 החודשים האחרונים (עד החודש הנוכחי), לפי סכום בשקלים. לא תלוי בחודש שנבחר בדף.
 function renderMonthlyChart(emp, hoursData){
   const canvas = document.getElementById('monthlyChart');
   if(!canvas || typeof Chart === 'undefined') return;
@@ -4300,19 +4389,41 @@ function renderMonthlyChart(emp, hoursData){
     keys.push(dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0'));
   }
   const hours = keys.map(k => (hoursData[k] || []).reduce((sum, e) => { const h = computeEntryHours(e); return sum + (h !== null ? h : 0); }, 0));
-  const pays = hours.map(h => h > 0 ? calcPay(emp, h) : 0);
-  const labels = keys.map(k => { const [y, m] = k.split('-'); return m + '/' + y.slice(2); });
+  const pays = hours.map(h => h > 0 ? Math.round(calcPay(emp, h) * 100) / 100 : 0);
+  const type = getMonthlyChartType();
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--brass').trim() || '#5FBF8F';
+
+  if(type === 'pie'){
+    // בעוגה מציגים רק חודשים שיש בהם סכום (לפרוסה של 0 אין גודל)
+    const idx = keys.map((_, i) => i).filter(i => pays[i] > 0);
+    state._monthlyChart = new Chart(canvas, {
+      type: 'pie',
+      data: {
+        labels: idx.map(i => monthLabel(keys[i])),
+        datasets: [{ data: idx.map(i => pays[i]), backgroundColor: idx.map(i => MONTH_SLICE_COLORS[i % MONTH_SLICE_COLORS.length]), borderWidth: 2 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: { callbacks: { label: (item) => ' ' + fmtMoney(item.raw) } }
+        }
+      }
+    });
+    return;
+  }
+
+  const labels = keys.map(k => { const [y, m] = k.split('-'); return m + '/' + y.slice(2); });
   state._monthlyChart = new Chart(canvas, {
     type: 'bar',
-    data: { labels, datasets: [{ label: 'שעות', data: hours.map(v => Math.round(v * 100) / 100), backgroundColor: accent, borderRadius: 4 }] },
+    data: { labels, datasets: [{ label: '₪', data: pays, backgroundColor: accent, borderRadius: 4 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: {
           title: (items) => monthLabel(keys[items[0].dataIndex]),
-          label: (item) => [fmtHours(hours[item.dataIndex]) + ' שעות', fmtMoney(pays[item.dataIndex])]
+          label: (item) => fmtMoney(item.raw)
         } }
       },
       scales: { y: { beginAtZero: true } }
