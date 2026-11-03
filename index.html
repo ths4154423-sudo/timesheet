@@ -4301,33 +4301,38 @@ const SPECIAL_DAY_STYLE = {
   weekend: { band: 'rgba(100,116,139,.14)', text: '#475569' },
   holiday: { band: 'rgba(139,92,246,.17)', text: '#6D28D9' }
 };
-// פלאגין של Chart.js: צובע ברקע את הטור של יום מיוחד, וכותב עליו את שם היום מלמעלה למטה
-const specialDaysPlugin = {
-  id: 'specialDays',
-  beforeDatasetsDraw(chart, args, opts){
-    const days = opts && opts.days; if(!days) return;
-    const { ctx, chartArea, scales: { x } } = chart;
-    const n = chart.data.labels.length; if(!n) return;
-    const colW = (chartArea.right - chartArea.left) / n;
-    days.forEach((d, i) => {
-      if(!d) return;
-      const st = SPECIAL_DAY_STYLE[d.kind];
-      const cx = x.getPixelForValue(i);
-      ctx.save();
-      ctx.fillStyle = st.band;
-      ctx.fillRect(cx - colW / 2, chartArea.top, colW, chartArea.bottom - chartArea.top);
-      ctx.translate(cx, chartArea.top + 6);
-      ctx.rotate(Math.PI / 2);
-      ctx.fillStyle = st.text;
-      ctx.font = '600 11px Heebo, Arial, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-      ctx.direction = 'rtl';
-      ctx.fillText(d.text, 0, 0);
-      ctx.restore();
-    });
-  }
-};
+// פלאגין של Chart.js: צובע ברקע את כל הטור של יום מיוחד, וכותב את שם היום לאורך כל הטור, מלמעלה למטה.
+// הרשימה מועברת דרך closure ולא דרך options, כי Chart.js מעבד מערכים ב-options בצורה שמשבשת אותם.
+function makeSpecialDaysPlugin(days){
+  return {
+    id: 'specialDays',
+    beforeDatasetsDraw(chart){
+      const { ctx, chartArea, scales: { x } } = chart;
+      const n = chart.data.labels.length; if(!n) return;
+      const colW = (chartArea.right - chartArea.left) / n;
+      const colH = chartArea.bottom - chartArea.top;
+      days.forEach((d, i) => {
+        if(!d) return;
+        const st = SPECIAL_DAY_STYLE[d.kind]; if(!st) return;
+        const cx = x.getPixelForValue(i);
+        ctx.save();
+        ctx.fillStyle = st.band;
+        ctx.fillRect(cx - colW / 2, chartArea.top, colW, colH);
+        // הטקסט: האותיות זו מתחת לזו, מלמעלה למטה, מפוזרות לאורך רוב גובה הטור
+        const chars = [...d.text];
+        const fontSize = Math.max(9, Math.min(14, colW * 0.6));
+        ctx.font = '700 ' + fontSize + 'px Heebo, Arial, sans-serif';
+        ctx.fillStyle = st.text;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const step = Math.min(fontSize * 2.4, (colH * 0.9) / chars.length);
+        const startY = chartArea.top + (colH - step * (chars.length - 1)) / 2;
+        chars.forEach((ch, k) => { if(ch.trim()) ctx.fillText(ch, cx, startY + k * step); });
+        ctx.restore();
+      });
+    }
+  };
+}
 
 // גרף עמודות: סה"כ שעות לכל יום בחודש. צבע העמודה לפי הסכום היומי (בשכר שעתי).
 function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate){
@@ -4347,12 +4352,11 @@ function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate){
   const specialDays = perDay.map((_, i) => specialDayLabel(yy, mm, i + 1));
   state._dailyChart = new Chart(canvas, {
     type: 'bar',
-    plugins: [specialDaysPlugin],
+    plugins: [makeSpecialDaysPlugin(specialDays)],
     data: { labels, datasets: [{ label: 'שעות', data: perDay.map(v => Math.round(v * 100) / 100), backgroundColor: colors, borderRadius: 4 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        specialDays: { days: specialDays },
         legend: { display: false },
         tooltip: { callbacks: {
           title: (items) => items[0].label + ' ב' + monthLabel(monthKey) + (specialDays[items[0].dataIndex] ? ' · ' + specialDays[items[0].dataIndex].text : ''),
@@ -4374,6 +4378,32 @@ function getMonthlyChartType(){
 }
 function setMonthlyChartType(t){
   try{ localStorage.setItem('monthlyChartType', t); }catch(e){}
+}
+// פלאגין: כותב על כל פרוסה בעוגה את שם החודש והסכום, בלי צורך במעבר עכבר
+function makePieLabelsPlugin(names, amounts){
+  return {
+    id: 'pieLabels',
+    afterDatasetsDraw(chart){
+      const meta = chart.getDatasetMeta(0); if(!meta || !meta.data) return;
+      const { ctx } = chart;
+      meta.data.forEach((arc, i) => {
+        const angle = arc.endAngle - arc.startAngle;
+        if(angle < 0.28) return; // פרוסה קטנה מדי - השם מופיע במקרא שמתחת
+        const pos = arc.tooltipPosition();
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = 'rgba(0,0,0,.45)';
+        ctx.shadowBlur = 3;
+        ctx.font = '600 12px Heebo, Arial, sans-serif';
+        ctx.fillText(names[i], pos.x, pos.y - 8);
+        ctx.font = '700 13px Heebo, Arial, sans-serif';
+        ctx.fillText(amounts[i], pos.x, pos.y + 9);
+        ctx.restore();
+      });
+    }
+  };
 }
 const MONTH_SLICE_COLORS = ['#60A5FA','#F59E0B','#10B981','#F472B6','#A78BFA','#F87171','#34D399','#FBBF24','#38BDF8','#FB923C','#818CF8','#4ADE80'];
 
@@ -4398,6 +4428,7 @@ function renderMonthlyChart(emp, hoursData){
     const idx = keys.map((_, i) => i).filter(i => pays[i] > 0);
     state._monthlyChart = new Chart(canvas, {
       type: 'pie',
+      plugins: [makePieLabelsPlugin(idx.map(i => monthLabel(keys[i]).split(' ')[0]), idx.map(i => fmtMoney(pays[i])))],
       data: {
         labels: idx.map(i => monthLabel(keys[i])),
         datasets: [{ data: idx.map(i => pays[i]), backgroundColor: idx.map(i => MONTH_SLICE_COLORS[i % MONTH_SLICE_COLORS.length]), borderWidth: 2 }]
