@@ -3606,15 +3606,29 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   if(state._entriesPage && !editingEntry){
     const [yy, mm] = month.split('-').map(Number);
     const daysInMonth = new Date(yy, mm, 0).getDate();
+    const showPay = emp.payType !== 'fixed';
     app.innerHTML = `
       <div class="top-actions" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
         <button type="button" class="btn ghost small" id="entriesBackBtn">→ חזרה</button>
-        <input type="month" class="month-picker" id="empMonthPicker" value="${month}" />
+        <div style="display:flex; align-items:center; gap:6px;">
+          <button type="button" class="btn ghost small" id="prevMonthBtn" title="החודש הקודם">▶</button>
+          <input type="month" class="month-picker" id="empMonthPicker" value="${month}" />
+          <button type="button" class="btn ghost small" id="nextMonthBtn" title="החודש הבא">◀</button>
+        </div>
         <span class="subtitle">${monthLabel(month)} · ${fmtHours(totalHours)} שעות${emp.payType !== 'fixed' ? ' · ' + fmtMoney(pay) : ''}</span>
       </div>
       <div class="card">
         <h3 style="margin-top:0;">שעות עבודה לפי יום</h3>
-        ${entries.length === 0 ? '<div class="empty-state">אין נתונים להצגה בגרף.</div>' : '<div style="position:relative; height:260px;"><canvas id="dailyHoursChart"></canvas></div>'}
+        ${entries.length === 0 ? '<div class="empty-state">אין נתונים להצגה בגרף.</div>' : `
+          <div style="position:relative; height:260px;"><canvas id="dailyHoursChart"></canvas></div>
+          ${showPay ? `<div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; font-size:13px;">
+            ${PAY_COLOR_BANDS.map(b => `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:14px; border-radius:3px; background:${b.color}; display:inline-block;"></span>${b.label}</span>`).join('')}
+          </div>` : ''}
+        `}
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">סיכום לפי חודשים (12 החודשים האחרונים)</h3>
+        <div style="position:relative; height:170px;"><canvas id="monthlyChart"></canvas></div>
       </div>
       <div class="card">
         <h3 style="margin-top:0;">רישומי החודש</h3>
@@ -3626,7 +3640,15 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     document.getElementById('entriesBackBtn').onclick = () => { state._entriesPage = false; renderEmployeeDashboard(emp, null, true); window.scrollTo(0, 0); };
     const picker = document.getElementById('empMonthPicker');
     if(picker) picker.onchange = (e) => { state._empMonth = e.target.value; renderEmployeeDashboard(emp, null, true); };
-    renderDailyHoursChart(entries, yy, mm, daysInMonth);
+    const shiftMonth = (delta) => {
+      const dt = new Date(yy, mm - 1 + delta, 1);
+      state._empMonth = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+      renderEmployeeDashboard(emp, null, true);
+    };
+    document.getElementById('prevMonthBtn').onclick = () => shiftMonth(-1);
+    document.getElementById('nextMonthBtn').onclick = () => shiftMonth(1);
+    renderDailyHoursChart(entries, yy, mm, daysInMonth, showPay ? emp.rate : null);
+    renderMonthlyChart(emp, hoursData);
     bindEntryRowButtons(emp, entries, month);
     return;
   }
@@ -4219,8 +4241,19 @@ function bindEntryRowButtons(emp, entries, month){
   });
 }
 
-// גרף עמודות: סה"כ שעות לכל יום בחודש (ימים בלי עבודה מוצגים כ-0)
-function renderDailyHoursChart(entries, yy, mm, daysInMonth){
+// צבעי עמודות לפי הסכום שהורווח באותו יום
+const PAY_COLOR_BANDS = [
+  { max: 100, color: '#9CA3AF', label: 'עד 100 ₪' },
+  { max: 150, color: '#60A5FA', label: '100–150 ₪' },
+  { max: 200, color: '#F59E0B', label: '150–200 ₪' },
+  { max: Infinity, color: '#10B981', label: 'מעל 200 ₪' }
+];
+function payBandColor(amount){
+  return (PAY_COLOR_BANDS.find(b => amount <= b.max) || PAY_COLOR_BANDS[PAY_COLOR_BANDS.length - 1]).color;
+}
+
+// גרף עמודות: סה"כ שעות לכל יום בחודש. צבע העמודה לפי הסכום היומי (בשכר שעתי).
+function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate){
   const canvas = document.getElementById('dailyHoursChart');
   if(!canvas || typeof Chart === 'undefined') return;
   if(state._dailyChart){ try{ state._dailyChart.destroy(); }catch(e){} }
@@ -4232,11 +4265,8 @@ function renderDailyHoursChart(entries, yy, mm, daysInMonth){
   });
   const labels = perDay.map((_, i) => String(i + 1));
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--brass').trim() || '#5FBF8F';
-  const weekendColor = 'rgba(138,109,47,.35)';
-  const colors = perDay.map((_, i) => {
-    const wd = new Date(yy, mm - 1, i + 1).getDay();
-    return (wd === 5 || wd === 6) ? weekendColor : accent;
-  });
+  const colors = perDay.map(h => rate != null ? payBandColor(h * rate) : accent);
+  const monthKey = yy + '-' + String(mm).padStart(2, '0');
   state._dailyChart = new Chart(canvas, {
     type: 'bar',
     data: { labels, datasets: [{ label: 'שעות', data: perDay.map(v => Math.round(v * 100) / 100), backgroundColor: colors, borderRadius: 4 }] },
@@ -4244,9 +4274,48 @@ function renderDailyHoursChart(entries, yy, mm, daysInMonth){
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { title: (items) => items[0].label + ' ב' + monthLabel(yy + '-' + String(mm).padStart(2, '0')), label: (item) => fmtHours(item.raw) + ' שעות' } }
+        tooltip: { callbacks: {
+          title: (items) => items[0].label + ' ב' + monthLabel(monthKey),
+          label: (item) => {
+            const lines = [fmtHours(item.raw) + ' שעות'];
+            if(rate != null) lines.push(fmtMoney(item.raw * rate));
+            return lines;
+          }
+        } }
       },
       scales: { y: { beginAtZero: true, title: { display: true, text: 'שעות' } }, x: { title: { display: true, text: 'יום בחודש' } } }
+    }
+  });
+}
+
+// גרף קטן של 12 החודשים האחרונים (עד החודש הנוכחי). לא תלוי בחודש שנבחר בדף.
+function renderMonthlyChart(emp, hoursData){
+  const canvas = document.getElementById('monthlyChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+  if(state._monthlyChart){ try{ state._monthlyChart.destroy(); }catch(e){} }
+  const now = new Date();
+  const keys = [];
+  for(let i = 11; i >= 0; i--){
+    const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    keys.push(dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0'));
+  }
+  const hours = keys.map(k => (hoursData[k] || []).reduce((sum, e) => { const h = computeEntryHours(e); return sum + (h !== null ? h : 0); }, 0));
+  const pays = hours.map(h => h > 0 ? calcPay(emp, h) : 0);
+  const labels = keys.map(k => { const [y, m] = k.split('-'); return m + '/' + y.slice(2); });
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--brass').trim() || '#5FBF8F';
+  state._monthlyChart = new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'שעות', data: hours.map(v => Math.round(v * 100) / 100), backgroundColor: accent, borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: {
+          title: (items) => monthLabel(keys[items[0].dataIndex]),
+          label: (item) => [fmtHours(hours[item.dataIndex]) + ' שעות', fmtMoney(pays[item.dataIndex])]
+        } }
+      },
+      scales: { y: { beginAtZero: true } }
     }
   });
 }
