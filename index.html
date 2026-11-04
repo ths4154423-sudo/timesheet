@@ -785,6 +785,22 @@ async function loadAnnouncement(){
 async function saveAnnouncement(image, caption){
   return saveDoc(() => setDoc(doc(db, 'meta', 'announcement'), { image, caption }), 'saveAnnouncement');
 }
+// ---------- הגדרות כלליות של המערכת (מסמך meta/appSettings) ----------
+async function loadAppSettings(){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'appSettings')), 30000, 'loadAppSettings');
+    return snap.exists() ? snap.data() : {};
+  }catch(e){ console.error('loadAppSettings error', e); return {}; }
+}
+async function saveAppSettings(data){
+  return saveDoc(() => setDoc(doc(db, 'meta', 'appSettings'), data), 'saveAppSettings');
+}
+// נטו משוער לעובד לפי הפרטים שהמנהל שמר לו במחשבון הנטו
+function employeeNetEstimate(emp, gross, taxYear){
+  const cp = computeCreditPoints(emp.gender === 'f' ? 'f' : 'm', emp.childYears || [], emp.extraPoints || 0, taxYear);
+  const pension = emp.pensionPct != null ? Number(emp.pensionPct) : 6;
+  return { ...calcNetSalary(gross, cp.total, pension), points: cp.total, pensionPct: pension, configured: !!(emp.gender || (emp.childYears || []).length || emp.extraPoints != null) };
+}
 // ---------- manager contact + automatic email sending config (shared "meta/contact" doc) ----------
 async function loadContactConfig(){
   try{
@@ -2650,6 +2666,8 @@ async function renderAdminNetCalc(){
     gross = hours > 0 || emp.payType === 'fixed' ? calcPay(emp, hours) : 0;
   }
   if(state._netGrossOverride != null) gross = state._netGrossOverride;
+  const appSettings = await loadAppSettings();
+  state._appSettings = appSettings;
   const gender = emp && emp.gender === 'f' ? 'f' : 'm';
   if(!state._netKids || state._netKids.empId !== empId) state._netKids = { empId, years: (emp && Array.isArray(emp.childYears)) ? emp.childYears.slice() : [] };
   const legacyExtra = emp && emp.extraPoints == null && emp.creditPoints != null && !emp.gender && !(emp.childYears || []).length ? Math.max(0, Number(emp.creditPoints) - 2.25) : null;
@@ -2689,7 +2707,14 @@ async function renderAdminNetCalc(){
         <button type="button" class="btn ghost small" id="netSaveParams">שמירת הפרטים לעובד (מין, ילדים, נקודות ופנסיה)</button>
       </div>
       <div class="error-msg" id="netErr"></div>
-      <div id="netResult" style="margin-top:14px;"></div>`}
+      <div id="netResult" style="margin-top:14px;"></div>
+      <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--line);">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="netShowToEmployees" ${appSettings.showNetToEmployees !== false ? 'checked' : ''} />
+          <span>להציג לעובדים נטו משוער בדף "רישומי החודש"</span>
+        </label>
+        <div class="hint" style="font-size:12.5px; margin-top:4px;">כל עובד רואה רק את הנטו שלו, לפי הפרטים שנשמרו לו כאן.</div>
+      </div>`}
     </div>
   `;
   if(!emp) return;
@@ -2742,6 +2767,13 @@ async function renderAdminNetCalc(){
   document.getElementById('netGross').addEventListener('input', () => { state._netGrossOverride = Number(document.getElementById('netGross').value) || 0; });
   document.getElementById('netEmp').onchange = (e) => { state._netEmpId = e.target.value; state._netGrossOverride = null; state._netKids = null; renderAdminNetCalc(); };
   document.getElementById('netMonth').onchange = (e) => { state._netMonth = e.target.value; state._netGrossOverride = null; renderAdminNetCalc(); };
+  document.getElementById('netShowToEmployees').onchange = async (e) => {
+    const updated = { ...(state._appSettings || {}), showNetToEmployees: e.target.checked };
+    const ok = await saveAppSettings(updated);
+    if(ok !== true){ document.getElementById('netErr').textContent = 'שגיאה בשמירה: ' + ok; e.target.checked = !e.target.checked; return; }
+    state._appSettings = updated;
+    showToast(e.target.checked ? 'הנטו המשוער יוצג לעובדים' : 'הנטו המשוער הוסתר מהעובדים');
+  };
   document.getElementById('netSaveParams').onclick = async () => {
     const errEl = document.getElementById('netErr');
     const pp = Number(document.getElementById('netPension').value);
@@ -3840,6 +3872,28 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           <span class="hint">(${monthLabel(prevKey)}: ${fmtHours(prevHours)} שעות)</span>
         `}
       </div>`;
+    // נטו משוער (רק אם המנהל אישר להציג לעובדים)
+    if(!state._appSettings) state._appSettings = await loadAppSettings();
+    const showNet = state._appSettings.showNetToEmployees !== false && totalHours > 0;
+    const netEst = showNet ? employeeNetEstimate(emp, pay, yy) : null;
+    const netHtml = !netEst ? '' : `
+      <div class="card" style="padding:14px 18px; margin-bottom:14px;">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <span style="font-size:15px;">💵 <b>נטו משוער ל${monthLabel(month)}:</b></span>
+          <span class="mono" style="font-size:22px; font-weight:700; color:var(--brass-dark, #2E7D5B);">${fmtMoney(netEst.net)}</span>
+        </div>
+        <details style="margin-top:8px; font-size:13.5px;">
+          <summary style="cursor:pointer;" class="hint">פירוט</summary>
+          <div style="margin-top:6px; line-height:1.9;">
+            ברוטו: <span class="mono">${fmtMoney(netEst.gross)}</span><br>
+            מס הכנסה: <span class="mono" dir="ltr">−${fmtMoney(netEst.incomeTax)}</span> <span class="hint">(${netEst.points} נקודות זיכוי)</span><br>
+            ביטוח לאומי: <span class="mono" dir="ltr">−${fmtMoney(netEst.ni)}</span><br>
+            מס בריאות: <span class="mono" dir="ltr">−${fmtMoney(netEst.health)}</span><br>
+            פנסיה (${netEst.pensionPct}%): <span class="mono" dir="ltr">−${fmtMoney(netEst.pension)}</span>
+          </div>
+        </details>
+        <div class="hint" style="font-size:12px; margin-top:6px;">הערכה בלבד. הסכום הקובע הוא זה שבתלוש השכר.${netEst.configured ? '' : ' (חושב לפי ברירת מחדל: 2.25 נקודות זיכוי ופנסיה 6%)'}</div>
+      </div>`;
     // ימי חופשה ומחלה בחודש הזה
     const daysOff = getDaysOff(empSettings);
     const monthDaysOff = daysOff.filter(d => d.date.slice(0, 7) === month).sort((a, b) => a.date.localeCompare(b.date));
@@ -3855,6 +3909,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         <span class="subtitle">${monthLabel(month)} · ${fmtHours(totalHours)} שעות${emp.payType !== 'fixed' ? ' · ' + fmtMoney(pay) : ''}</span>
       </div>
       ${compareHtml}
+      ${netHtml}
       <div class="card">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
           <h3 style="margin:0;">שעות עבודה לפי יום</h3>
