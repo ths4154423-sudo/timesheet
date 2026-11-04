@@ -1668,6 +1668,62 @@ function attachLongPress(el, onLongPress, onClick){
 
 
 
+// מסך שינוי קוד כניסה (PIN) של העובד
+function renderEmployeeChangePin(emp){
+  stopLiveTimer();
+  stopLiveMoneyTimer();
+  stopClockFieldTimers();
+  stopBreakWatchdog();
+  setHeader('שינוי קוד כניסה', '<button class="btn ghost small" id="pinBackBtn">חזרה</button>');
+  const pinInput = (id, label) => `
+    <div class="field"><label>${label}</label>
+      <input type="text" id="${id}" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" data-lpignore="true"
+        style="-webkit-text-security: disc; text-security: disc;" dir="ltr" />
+    </div>`;
+  app.innerHTML = `
+    <div class="card">
+      <h3 style="margin-top:0;">שינוי קוד כניסה</h3>
+      <form id="changePinForm" novalidate>
+        ${pinInput('curPin', 'קוד נוכחי')}
+        ${pinInput('newPin', 'קוד חדש (4 עד 6 ספרות)')}
+        ${pinInput('newPin2', 'הקלדת הקוד החדש שוב')}
+        <div class="error-msg" id="pinErr"></div>
+        <div class="actions" style="justify-content:flex-start;">
+          <button type="submit" class="btn brass">עדכון קוד</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.getElementById('pinBackBtn').onclick = () => renderEmployeeSettings(emp);
+  document.getElementById('changePinForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('pinErr');
+    const btn = e.target.querySelector('button[type=submit]');
+    const clean = (id) => document.getElementById(id).value.replace(/[\u200e\u200f\u202a-\u202e\s]/g, '');
+    const cur = clean('curPin'), next = clean('newPin'), next2 = clean('newPin2');
+    errEl.style.color = '';
+    if(!/^\d{4,6}$/.test(next)){ errEl.textContent = 'הקוד החדש צריך להיות 4 עד 6 ספרות.'; return; }
+    if(next !== next2){ errEl.textContent = 'הקוד החדש לא תואם בשתי ההקלדות.'; return; }
+    btn.disabled = true; btn.textContent = 'שומר...';
+    // טוענים את הרשימה העדכנית מהשרת, כדי לא לדרוס שינויים של המנהל
+    const list = await loadEmployees();
+    if(list === null){ btn.disabled = false; btn.textContent = 'עדכון קוד'; errEl.textContent = 'לא הצלחנו להתחבר לשרת. נסו שוב.'; return; }
+    const me = list.find(x => x.id === emp.id);
+    if(!me){ btn.disabled = false; btn.textContent = 'עדכון קוד'; errEl.textContent = 'העובד לא נמצא במערכת.'; return; }
+    if(String(me.pin) !== cur){ btn.disabled = false; btn.textContent = 'עדכון קוד'; errEl.textContent = 'הקוד הנוכחי שגוי.'; return; }
+    if(next === cur){ btn.disabled = false; btn.textContent = 'עדכון קוד'; errEl.textContent = 'הקוד החדש זהה לקוד הנוכחי.'; return; }
+    const updated = list.map(x => x.id === emp.id ? { ...x, pin: next } : x);
+    const ok = await saveEmployees(updated);
+    btn.disabled = false; btn.textContent = 'עדכון קוד';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state.employees = updated;
+    emp.pin = next;
+    if(state.currentEmployee && state.currentEmployee.id === emp.id) state.currentEmployee.pin = next;
+    showToast('קוד הכניסה עודכן');
+    renderEmployeeSettings(emp);
+  };
+}
+
 async function renderEmployeeRequests(emp){
   stopLiveTimer();
   stopLiveMoneyTimer();
@@ -4031,16 +4087,22 @@ function makeSpecialDaysPlugin(days){
         ctx.save();
         ctx.fillStyle = st.band;
         ctx.fillRect(cx - colW / 2, chartArea.top, colW, colH);
-        // הטקסט: האותיות זו מתחת לזו, מלמעלה למטה, מפוזרות לאורך רוב גובה הטור
-        const chars = [...d.text];
-        const fontSize = Math.max(9, Math.min(14, colW * 0.6));
-        ctx.font = '700 ' + fontSize + 'px Heebo, Arial, sans-serif';
+        // הטקסט: המילה כולה מסובבת לאורך הטור, כך שגם האותיות עצמן עומדות על הצד ונקראות מלמעלה למטה
+        let fontSize = Math.max(10, Math.min(14, colW * 0.62));
+        const fontFamily = "'Heebo', 'Segoe UI', Arial, sans-serif";
+        ctx.font = '600 ' + fontSize + 'px ' + fontFamily;
+        let w = ctx.measureText(d.text).width;
+        const maxLen = colH * 0.9;
+        if(w > maxLen){ fontSize = Math.max(8, fontSize * maxLen / w); ctx.font = '600 ' + fontSize + 'px ' + fontFamily; w = ctx.measureText(d.text).width; }
+        ctx.translate(cx, chartArea.top + colH / 2);
+        ctx.rotate(-Math.PI / 2);
         ctx.fillStyle = st.text;
+        ctx.globalAlpha = 0.85;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const step = Math.min(fontSize * 2.4, (colH * 0.9) / chars.length);
-        const startY = chartArea.top + (colH - step * (chars.length - 1)) / 2;
-        chars.forEach((ch, k) => { if(ch.trim()) ctx.fillText(ch, cx, startY + k * step); });
+        ctx.direction = 'rtl';
+        if('letterSpacing' in ctx) ctx.letterSpacing = '1px';
+        ctx.fillText(d.text, 0, 0);
         ctx.restore();
       });
     }
@@ -4208,6 +4270,7 @@ function renderMonthlyChart(emp, hoursData){
 const SETTINGS_CATEGORIES = [
   { key: 'sound', icon: '🔔', label: 'התראות ותזכורות', hint: 'הודעות קוליות, צלילים וצלצולי תזכורת בטלפון' },
   { key: 'appearance', icon: '🎨', label: 'עיצוב ותצוגה', hint: 'צבעים, מצב כהה ואפשרויות תצוגה' },
+  { key: 'pin', icon: '🔑', label: 'שינוי קוד כניסה', hint: 'החלפת הקוד האישי (PIN) שאיתו נכנסים למערכת', action: true },
   { key: 'requests', icon: '📨', label: 'בקשה למנהל', hint: 'שליחת הודעה חופשית וצפייה בסטטוס בקשות קודמות', action: true }
 ];
 const EMPLOYEE_SETTINGS_DEFS = [
@@ -4334,6 +4397,7 @@ async function renderEmployeeSettings(emp){
     btn.onclick = () => {
       const cat = SETTINGS_CATEGORIES.find(c => c.key === btn.dataset.openCategory);
       if(cat && cat.action && cat.key === 'requests'){ renderEmployeeRequests(emp); return; }
+      if(cat && cat.action && cat.key === 'pin'){ renderEmployeeChangePin(emp); return; }
       renderEmployeeSettingsCategory(emp, btn.dataset.openCategory);
     };
   });
