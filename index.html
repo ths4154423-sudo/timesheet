@@ -2794,7 +2794,8 @@ const ADMIN_SETTINGS_TABS = [
   { key: 'email', label: 'כתובת אימייל / וואטסאפ' },
   { key: 'autosend', label: 'שליחה אוטומטית' },
   { key: 'announcement', label: 'הודעה לעובדים' },
-  { key: 'security', label: 'אבטחה' }
+  { key: 'security', label: 'אבטחה' },
+  { key: 'info', label: 'ℹ️ מידע' }
 ];
 
 async function renderAdminSettings(){
@@ -2828,20 +2829,10 @@ async function renderAdminSettings(){
           </div>
         </form>
       </div>
-      <div class="card">
-        <h3>שחזור סיסמה</h3>
-        <p class="hint" style="font-size:13.5px; margin-top:-6px;">
-          אם תשכחו את הסיסמה, לחצו "שכחת סיסמה?" במסך הכניסה — יישלח מייל אמיתי לכתובת
-          <b>${escapeHtml(state.adminEmail || '')}</b> עם קישור לקביעת סיסמה חדשה. אין צורך בהגדרה נוספת.
-        </p>
-      </div>
     `,
     email: () => `
       <div class="card">
         <h3>כתובת אימייל לקבלת דוחות שעות</h3>
-        <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
-          כשעובד שולח דוח שעות, זו הכתובת שתופיע כנמען. אפשר להשאיר ריק כדי לבטל את האפשרות אצל העובדים.
-        </p>
         ${state._emailEditMode ? `
           <form id="managerEmailForm">
             <div class="field"><label>כתובת אימייל</label><input type="email" id="managerEmailInput" value="${escapeHtml(managerEmail)}" placeholder="${escapeHtml(state.adminEmail || 'name@example.com')}" /></div>
@@ -2860,9 +2851,6 @@ async function renderAdminSettings(){
       </div>
       <div class="card">
         <h3>מספר וואטסאפ לקבלת דוחות שעות</h3>
-        <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
-          כשעובד שולח דוח שעות, יוכל גם לבחור לשלוח אותו בוואטסאפ למספר הזה — נפתח וואטסאפ עם ההודעה כבר כתובה, והעובד רק לוחץ שליחה. אפשר להשאיר ריק כדי לבטל את האפשרות אצל העובדים.
-        </p>
         ${state._whatsappEditMode ? `
           <form id="managerWhatsappForm">
             <div class="field"><label>מספר טלפון</label><input type="tel" id="managerWhatsappInput" value="${escapeHtml(managerWhatsapp)}" placeholder="050-1234567" dir="ltr" style="text-align:left;" /></div>
@@ -2883,12 +2871,6 @@ async function renderAdminSettings(){
     autosend: () => `
       <div class="card">
         <h3>שליחה אוטומטית של דוחות שעות (EmailJS)</h3>
-        <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
-          זו אפשרות מתקדמת: העובדים ישלחו את דוח השעות ישירות מהאתר, בלי לפתוח אפליקציית מייל, ויוכלו לבחור מבין חשבונות השליחה שתגדירו כאן.
-          דורש חשבון חינמי ב-<b>emailjs.com</b>. הגדרה חד-פעמית: 1) בחשבון ה-EmailJS, תחת "Email Services", חברו חשבון מייל אחד לכל "שולח" שתרצו שיופיע לעובדים, ורשמו לכל אחד את ה-Service ID שלו.
-          2) תחת "Email Templates" צרו תבנית אחת (משותפת לכולם) עם המשתנים <code>{{to_email}}</code>, <code>{{subject}}</code>, <code>{{{message}}}</code> ו-<code>{{employee_name}}</code> בגוף התבנית, ורשמו את ה-Template ID.
-          3) תחת "Account" &gt; "API Keys" מצאו את ה-Public Key. אם משאירים את הרשימה של חשבונות שולחים ריקה, העובדים ימשיכו לראות רק את אפשרות פתיחת טיוטת המייל הרגילה.
-        </p>
         ${state._autosendEditMode ? `
           <form id="emailjsConfigForm">
             <div class="field"><label>Public Key</label><input type="text" id="emailjsPublicKey" value="${escapeHtml(draft.publicKey)}" dir="ltr" style="text-align:left;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" /></div>
@@ -2932,9 +2914,6 @@ async function renderAdminSettings(){
     announcement: () => `
       <div class="card">
         <h3>הודעה לעובדים</h3>
-        <p class="hint" style="font-size:13.5px; margin-top:-6px; margin-bottom:14px;">
-          תמונה וכיתוב שיוצגו לכל עובד בראש הדף שלו כשהוא נכנס למערכת. אפשר למלא רק תמונה, רק כיתוב, או את שניהם.
-        </p>
         ${announcement.image ? `<img src="${announcement.image}" style="max-width:100%; max-height:220px; border-radius:6px; margin-bottom:12px; display:block;" />` : ''}
         <form id="announcementForm">
           <div class="field"><label>${announcement.image ? 'החלפת תמונה' : 'העלאת תמונה'} (לא חובה)</label><input type="file" id="announcementImage" accept="image/*" /></div>
@@ -2949,7 +2928,46 @@ async function renderAdminSettings(){
     `,
     security: () => `
       <div class="card">
-        <h3>הערת אבטחה</h3>
+        <h3>מכשיר מהימן</h3>
+        <button type="button" class="btn danger" id="revokeTrustedDeviceBtn">ניתוק מכשיר זה מכניסה ללא אינטרנט</button>
+      </div>
+    `,
+    info: () => `
+      <div class="card">
+        <h3>סיסמה ושחזור סיסמה</h3>
+        <p class="hint" style="font-size:13.5px;">
+          אם תשכחו את הסיסמה, לחצו "שכחת סיסמה?" במסך הכניסה — יישלח מייל אמיתי לכתובת
+          <b>${escapeHtml(state.adminEmail || '')}</b> עם קישור לקביעת סיסמה חדשה. אין צורך בהגדרה נוספת.
+        </p>
+      </div>
+      <div class="card">
+        <h3>כתובת אימייל ומספר וואטסאפ</h3>
+        <p class="hint" style="font-size:13.5px;">
+          <b>אימייל:</b> כשעובד שולח דוח שעות, זו הכתובת שתופיע כנמען. אפשר להשאיר ריק כדי לבטל את האפשרות אצל העובדים.<br>
+          <b>וואטסאפ:</b> כשעובד שולח דוח שעות, יוכל גם לבחור לשלוח אותו בוואטסאפ למספר הזה — נפתח וואטסאפ עם ההודעה כבר כתובה, והעובד רק לוחץ שליחה. אפשר להשאיר ריק כדי לבטל את האפשרות אצל העובדים.
+        </p>
+      </div>
+      <div class="card">
+        <h3>שליחה אוטומטית (EmailJS)</h3>
+        <p class="hint" style="font-size:13.5px;">
+          זו אפשרות מתקדמת: העובדים ישלחו את דוח השעות ישירות מהאתר, בלי לפתוח אפליקציית מייל, ויוכלו לבחור מבין חשבונות השליחה שתגדירו.
+          דורש חשבון חינמי ב-<b>emailjs.com</b>. הגדרה חד-פעמית:
+        </p>
+        <ol class="hint" style="font-size:13.5px; padding-inline-start:20px; margin:6px 0;">
+          <li>בחשבון ה-EmailJS, תחת "Email Services", חברו חשבון מייל אחד לכל "שולח" שתרצו שיופיע לעובדים, ורשמו לכל אחד את ה-Service ID שלו.</li>
+          <li>תחת "Email Templates" צרו תבנית אחת (משותפת לכולם) עם המשתנים <code>{{to_email}}</code>, <code>{{subject}}</code>, <code>{{{message}}}</code> ו-<code>{{employee_name}}</code> בגוף התבנית, ורשמו את ה-Template ID.</li>
+          <li>תחת "Account" &gt; "API Keys" מצאו את ה-Public Key.</li>
+        </ol>
+        <p class="hint" style="font-size:13.5px;">אם משאירים את רשימת חשבונות השולחים ריקה, העובדים ימשיכו לראות רק את אפשרות פתיחת טיוטת המייל הרגילה.</p>
+      </div>
+      <div class="card">
+        <h3>הודעה לעובדים</h3>
+        <p class="hint" style="font-size:13.5px;">
+          תמונה וכיתוב שיוצגו לכל עובד בראש הדף שלו כשהוא נכנס למערכת. אפשר למלא רק תמונה, רק כיתוב, או את שניהם.
+        </p>
+      </div>
+      <div class="card">
+        <h3>אבטחה</h3>
         <p class="hint" style="font-size:13.5px;">
           פרטי העובדים והשעות שמורים במסד נתונים אמיתי (Firebase Firestore), הפועל כרגע ב"מצב בדיקה" (test mode) –
           כלומר אין הגבלת הרשאות אמיתית מצד השרת מעבר להתחברות עצמה: כל מי שיש לו את קוד האתר (הגלוי לכולם
@@ -2972,10 +2990,9 @@ async function renderAdminSettings(){
         <p class="hint" style="font-size:13.5px;">
           כדי לאפשר כניסת מנהל גם כשאין אינטרנט, המכשיר הזה מסומן כ"מהימן" מאז ההתחברות האחרונה שלך —
           כניסה חוזרת אליו (למשל אחרי לחיצה על "יציאה" כדי להגיע לדשבורד של עובד) לא תדרוש סיסמה כשאין
-          חיבור. אם המכשיר הזה אבד, נמכר, או שאתה חולק אותו עם מישהו שלא אמור לגשת לניהול — לחץ כאן כדי
-          לבטל את הסימון. כניסה הבאה, גם עם אינטרנט, תדרוש סיסמה מחדש.
+          חיבור. אם המכשיר הזה אבד, נמכר, או שאתה חולק אותו עם מישהו שלא אמור לגשת לניהול — בלשונית "אבטחה"
+          יש כפתור לביטול הסימון. כניסה הבאה, גם עם אינטרנט, תדרוש סיסמה מחדש.
         </p>
-        <button type="button" class="btn danger" id="revokeTrustedDeviceBtn">ניתוק מכשיר זה מכניסה ללא אינטרנט</button>
       </div>
     `
   };
