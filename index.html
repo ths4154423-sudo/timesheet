@@ -1668,6 +1668,36 @@ function attachLongPress(el, onLongPress, onClick){
 
 
 
+// מסך אבטחה של העובד: רשימת אפשרויות (כרגע: שינוי קוד כניסה)
+const EMPLOYEE_SECURITY_ITEMS = [
+  { key: 'pin', icon: '🔑', label: 'שינוי קוד כניסה', hint: 'החלפת הקוד האישי (PIN) שאיתו נכנסים למערכת' }
+];
+function renderEmployeeSecurity(emp){
+  stopLiveTimer();
+  stopLiveMoneyTimer();
+  stopClockFieldTimers();
+  stopBreakWatchdog();
+  setHeader('אבטחה', '<button class="btn ghost small" id="securityBackBtn">חזרה</button>');
+  app.innerHTML = `
+    <div class="card">
+      <h3>🔒 אבטחה</h3>
+      ${EMPLOYEE_SECURITY_ITEMS.map((it, i) => `
+        <button type="button" data-security-item="${it.key}" style="width:100%; text-align:right; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 16px; margin-top:${i === 0 ? '0' : '10px'}; background:var(--paper-alt); border:none; border-radius:12px; color:var(--ink); cursor:pointer; font-family:'Heebo',sans-serif; font-size:14px;">
+          <span>
+            <span style="display:block; font-weight:600;">${it.icon} ${escapeHtml(it.label)}</span>
+            <span class="hint" style="display:block; margin-top:2px; font-size:13px;">${escapeHtml(it.hint)}</span>
+          </span>
+          <span style="font-size:18px;">‹</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+  document.getElementById('securityBackBtn').onclick = () => renderEmployeeSettings(emp);
+  document.querySelectorAll('[data-security-item]').forEach(btn => {
+    btn.onclick = () => { if(btn.dataset.securityItem === 'pin') renderEmployeeChangePin(emp); };
+  });
+}
+
 // מסך שינוי קוד כניסה (PIN) של העובד
 function renderEmployeeChangePin(emp){
   stopLiveTimer();
@@ -1694,7 +1724,7 @@ function renderEmployeeChangePin(emp){
       </form>
     </div>
   `;
-  document.getElementById('pinBackBtn').onclick = () => renderEmployeeSettings(emp);
+  document.getElementById('pinBackBtn').onclick = () => renderEmployeeSecurity(emp);
   document.getElementById('changePinForm').onsubmit = async (e) => {
     e.preventDefault();
     const errEl = document.getElementById('pinErr');
@@ -1720,7 +1750,7 @@ function renderEmployeeChangePin(emp){
     emp.pin = next;
     if(state.currentEmployee && state.currentEmployee.id === emp.id) state.currentEmployee.pin = next;
     showToast('קוד הכניסה עודכן');
-    renderEmployeeSettings(emp);
+    renderEmployeeSecurity(emp);
   };
 }
 
@@ -4270,7 +4300,7 @@ function renderMonthlyChart(emp, hoursData){
 const SETTINGS_CATEGORIES = [
   { key: 'sound', icon: '🔔', label: 'התראות ותזכורות', hint: 'הודעות קוליות, צלילים וצלצולי תזכורת בטלפון' },
   { key: 'appearance', icon: '🎨', label: 'עיצוב ותצוגה', hint: 'צבעים, מצב כהה ואפשרויות תצוגה' },
-  { key: 'pin', icon: '🔑', label: 'שינוי קוד כניסה', hint: 'החלפת הקוד האישי (PIN) שאיתו נכנסים למערכת', action: true },
+  { key: 'security', icon: '🔒', label: 'אבטחה', hint: 'שינוי קוד הכניסה למערכת', action: true },
   { key: 'requests', icon: '📨', label: 'בקשה למנהל', hint: 'שליחת הודעה חופשית וצפייה בסטטוס בקשות קודמות', action: true }
 ];
 const EMPLOYEE_SETTINGS_DEFS = [
@@ -4397,7 +4427,7 @@ async function renderEmployeeSettings(emp){
     btn.onclick = () => {
       const cat = SETTINGS_CATEGORIES.find(c => c.key === btn.dataset.openCategory);
       if(cat && cat.action && cat.key === 'requests'){ renderEmployeeRequests(emp); return; }
-      if(cat && cat.action && cat.key === 'pin'){ renderEmployeeChangePin(emp); return; }
+      if(cat && cat.action && cat.key === 'security'){ renderEmployeeSecurity(emp); return; }
       renderEmployeeSettingsCategory(emp, btn.dataset.openCategory);
     };
   });
