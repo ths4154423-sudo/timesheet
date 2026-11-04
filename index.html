@@ -2449,6 +2449,7 @@ function renderAdminDashboard(tab){
       <div class="tab" data-tab="now">🟢 מי בעבודה</div>
       <div class="tab" data-tab="summary">סיכום חודשי</div>
       <div class="tab" data-tab="employees">ניהול עובדים</div>
+      <div class="tab" data-tab="netcalc">🧮 מחשבון נטו</div>
       <div class="tab" data-tab="requests">בקשות</div>
       <div class="tab" data-tab="settings">הגדרות</div>
     </div>
@@ -2470,6 +2471,7 @@ function renderAdminDashboard(tab){
   if(tab === 'now') renderAdminNow();
   else if(tab === 'summary') renderAdminSummary();
   else if(tab === 'employees') renderAdminEmployees();
+  else if(tab === 'netcalc') renderAdminNetCalc();
   else if(tab === 'requests') renderAdminRequests();
   else renderAdminSettings();
 
@@ -2574,6 +2576,189 @@ async function renderAdminRequests(){
       if(slot) slot.innerHTML = `<audio controls autoplay src="${audioDataUrl}" style="width:100%; max-width:340px; border-radius:8px;"></audio>`;
     };
   });
+}
+
+// ---------- מחשבון נטו (הערכה) ----------
+// נתוני 2026 לשכיר. לעדכן בכל ינואר לפי "לוח עזר לחישוב מס הכנסה ממשכורת" של רשות המסים
+// ולפי חוזר המוסד לביטוח לאומי "שינוי בתשלום דמי ביטוח לאומי ודמי ביטוח בריאות" לאותה שנה.
+const PAYROLL_PARAMS = {
+  year: 2026,
+  taxBrackets: [            // מדרגות מס הכנסה חודשיות (אחרי ריווח המדרגות, בתוקף מ-1.1.2026)
+    { upTo: 7010, rate: 0.10 },
+    { upTo: 10060, rate: 0.14 },
+    { upTo: 19000, rate: 0.20 },
+    { upTo: 25100, rate: 0.31 },
+    { upTo: 46690, rate: 0.35 },
+    { upTo: Infinity, rate: 0.47 }
+  ],
+  surtaxFrom: 60130, surtaxRate: 0.03,   // מס נוסף על הכנסה חודשית גבוהה
+  creditPointValue: 242,                 // שווי נקודת זיכוי לחודש
+  niReducedUpTo: 7703,                   // בסיס לשיעור המופחת בביטוח לאומי ובריאות
+  niMax: 51910,                          // הכנסה מרבית לדמי ביטוח
+  niReduced: 0.0104, niFull: 0.07,       // ביטוח לאומי - חלק העובד
+  healthReduced: 0.0323, healthFull: 0.0517  // דמי ביטוח בריאות
+};
+function calcNetSalary(gross, creditPoints, pensionPct){
+  const P = PAYROLL_PARAMS;
+  let taxBefore = 0, prev = 0;
+  for(const b of P.taxBrackets){
+    if(gross <= prev) break;
+    taxBefore += (Math.min(gross, b.upTo) - prev) * b.rate;
+    prev = b.upTo;
+  }
+  if(gross > P.surtaxFrom) taxBefore += (gross - P.surtaxFrom) * P.surtaxRate;
+  const credits = Math.max(0, creditPoints) * P.creditPointValue;
+  const incomeTax = Math.max(0, taxBefore - credits);
+  const niBase = Math.min(gross, P.niMax);
+  const low = Math.min(niBase, P.niReducedUpTo), high = Math.max(0, niBase - P.niReducedUpTo);
+  const ni = low * P.niReduced + high * P.niFull;
+  const health = low * P.healthReduced + high * P.healthFull;
+  const pension = gross * (Math.max(0, pensionPct) / 100);
+  const r = (v) => Math.round(v * 100) / 100;
+  const net = gross - incomeTax - ni - health - pension;
+  return { gross: r(gross), taxBefore: r(taxBefore), credits: r(Math.min(credits, taxBefore)), incomeTax: r(incomeTax), ni: r(ni), health: r(health), pension: r(pension), net: r(net) };
+}
+// נקודות זיכוי לפי מין העובד וגילאי הילדים (טבלת רשות המסים 2026; הגיל = שנת המס פחות שנת הלידה)
+function childCreditPoints(age, isWoman){
+  if(age === 0) return 2.5;
+  if(age >= 1 && age <= 2) return 4.5;
+  if(age === 3) return 3.5;
+  if(age >= 4 && age <= 5) return 2.5;
+  if(age >= 6 && age <= 17) return isWoman ? 2 : 1;
+  if(age === 18) return isWoman ? 0.5 : 0;
+  return 0;
+}
+function computeCreditPoints(gender, childYears, extra, taxYear){
+  const isWoman = gender === 'f';
+  const base = 2.25 + (isWoman ? 0.5 : 0);
+  const kids = (childYears || []).map(y => {
+    const age = taxYear - Number(y);
+    return { year: Number(y), age, points: Number(y) > 0 && age >= 0 ? childCreditPoints(age, isWoman) : 0 };
+  });
+  const kidsTotal = kids.reduce((sum, k) => sum + k.points, 0);
+  return { base, kids, kidsTotal, extra: Math.max(0, Number(extra) || 0), total: base + kidsTotal + Math.max(0, Number(extra) || 0) };
+}
+async function renderAdminNetCalc(){
+  const content = document.getElementById('tabContent');
+  const month = state._netMonth || currentMonthStr();
+  const empId = state._netEmpId || (state.employees[0] && state.employees[0].id) || '';
+  const emp = state.employees.find(e => e.id === empId);
+  let gross = 0, hours = 0;
+  if(emp){
+    const hoursData = await loadHours(emp.id) || {};
+    hours = (hoursData[month] || []).reduce((sum, e) => sum + (computeEntryHours(e) || 0), 0);
+    gross = hours > 0 || emp.payType === 'fixed' ? calcPay(emp, hours) : 0;
+  }
+  if(state._netGrossOverride != null) gross = state._netGrossOverride;
+  const gender = emp && emp.gender === 'f' ? 'f' : 'm';
+  if(!state._netKids || state._netKids.empId !== empId) state._netKids = { empId, years: (emp && Array.isArray(emp.childYears)) ? emp.childYears.slice() : [] };
+  const legacyExtra = emp && emp.extraPoints == null && emp.creditPoints != null && !emp.gender && !(emp.childYears || []).length ? Math.max(0, Number(emp.creditPoints) - 2.25) : null;
+  const extraPoints = emp ? (emp.extraPoints != null ? Number(emp.extraPoints) : (legacyExtra || 0)) : 0;
+  const taxYear = Number(month.slice(0, 4));
+  const pensionPct = emp && emp.pensionPct != null ? Number(emp.pensionPct) : 6;
+  content.innerHTML = `
+    <div class="card">
+      <h3 style="margin-top:0;">🧮 מחשבון נטו (הערכה)</h3>
+      ${!state.employees.length ? '<div class="empty-state">אין עדיין עובדים במערכת.</div>' : `
+      <div class="emp-row-form" style="align-items:flex-end; flex-wrap:wrap; gap:10px;">
+        <div class="field" style="margin-top:0;"><label>עובד</label>
+          <select id="netEmp">${state.employees.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${escapeHtml(e.name)}</option>`).join('')}</select>
+        </div>
+        <div class="field" style="margin-top:0;"><label>חודש</label><input type="month" id="netMonth" value="${month}" /></div>
+        <div class="field" style="margin-top:0;"><label>ברוטו (₪)</label><input type="number" id="netGross" min="0" step="1" value="${Math.round(gross * 100) / 100}" dir="ltr" /></div>
+        <div class="field" style="margin-top:0;"><label>העובד/ת</label>
+          <select id="netGender"><option value="m" ${gender === 'm' ? 'selected' : ''}>גבר</option><option value="f" ${gender === 'f' ? 'selected' : ''}>אישה</option></select>
+        </div>
+        <div class="field" style="margin-top:0;"><label>נקודות נוספות (לא חובה)</label><input type="number" id="netExtra" min="0" step="0.25" value="${extraPoints}" dir="ltr" style="max-width:110px;" /></div>
+        <div class="field" style="margin-top:0;"><label>פנסיה – חלק העובד (%)</label><input type="number" id="netPension" min="0" max="20" step="0.5" value="${pensionPct}" dir="ltr" /></div>
+      </div>
+      <div class="hint" style="font-size:12.5px; margin-top:6px;">
+        הברוטו מחושב אוטומטית מהשעות של החודש${emp && emp.payType !== 'fixed' ? ` (${fmtHours(Math.round(hours * 100) / 100)} שעות × ${fmtMoney(emp.rate)})` : ''}, ואפשר לשנות אותו ידנית.
+        פנסיה: 6% (0 לעובד שעוד לא זכאי). "נקודות נוספות" – למשל תואר אקדמי, יישוב מוטב או הורה יחיד, לפי מה שמופיע בטופס 101.
+      </div>
+      <div style="margin-top:14px; padding:12px 14px; background:var(--paper-alt); border-radius:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <b>👶 ילדים (<span id="netKidsCount">0</span>)</b>
+          <button type="button" class="btn ghost small" id="netAddKid">+ הוספת ילד/ה</button>
+        </div>
+        <div class="hint" style="font-size:12.5px; margin:4px 0 8px;">מזינים שנת לידה לכל ילד. הנקודות מחושבות לפי הגיל בשנת ${taxYear}.</div>
+        <div id="netKidsList" style="display:flex; flex-direction:column; gap:6px;"></div>
+        <div id="netCreditSummary" style="margin-top:10px; font-size:14px;"></div>
+      </div>
+      <div class="actions" style="justify-content:flex-start; margin-top:10px;">
+        <button type="button" class="btn ghost small" id="netSaveParams">שמירת הפרטים לעובד (מין, ילדים, נקודות ופנסיה)</button>
+      </div>
+      <div class="error-msg" id="netErr"></div>
+      <div id="netResult" style="margin-top:14px;"></div>`}
+    </div>
+  `;
+  if(!emp) return;
+  const draw = () => {
+    const g = Number(document.getElementById('netGross').value) || 0;
+    const pp = Number(document.getElementById('netPension').value) || 0;
+    const cp = computeCreditPoints(document.getElementById('netGender').value, state._netKids.years, document.getElementById('netExtra').value, taxYear);
+    // רשימת הילדים + סיכום הנקודות
+    const kidsList = document.getElementById('netKidsList');
+    if(kidsList.children.length !== cp.kids.length){ // בונים מחדש רק כשנוסף או הוסר ילד, כדי לא לאבד את הסמן בזמן הקלדה
+      kidsList.innerHTML = cp.kids.map((k, i) => `
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="min-width:56px;">ילד/ה ${i + 1}</span>
+          <input type="number" data-kid-idx="${i}" value="${k.year || ''}" placeholder="שנת לידה" min="1990" max="${taxYear}" dir="ltr" style="max-width:120px;" />
+          <span class="hint" data-kid-info="${i}"></span>
+          <button type="button" class="btn ghost small" data-kid-remove="${i}">הסרה</button>
+        </div>`).join('');
+      kidsList.querySelectorAll('[data-kid-idx]').forEach(inp => inp.oninput = () => { state._netKids.years[Number(inp.dataset.kidIdx)] = Number(inp.value) || ''; draw(); });
+      kidsList.querySelectorAll('[data-kid-remove]').forEach(btn => btn.onclick = () => { state._netKids.years.splice(Number(btn.dataset.kidRemove), 1); kidsList.innerHTML = ''; draw(); });
+    }
+    cp.kids.forEach((k, i) => {
+      const info = kidsList.querySelector(`[data-kid-info="${i}"]`);
+      if(info) info.textContent = !k.year ? '' : (k.age < 0 ? 'שנה עתידית' : `גיל ${k.age} · ${k.points} נקודות`);
+    });
+    document.getElementById('netKidsCount').textContent = cp.kids.length;
+    document.getElementById('netCreditSummary').innerHTML = `<b>סה"כ נקודות זיכוי: ${cp.total}</b> <span class="hint">(בסיס ${cp.base}${cp.kidsTotal ? ` + ילדים ${cp.kidsTotal}` : ''}${cp.extra ? ` + נוספות ${cp.extra}` : ''})</span>`;
+    const r = calcNetSalary(g, cp.total, pp);
+    const row = (label, val, opts = {}) => `<tr${opts.total ? ' class="total-row"' : ''}><td>${label}</td><td class="mono" style="text-align:left;"><span dir="ltr">${opts.minus && val > 0 ? '−' : ''}${fmtMoney(val)}</span></td></tr>`;
+    document.getElementById('netResult').innerHTML = `
+      <div class="table-scroll"><table>
+        <tbody>
+          ${row('שכר ברוטו', r.gross)}
+          ${row('מס הכנסה לפני זיכויים', r.taxBefore)}
+          ${row(`זיכוי (${cp.total} נקודות × ${fmtMoney(PAYROLL_PARAMS.creditPointValue)})`, r.credits)}
+          ${row('מס הכנסה לתשלום', r.incomeTax, { minus: true })}
+          ${row('ביטוח לאומי', r.ni, { minus: true })}
+          ${row('מס בריאות', r.health, { minus: true })}
+          ${row(`פנסיה – חלק העובד (${pp}%)`, r.pension, { minus: true })}
+          ${row('נטו משוער לתשלום', r.net, { total: true })}
+        </tbody>
+      </table></div>
+      <p class="hint" style="font-size:12.5px; margin-top:10px;">
+        ⚠️ זו הערכה בלבד, לפי נתוני ${PAYROLL_PARAMS.year} לשכיר במשרה אחת. החישוב לא כולל תיאום מס, זיכויים נוספים (כמו תואר אקדמי או יישוב מוטב),
+        הטבת מס על ההפקדה לפנסיה, קרן השתלמות או ניכויים אחרים. התלוש הרשמי צריך להיות מופק על ידי רואה חשבון או תוכנת שכר מוסמכת.
+      </p>`;
+  };
+  ['netGross', 'netExtra', 'netPension'].forEach(id => document.getElementById(id).oninput = draw);
+  document.getElementById('netGender').onchange = draw;
+  document.getElementById('netAddKid').onclick = () => { state._netKids.years.push(''); document.getElementById('netKidsList').innerHTML = ''; draw(); const ins = document.querySelectorAll('[data-kid-idx]'); if(ins.length) ins[ins.length - 1].focus(); };
+  document.getElementById('netGross').addEventListener('input', () => { state._netGrossOverride = Number(document.getElementById('netGross').value) || 0; });
+  document.getElementById('netEmp').onchange = (e) => { state._netEmpId = e.target.value; state._netGrossOverride = null; state._netKids = null; renderAdminNetCalc(); };
+  document.getElementById('netMonth').onchange = (e) => { state._netMonth = e.target.value; state._netGrossOverride = null; renderAdminNetCalc(); };
+  document.getElementById('netSaveParams').onclick = async () => {
+    const errEl = document.getElementById('netErr');
+    const pp = Number(document.getElementById('netPension').value);
+    const extra = Number(document.getElementById('netExtra').value) || 0;
+    const g2 = document.getElementById('netGender').value;
+    const years = state._netKids.years.map(Number).filter(y => y > 1900);
+    if(!(pp >= 0) || !(extra >= 0)){ errEl.textContent = 'ערכים לא תקינים.'; return; }
+    const c = computeCreditPoints(g2, years, extra, taxYear).total;
+    const list = await loadEmployees();
+    if(list === null){ errEl.textContent = 'לא הצלחנו להתחבר לשרת.'; return; }
+    const updated = list.map(x => x.id === emp.id ? { ...x, creditPoints: c, pensionPct: pp, gender: g2, childYears: years, extraPoints: extra } : x);
+    const ok = await saveEmployees(updated);
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state.employees = updated;
+    showToast('נשמר לעובד ' + emp.name);
+  };
+  draw();
 }
 
 // ---------- מנהל: מי בעבודה עכשיו ----------
