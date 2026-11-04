@@ -843,6 +843,32 @@ async function getEmpSettings(empId){
   return settings;
 }
 
+// ---------- תאריך עברי ----------
+function hebNumber(n){
+  if(n === 15) return 'ט״ו';
+  if(n === 16) return 'ט״ז';
+  const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+  const tens = ['', 'י', 'כ', 'ל'];
+  const str = tens[Math.floor(n / 10)] + ones[n % 10];
+  return str.length > 1 ? str.slice(0, -1) + '״' + str.slice(-1) : str + '׳';
+}
+let _hebDateFmt = null;
+function hebrewDateStr(dateStr){
+  try{
+    if(!_hebDateFmt) _hebDateFmt = new Intl.DateTimeFormat('he-u-ca-hebrew', { day: 'numeric', month: 'long' });
+    const [y, m, d] = String(dateStr).split('-').map(Number);
+    const parts = _hebDateFmt.formatToParts(new Date(y, m - 1, d, 12));
+    const day = Number(parts.find(p => p.type === 'day').value);
+    const month = parts.find(p => p.type === 'month').value;
+    return hebNumber(day) + ' ' + month;
+  }catch(e){ return ''; }
+}
+// ---------- ימי חופשה ומחלה (נשמרים בהגדרות האישיות של העובד, בשדה daysOff) ----------
+const DAY_OFF_TYPES = { vacation: { label: 'חופשה', icon: '🏖️' }, sick: { label: 'מחלה', icon: '🤒' } };
+function getDaysOff(settings){
+  return Array.isArray(settings && settings.daysOff) ? settings.daysOff.filter(d => d && d.date && DAY_OFF_TYPES[d.type]) : [];
+}
+
 // ---------- personal color theme (per-employee background/text/accent color choices) ----------
 function hexToRgb(hex){
   const clean = (hex || '').replace('#', '');
@@ -3368,7 +3394,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
                 const delay = Math.min(i, 15) * 35;
                 return `
                 <tr class="stagger-item" style="animation-delay:${delay}ms;">
-                  <td>${e.date}</td>
+                  <td>${e.date}<div class="hint" style="font-size:12px; margin-top:2px;">${hebrewDateStr(e.date)}</div></td>
                   <td class="mono">${e.start ? (hhmm(e.start) + ' – ' + (e.end ? hhmm(e.end) : '...')) : '—'}</td>
                   <td class="mono">${breaksCount > 0 ? breaksCount + ' הפסקות' : '—'}</td>
                   <td class="mono">${h !== null ? fmtHours(h) : '<span class="pill hourly">בעבודה</span>'}</td>
@@ -3395,6 +3421,28 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     const daysInMonth = new Date(yy, mm, 0).getDate();
     const showPay = emp.payType !== 'fixed';
     const dailyType = getChartType('daily');
+    // השוואה לחודש הקודם
+    const prevDt = new Date(yy, mm - 2, 1);
+    const prevKey = prevDt.getFullYear() + '-' + String(prevDt.getMonth() + 1).padStart(2, '0');
+    const prevHours = (hoursData[prevKey] || []).reduce((sum, e) => { const h = computeEntryHours(e); return sum + (h !== null ? h : 0); }, 0);
+    const diffH = Math.round((totalHours - prevHours) * 100) / 100;
+    const prevPay = prevHours > 0 ? calcPay(emp, prevHours) : 0;
+    const diffPay = Math.round((pay - prevPay) * 100) / 100;
+    const sign = (v) => v > 0 ? '+' : (v < 0 ? '−' : '');
+    const compareColor = diffH > 0 ? 'var(--brass-dark, #2E7D5B)' : (diffH < 0 ? 'var(--danger, #B3261E)' : 'inherit');
+    const compareHtml = `
+      <div class="card" style="padding:12px 18px; margin-bottom:14px; font-size:14.5px;">
+        ${prevHours === 0 && totalHours === 0 ? `אין נתונים להשוואה לחודש ${monthLabel(prevKey)}.` :
+          diffH === 0 ? `החודש עבדת בדיוק כמו ב${monthLabel(prevKey)}: ${fmtHours(totalHours)} שעות.` : `
+          <b>לעומת ${monthLabel(prevKey)}:</b>
+          <span style="color:${compareColor}; font-weight:600;" dir="ltr">${sign(diffH)}${fmtHours(Math.abs(diffH))}</span> שעות
+          ${showPay ? ` · <span style="color:${compareColor}; font-weight:600;" dir="ltr">${sign(diffPay)}${fmtMoney(Math.abs(diffPay))}</span>` : ''}
+          <span class="hint">(${monthLabel(prevKey)}: ${fmtHours(prevHours)} שעות)</span>
+        `}
+      </div>`;
+    // ימי חופשה ומחלה בחודש הזה
+    const daysOff = getDaysOff(empSettings);
+    const monthDaysOff = daysOff.filter(d => d.date.slice(0, 7) === month).sort((a, b) => a.date.localeCompare(b.date));
     const monthlyType = getChartType('monthly');
     app.innerHTML = `
       <div class="top-actions" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
@@ -3406,6 +3454,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         </div>
         <span class="subtitle">${monthLabel(month)} · ${fmtHours(totalHours)} שעות${emp.payType !== 'fixed' ? ' · ' + fmtMoney(pay) : ''}</span>
       </div>
+      ${compareHtml}
       <div class="card">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
           <h3 style="margin:0;">שעות עבודה לפי יום</h3>
@@ -3422,6 +3471,8 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:8px; font-size:13px;">
             <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:14px; border-radius:3px; background:rgba(100,116,139,.35); display:inline-block;"></span>שישי ושבת</span>
             <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:14px; border-radius:3px; background:rgba(139,92,246,.4); display:inline-block;"></span>חג / ערב חג</span>
+            <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:14px; border-radius:3px; background:rgba(20,184,166,.4); display:inline-block;"></span>חופשה</span>
+            <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:14px; border-radius:3px; background:rgba(244,114,182,.45); display:inline-block;"></span>מחלה</span>
           </div>
         `}
       </div>
@@ -3440,6 +3491,27 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         <h3 style="margin-top:0;">רישומי החודש</h3>
         ${entriesTableHtml}
       </div>
+      <div class="card">
+        <h3 style="margin-top:0;">ימי חופשה ומחלה</h3>
+        <div class="emp-row-form" style="align-items:flex-end; flex-wrap:wrap; gap:10px;">
+          <div class="field" style="margin-top:0;"><label>מתאריך</label><input type="date" id="offFrom" value="${todayStr()}" /></div>
+          <div class="field" style="margin-top:0;"><label>עד תאריך (לא חובה)</label><input type="date" id="offTo" /></div>
+          <div class="field" style="margin-top:0;"><label>סוג</label>
+            <select id="offType">${Object.entries(DAY_OFF_TYPES).map(([k, t]) => `<option value="${k}">${t.icon} ${t.label}</option>`).join('')}</select>
+          </div>
+          <div class="field" style="flex:0 0 auto; margin-top:0;"><button type="button" class="btn brass" id="addDayOffBtn">הוספה</button></div>
+        </div>
+        <div class="error-msg" id="offErr" style="margin-top:8px;"></div>
+        <p class="hint" style="font-size:13px; margin:6px 0 10px;">בימים שמסומנים כאן לא יישלח צלצול תזכורת לכניסה.</p>
+        ${monthDaysOff.length ? `
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            ${monthDaysOff.map(d => `
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; background:var(--paper-alt); border-radius:8px;">
+                <span>${DAY_OFF_TYPES[d.type].icon} <b>${DAY_OFF_TYPES[d.type].label}</b> · ${d.date} <span class="hint">(${hebrewDateStr(d.date)})</span></span>
+                <button type="button" class="btn ghost small" data-remove-dayoff="${d.date}">הסרה</button>
+              </div>`).join('')}
+          </div>` : `<div class="hint" style="font-size:13.5px;">אין ימי חופשה או מחלה ב${monthLabel(month)}.</div>`}
+      </div>
     `;
     document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; state._entriesPage = false; clearSession(); renderLanding(); };
     document.getElementById('settingsBtn').onclick = () => { state._entriesPage = false; renderEmployeeSettings(emp); };
@@ -3453,7 +3525,36 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     };
     document.getElementById('prevMonthBtn').onclick = () => shiftMonth(-1);
     document.getElementById('nextMonthBtn').onclick = () => shiftMonth(1);
-    renderDailyHoursChart(entries, yy, mm, daysInMonth, showPay ? emp.rate : null);
+    renderDailyHoursChart(entries, yy, mm, daysInMonth, showPay ? emp.rate : null, monthDaysOff);
+    const saveDaysOff = async (list) => {
+      const updated = { ...empSettings, daysOff: list };
+      const ok = await saveSettings(emp.id, updated);
+      if(ok !== true){ document.getElementById('offErr').textContent = 'שגיאה בשמירה: ' + ok; return; }
+      state._settingsCache = { empId: emp.id, settings: updated };
+      renderEmployeeDashboard(emp, null, true);
+    };
+    document.getElementById('addDayOffBtn').onclick = async () => {
+      const errEl = document.getElementById('offErr');
+      const from = document.getElementById('offFrom').value;
+      const to = document.getElementById('offTo').value || from;
+      const type = document.getElementById('offType').value;
+      errEl.textContent = '';
+      if(!from){ errEl.textContent = 'יש לבחור תאריך.'; return; }
+      if(to < from){ errEl.textContent = 'תאריך הסיום לפני תאריך ההתחלה.'; return; }
+      const dates = [];
+      const [fy, fm, fd] = from.split('-').map(Number);
+      for(let dt = new Date(fy, fm - 1, fd, 12); ; dt.setDate(dt.getDate() + 1)){
+        const ds = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+        if(ds > to) break;
+        dates.push(ds);
+        if(dates.length > 62){ errEl.textContent = 'אפשר לסמן עד חודשיים בבת אחת.'; return; }
+      }
+      const others = daysOff.filter(d => !dates.includes(d.date));
+      await saveDaysOff(others.concat(dates.map(date => ({ date, type }))));
+    };
+    document.querySelectorAll('[data-remove-dayoff]').forEach(btn => {
+      btn.onclick = () => saveDaysOff(daysOff.filter(d => d.date !== btn.dataset.removeDayoff));
+    });
     renderMonthlyChart(emp, hoursData);
     document.querySelectorAll('[data-chart-kind]').forEach(btn => {
       btn.onclick = () => { setChartType(btn.dataset.chartKind, btn.dataset.chartType); renderEmployeeDashboard(emp, null, true); };
@@ -4098,7 +4199,9 @@ function specialDayLabel(yy, mm, dd){
 }
 const SPECIAL_DAY_STYLE = {
   weekend: { band: 'rgba(100,116,139,.14)', text: '#475569' },
-  holiday: { band: 'rgba(139,92,246,.17)', text: '#6D28D9' }
+  holiday: { band: 'rgba(139,92,246,.17)', text: '#6D28D9' },
+  vacation: { band: 'rgba(20,184,166,.17)', text: '#0F766E' },
+  sick: { band: 'rgba(244,114,182,.18)', text: '#BE185D' }
 };
 // פלאגין של Chart.js: צובע ברקע את כל הטור של יום מיוחד, וכותב את שם היום לאורך כל הטור, מלמעלה למטה.
 // הרשימה מועברת דרך closure ולא דרך options, כי Chart.js מעבד מערכים ב-options בצורה שמשבשת אותם.
@@ -4140,7 +4243,7 @@ function makeSpecialDaysPlugin(days){
 }
 
 // גרף עמודות: סה"כ שעות לכל יום בחודש. צבע העמודה לפי הסכום היומי (בשכר שעתי).
-function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate){
+function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate, monthDaysOff){
   const canvas = document.getElementById('dailyHoursChart');
   if(!canvas || typeof Chart === 'undefined') return;
   if(state._dailyChart){ try{ state._dailyChart.destroy(); }catch(e){} }
@@ -4155,7 +4258,11 @@ function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate){
   const colors = perDay.map(h => rate != null ? payBandColor(h * rate) : accent);
   const monthKey = yy + '-' + String(mm).padStart(2, '0');
   // יום שישי שעבדו בו מוצג כיום רגיל (בלי רקע ובלי כיתוב)
+  const offByDay = {};
+  (monthDaysOff || []).forEach(d => { offByDay[Number(d.date.slice(8, 10))] = d; });
   const specialDays = perDay.map((h, i) => {
+    const off = offByDay[i + 1];
+    if(off) return { text: DAY_OFF_TYPES[off.type].label, kind: off.type };
     const sd = specialDayLabel(yy, mm, i + 1);
     if(sd && sd.text === 'שישי' && h > 0) return null;
     return sd;
