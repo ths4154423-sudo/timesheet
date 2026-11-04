@@ -4369,7 +4369,12 @@ function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate){
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--brass').trim() || '#5FBF8F';
   const colors = perDay.map(h => rate != null ? payBandColor(h * rate) : accent);
   const monthKey = yy + '-' + String(mm).padStart(2, '0');
-  const specialDays = perDay.map((_, i) => specialDayLabel(yy, mm, i + 1));
+  // יום שישי שעבדו בו מוצג כיום רגיל (בלי רקע ובלי כיתוב)
+  const specialDays = perDay.map((h, i) => {
+    const sd = specialDayLabel(yy, mm, i + 1);
+    if(sd && sd.text === 'שישי' && h > 0) return null;
+    return sd;
+  });
   state._dailyChart = new Chart(canvas, {
     type: 'bar',
     plugins: [makeSpecialDaysPlugin(specialDays)],
