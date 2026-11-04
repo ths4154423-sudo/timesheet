@@ -1777,6 +1777,25 @@ function sanitizeTimeInput(raw){
 }
 
 // Custom confirm modal (replaces native confirm() so we can style/animate the message)
+// חלון קופץ אחרי התחלת יום עבודה: כפתור מעבר לאתר דירתא (נפתח בלשונית חדשה)
+function showDirataPopup(){
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = `
+    <div class="confirm-box" style="text-align:center;">
+      <a href="https://dirata.co.il" target="_blank" rel="noopener" class="btn brass" id="dirataGo" style="display:inline-block; padding:12px 28px; font-size:17px; text-decoration:none;">למעבר לדירתא</a>
+      <div class="actions" style="justify-content:center; margin-top:14px;">
+        <button type="button" class="btn ghost small" id="dirataClose">סגירה</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#dirataGo').addEventListener('click', () => setTimeout(close, 50));
+  overlay.querySelector('#dirataClose').onclick = close;
+  overlay.onclick = (e) => { if(e.target === overlay) close(); };
+}
+
 function showConfirmModal(message){
   return new Promise(resolve => {
     const overlay = document.createElement('div');
@@ -3914,6 +3933,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       showToast('יום העבודה התחיל בהצלחה');
       if(month !== tm) state._empMonth = tm;
       renderEmployeeDashboard(emp, null, fresh);
+      showDirataPopup();
     };
   }
 
