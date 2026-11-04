@@ -843,6 +843,40 @@ async function getEmpSettings(empId){
   return settings;
 }
 
+// ---------- שעות "עד עכשיו" לרישום (גם ליום פתוח: עד השעה הנוכחית, בניכוי הפסקות) ----------
+function entryHoursSoFar(entry){
+  if(entry.end) return computeEntryHours(entry) || 0;
+  const now = nowTimeStr();
+  const gross = computeHoursFromRange(entry.start, now) || 0;
+  const br = (entry.breaks || []).reduce((sum, b) => sum + (computeHoursFromRange(b.start, b.end || now) || 0), 0);
+  return Math.max(0, gross - br);
+}
+// ---------- יעד יומי של העובד (נשמר בהגדרות, בשדה dailyGoal) ----------
+function getDailyGoal(settings, emp){
+  const g = settings && settings.dailyGoal;
+  const fixed = emp && emp.payType === 'fixed';
+  if(g && (g.type === 'pay' || g.type === 'hours') && Number(g.value) > 0){
+    if(fixed && g.type === 'pay') return { type: 'hours', value: 8 };
+    return { type: g.type, value: Number(g.value) };
+  }
+  return fixed ? { type: 'hours', value: 8 } : { type: 'pay', value: 200 };
+}
+function dailyGoalProgress(emp, goal, entries){
+  const t = todayStr();
+  const hours = entries.filter(e => e.date === t).reduce((sum, e) => sum + entryHoursSoFar(e), 0);
+  const achieved = goal.type === 'pay' ? hours * (emp.rate || 0) : hours;
+  const pct = Math.min(100, goal.value > 0 ? (achieved / goal.value) * 100 : 0);
+  const fmt = (v) => goal.type === 'pay' ? fmtMoney(Math.round(v * 100) / 100) : fmtHours(Math.round(v * 100) / 100) + ' שעות';
+  return { achieved, pct, done: achieved >= goal.value, fmt };
+}
+function dailyGoalInHours(goal, emp){
+  if(goal.type === 'hours') return goal.value;
+  return emp.rate > 0 ? goal.value / emp.rate : null;
+}
+function goalTextHtml(pr, goal){
+  return pr.done ? `🎉 היעד הושג! ${pr.fmt(pr.achieved)} היום` : `הושגו ${pr.fmt(pr.achieved)} (${Math.floor(pr.pct)}%) · נשארו ${pr.fmt(goal.value - pr.achieved)}`;
+}
+
 // ---------- תאריך עברי ----------
 function hebNumber(n){
   if(n === 15) return 'ט״ו';
@@ -1694,6 +1728,55 @@ function attachLongPress(el, onLongPress, onClick){
 
 
 
+// מסך קביעת יעד יומי
+async function renderEmployeeGoal(emp){
+  stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog();
+  setHeader('יעד יומי', '<button class="btn ghost small" id="goalBackBtn">חזרה</button>');
+  const settings = await getEmpSettings(emp.id);
+  const goal = getDailyGoal(settings, emp);
+  const fixed = emp.payType === 'fixed';
+  app.innerHTML = `
+    <div class="card">
+      <h3 style="margin-top:0;">🎯 יעד יומי</h3>
+      <div class="field"><label>סוג היעד</label>
+        <div style="display:flex; gap:18px; flex-wrap:wrap; margin-top:4px;">
+          <label style="display:flex; align-items:center; gap:6px; ${fixed ? 'opacity:.5;' : ''}"><input type="radio" name="goalType" value="pay" ${goal.type === 'pay' ? 'checked' : ''} ${fixed ? 'disabled' : ''}/> שכר (₪)</label>
+          <label style="display:flex; align-items:center; gap:6px;"><input type="radio" name="goalType" value="hours" ${goal.type === 'hours' ? 'checked' : ''}/> שעות</label>
+        </div>
+        ${fixed ? '<div class="hint" style="font-size:12.5px; margin-top:4px;">בשכר חודשי קבוע אפשר לקבוע יעד בשעות בלבד.</div>' : ''}
+      </div>
+      <div class="field"><label id="goalValueLabel">${goal.type === 'pay' ? 'סכום ליום (₪)' : 'שעות ליום'}</label>
+        <input type="number" id="goalValue" min="0.5" step="0.5" value="${goal.value}" dir="ltr" style="max-width:180px;" />
+      </div>
+      <div class="error-msg" id="goalErr"></div>
+      <div class="actions" style="justify-content:flex-start;">
+        <button type="button" class="btn brass" id="saveGoalBtn">שמירה</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('goalBackBtn').onclick = () => renderEmployeeSettings(emp);
+  document.querySelectorAll('input[name=goalType]').forEach(r => r.onchange = () => {
+    if(!r.checked) return;
+    const isPay = r.value === 'pay';
+    document.getElementById('goalValueLabel').textContent = isPay ? 'סכום ליום (₪)' : 'שעות ליום';
+    document.getElementById('goalValue').value = isPay ? 200 : 8;
+  });
+  document.getElementById('saveGoalBtn').onclick = async () => {
+    const errEl = document.getElementById('goalErr');
+    const type = (document.querySelector('input[name=goalType]:checked') || {}).value || 'pay';
+    const value = Number(document.getElementById('goalValue').value);
+    if(!(value > 0)){ errEl.textContent = 'יש להזין יעד גדול מאפס.'; return; }
+    if(type === 'hours' && value > 24){ errEl.textContent = 'יעד שעות ליום לא יכול לעלות על 24.'; return; }
+    const fresh = await getEmpSettings(emp.id);
+    const updated = { ...fresh, dailyGoal: { type, value } };
+    const ok = await saveSettings(emp.id, updated);
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state._settingsCache = { empId: emp.id, settings: updated };
+    showToast('היעד היומי נשמר');
+    renderEmployeeSettings(emp);
+  };
+}
+
 // מסך אבטחה של העובד: רשימת אפשרויות (כרגע: שינוי קוד כניסה)
 const EMPLOYEE_SECURITY_ITEMS = [
   { key: 'pin', icon: '🔑', label: 'שינוי קוד כניסה', hint: 'החלפת הקוד האישי (PIN) שאיתו נכנסים למערכת' }
@@ -2363,6 +2446,7 @@ function renderAdminDashboard(tab){
   setHeader('פאנל ניהול', '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
   app.innerHTML = `
     <div class="tabs">
+      <div class="tab" data-tab="now">🟢 מי בעבודה</div>
       <div class="tab" data-tab="summary">סיכום חודשי</div>
       <div class="tab" data-tab="employees">ניהול עובדים</div>
       <div class="tab" data-tab="requests">בקשות</div>
@@ -2383,7 +2467,8 @@ function renderAdminDashboard(tab){
     renderLanding();
   };
 
-  if(tab === 'summary') renderAdminSummary();
+  if(tab === 'now') renderAdminNow();
+  else if(tab === 'summary') renderAdminSummary();
   else if(tab === 'employees') renderAdminEmployees();
   else if(tab === 'requests') renderAdminRequests();
   else renderAdminSettings();
@@ -2491,6 +2576,76 @@ async function renderAdminRequests(){
   });
 }
 
+// ---------- מנהל: מי בעבודה עכשיו ----------
+async function renderAdminNow(){
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
+  const t = todayStr();
+  const month = t.slice(0, 7);
+  const rows = await Promise.all(state.employees.map(async emp => {
+    const [hoursData, settings] = await Promise.all([loadHours(emp.id), loadSettings(emp.id)]);
+    const today = ((hoursData || {})[month] || []).filter(e => e.date === t);
+    const off = getDaysOff(settings).find(d => d.date === t);
+    const open = today.find(e => !e.end);
+    const hours = today.reduce((sum, e) => sum + entryHoursSoFar(e), 0);
+    let status, detail;
+    if(open){
+      const lastBreak = (open.breaks || []).slice(-1)[0];
+      if(lastBreak && !lastBreak.end){ status = 'break'; detail = 'בהפסקה מ-' + hhmm(lastBreak.start); }
+      else { status = 'working'; detail = 'נכנס/ה ב-' + hhmm(open.start); }
+    } else if(today.length){
+      const last = today.slice().sort((a, b) => String(a.end).localeCompare(String(b.end))).slice(-1)[0];
+      status = 'done'; detail = 'סיים/ה ב-' + hhmm(last.end);
+    } else if(off){
+      status = off.type; detail = DAY_OFF_TYPES[off.type].label;
+    } else {
+      status = 'absent'; detail = 'עדיין לא נכנס/ה';
+    }
+    return { emp, status, detail, hours };
+  }));
+  const ST = {
+    working: { label: 'בעבודה', color: '#10B981', order: 0 },
+    break:   { label: 'בהפסקה', color: '#F59E0B', order: 1 },
+    done:    { label: 'סיימו', pill: 'סיים/ה', color: '#60A5FA', order: 2 },
+    absent:  { label: 'לא הגיעו', pill: 'לא הגיע/ה', color: '#9CA3AF', order: 3 },
+    vacation:{ label: 'בחופשה', color: '#14B8A6', order: 4 },
+    sick:    { label: 'במחלה', color: '#EC4899', order: 5 }
+  };
+  rows.sort((a, b) => ST[a.status].order - ST[b.status].order || a.emp.name.localeCompare(b.emp.name, 'he'));
+  const counts = Object.keys(ST).map(k => ({ k, n: rows.filter(r => r.status === k).length })).filter(x => x.n > 0);
+  const timeNow = hhmm(nowTimeStr());
+  content.innerHTML = `
+    <div class="top-actions" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <span class="subtitle">היום, ${t.split('-').reverse().join('/')} (${hebrewDateStr(t)}) · מעודכן ל-${timeNow}</span>
+      <button type="button" class="btn ghost small" id="nowRefreshBtn">🔄 רענון</button>
+    </div>
+    ${state.employees.length === 0 ? '<div class="card"><div class="empty-state">אין עדיין עובדים במערכת.</div></div>' : `
+    <div class="card" style="display:flex; gap:16px; flex-wrap:wrap; font-size:15px;">
+      ${counts.map(c => `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:12px; height:12px; border-radius:50%; background:${ST[c.k].color}; display:inline-block;"></span><b>${ST[c.k].label}:</b> ${c.n}</span>`).join('')}
+    </div>
+    <div class="card">
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${rows.map(r => `
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; background:var(--paper-alt); border-radius:10px; border-inline-start:5px solid ${ST[r.status].color};">
+            <div style="display:flex; align-items:center; gap:10px;">
+              ${avatarHtml(r.emp)}
+              <div>
+                <div style="font-weight:600;">${escapeHtml(r.emp.name)}</div>
+                <div class="hint" style="font-size:13px;">${escapeHtml(r.detail)}</div>
+              </div>
+            </div>
+            <div style="text-align:left;">
+              <span class="pill" style="background:${ST[r.status].color}; color:#fff;">${ST[r.status].pill || ST[r.status].label}</span>
+              ${r.hours > 0 ? `<div class="hint mono" style="font-size:12.5px; margin-top:4px;">${fmtHours(Math.round(r.hours * 100) / 100)} שעות היום</div>` : ''}
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`}
+  `;
+  const btn = document.getElementById('nowRefreshBtn');
+  if(btn) btn.onclick = () => renderAdminNow();
+}
+
 async function renderAdminSummary(){
   const content = document.getElementById('tabContent');
   const month = state._adminMonth || currentMonthStr();
@@ -2511,6 +2666,7 @@ async function renderAdminSummary(){
     <div class="top-actions">
       <input type="month" class="month-picker" id="monthPicker" value="${month}" />
       <span class="subtitle">${monthLabel(month)}</span>
+      ${state.employees.length ? '<button type="button" class="btn brass small" id="payrollExportBtn">📥 דוח שכר לאקסל</button>' : ''}
     </div>
     ${state.employees.length === 0 ? '<div class="card"><div class="empty-state">אין עדיין עובדים במערכת. עברו לטאב "ניהול עובדים" כדי להוסיף.</div></div>' : `
     <div class="card">
@@ -2549,12 +2705,71 @@ async function renderAdminSummary(){
     state._adminMonth = e.target.value;
     renderAdminSummary();
   };
+  const exportBtn = document.getElementById('payrollExportBtn');
+  if(exportBtn) exportBtn.onclick = async () => {
+    exportBtn.disabled = true; exportBtn.textContent = 'מכין דוח...';
+    try{ await exportPayrollReport(month); }
+    catch(e){ console.error(e); showToast('לא הצלחנו להכין את הדוח'); }
+    exportBtn.disabled = false; exportBtn.textContent = '📥 דוח שכר לאקסל';
+  };
   document.getElementById('grandHoursCell').textContent = fmtHours(grandHours);
   document.getElementById('grandPayCell').textContent = fmtMoney(grandPay);
 
   if(rows.length && window.Chart){
     renderAdminCharts(rows);
   }
+}
+
+// דוח שכר חודשי לאקסל: גיליון "סיכום" (שורה לכל עובד) וגיליון "פירוט" (שורה לכל יום עבודה)
+async function exportPayrollReport(month){
+  if(typeof XLSX === 'undefined'){ showToast('ספריית האקסל לא נטענה. נסו לרענן את הדף.'); return; }
+  const summary = [], detail = [];
+  let sumHours = 0, sumPay = 0;
+  for(const emp of state.employees){
+    const [hoursData, settings] = await Promise.all([loadHours(emp.id), loadSettings(emp.id)]);
+    const entries = (((hoursData || {})[month]) || []).slice().sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+    const totalHours = entries.reduce((sum, e) => sum + (computeEntryHours(e) || 0), 0);
+    const pay = totalHours > 0 || emp.payType === 'fixed' ? calcPay(emp, totalHours) : 0;
+    const workDays = new Set(entries.map(e => e.date)).size;
+    const off = getDaysOff(settings).filter(d => d.date.slice(0, 7) === month);
+    const r2 = (v) => Math.round(v * 100) / 100;
+    sumHours += totalHours; sumPay += pay;
+    summary.push({
+      'שם העובד': emp.name,
+      'סוג שכר': emp.payType === 'fixed' ? 'חודשי קבוע' : 'שעתי',
+      'תעריף (₪)': emp.rate || 0,
+      'ימי עבודה': workDays,
+      'סה"כ שעות': r2(totalHours),
+      'סה"כ לתשלום (₪)': r2(pay),
+      'ימי חופשה': off.filter(d => d.type === 'vacation').length,
+      'ימי מחלה': off.filter(d => d.type === 'sick').length
+    });
+    entries.forEach(e => {
+      const h = computeEntryHours(e);
+      const breakMin = Math.round((e.breaks || []).filter(b => b.end).reduce((sum, b) => sum + (computeHoursFromRange(b.start, b.end) || 0), 0) * 60);
+      detail.push({
+        'שם העובד': emp.name,
+        'תאריך': e.date.split('-').reverse().join('/'),
+        'תאריך עברי': hebrewDateStr(e.date),
+        'משעה': hhmm(e.start) || '',
+        'עד שעה': e.end ? hhmm(e.end) : 'פתוח',
+        'הפסקות (דקות)': breakMin,
+        'שעות': h !== null ? r2(h) : '',
+        'סכום (₪)': h !== null && emp.payType !== 'fixed' ? r2(h * emp.rate) : ''
+      });
+    });
+  }
+  summary.push({ 'שם העובד': 'סה"כ', 'סוג שכר': '', 'תעריף (₪)': '', 'ימי עבודה': '', 'סה"כ שעות': Math.round(sumHours * 100) / 100, 'סה"כ לתשלום (₪)': Math.round(sumPay * 100) / 100, 'ימי חופשה': '', 'ימי מחלה': '' });
+  const wb = XLSX.utils.book_new();
+  const ws1 = XLSX.utils.json_to_sheet(summary);
+  ws1['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 10 }, { wch: 10 }];
+  const ws2 = XLSX.utils.json_to_sheet(detail.length ? detail : [{ 'שם העובד': 'אין רישומים בחודש זה' }]);
+  ws2['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 14 }, { wch: 8 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'סיכום');
+  XLSX.utils.book_append_sheet(wb, ws2, 'פירוט');
+  wb.Workbook = { Views: [{ RTL: true }] };
+  XLSX.writeFile(wb, `דוח שכר ${monthLabel(month)}.xlsx`);
+  showToast('הדוח הורד');
 }
 
 // מצייר את גרפי העמודות של סיכום המנהל (שעות ותשלום לכל עובד). שומר את מופעי הגרפים
@@ -3525,7 +3740,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     };
     document.getElementById('prevMonthBtn').onclick = () => shiftMonth(-1);
     document.getElementById('nextMonthBtn').onclick = () => shiftMonth(1);
-    renderDailyHoursChart(entries, yy, mm, daysInMonth, showPay ? emp.rate : null, monthDaysOff);
+    renderDailyHoursChart(entries, yy, mm, daysInMonth, showPay ? emp.rate : null, monthDaysOff, dailyGoalInHours(getDailyGoal(empSettings, emp), emp));
     const saveDaysOff = async (list) => {
       const updated = { ...empSettings, daysOff: list };
       const ok = await saveSettings(emp.id, updated);
@@ -3588,6 +3803,22 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       <div class="digit-block"><div class="num mono" id="readoutHours">0</div><div class="lbl">סה"כ שעות החודש</div></div>
       <div class="digit-block"><div class="num mono" id="readoutPay">${fmtMoney(0)}</div><div class="lbl">סה"כ לתשלום</div></div>
     </div>
+
+    ${(() => {
+      const goal = getDailyGoal(empSettings, emp);
+      const pr = dailyGoalProgress(emp, goal, entries);
+      return `
+    <div class="card" id="goalCard">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+        <h3 style="margin:0;">🎯 יעד יומי: ${pr.fmt(goal.value)}</h3>
+        <button type="button" class="btn ghost small" id="editGoalBtn">שינוי יעד</button>
+      </div>
+      <div style="margin-top:12px; height:14px; background:var(--paper-alt); border-radius:999px; overflow:hidden;">
+        <div id="goalBar" style="height:100%; width:${pr.pct}%; background:${pr.done ? '#10B981' : 'var(--brass)'}; border-radius:999px; transition:width .6s;"></div>
+      </div>
+      <div id="goalText" style="margin-top:8px; font-size:14.5px;">${goalTextHtml(pr, goal)}</div>
+    </div>`;
+    })()}
 
     <div class="card">
       <h3>כרטיס נוכחות היום</h3>
@@ -3749,6 +3980,19 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 
   document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); renderLanding(); };
   document.getElementById('settingsBtn').onclick = () => renderEmployeeSettings(emp);
+  const editGoalBtn = document.getElementById('editGoalBtn');
+  if(editGoalBtn) editGoalBtn.onclick = () => renderEmployeeGoal(emp);
+  // עדכון חי של פס היעד כל 30 שניות, כל עוד הוא מוצג
+  if(state._goalTimer) clearInterval(state._goalTimer);
+  state._goalTimer = setInterval(() => {
+    const bar = document.getElementById('goalBar'), txt = document.getElementById('goalText');
+    if(!bar || !txt){ clearInterval(state._goalTimer); state._goalTimer = null; return; }
+    const goal = getDailyGoal(empSettings, emp);
+    const pr = dailyGoalProgress(emp, goal, entries);
+    bar.style.width = pr.pct + '%';
+    bar.style.background = pr.done ? '#10B981' : 'var(--brass)';
+    txt.innerHTML = goalTextHtml(pr, goal);
+  }, 30000);
 
   // במצב עריכה אזור הסיכום לא מוצג, ולכן הרכיבים האלה לא קיימים. בלי הבדיקה הזו נזרקה כאן שגיאה,
   // שעצרה את המשך הפונקציה - ולכן כפתור "עדכון שינויים" בעריכה לא עשה כלום.
@@ -4242,8 +4486,29 @@ function makeSpecialDaysPlugin(days){
   };
 }
 
+// פלאגין: קו מקווקו של היעד היומי לרוחב הגרף
+function makeGoalLinePlugin(goalHours){
+  return {
+    id: 'goalLine',
+    afterDatasetsDraw(chart){
+      if(!goalHours) return;
+      const { ctx, chartArea, scales: { y } } = chart;
+      const py = y.getPixelForValue(goalHours);
+      if(py < chartArea.top || py > chartArea.bottom) return;
+      ctx.save();
+      ctx.strokeStyle = '#DC2626'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(chartArea.left, py); ctx.lineTo(chartArea.right, py); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#DC2626'; ctx.font = "600 11px 'Heebo', Arial, sans-serif";
+      ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.fillText('🎯 יעד', chartArea.left + 4, py - 3);
+      ctx.restore();
+    }
+  };
+}
+
 // גרף עמודות: סה"כ שעות לכל יום בחודש. צבע העמודה לפי הסכום היומי (בשכר שעתי).
-function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate, monthDaysOff){
+function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate, monthDaysOff, goalHours){
   const canvas = document.getElementById('dailyHoursChart');
   if(!canvas || typeof Chart === 'undefined') return;
   if(state._dailyChart){ try{ state._dailyChart.destroy(); }catch(e){} }
@@ -4276,7 +4541,7 @@ function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate, monthDaysOff)
     : { label: 'שעות', data: values, backgroundColor: colors, borderRadius: 4 };
   state._dailyChart = new Chart(canvas, {
     type,
-    plugins: [makeSpecialDaysPlugin(specialDays)],
+    plugins: [makeSpecialDaysPlugin(specialDays), makeGoalLinePlugin(goalHours)],
     data: { labels, datasets: [dataset] },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -4291,7 +4556,7 @@ function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate, monthDaysOff)
           }
         } }
       },
-      scales: { y: { beginAtZero: true, title: { display: true, text: 'שעות' } }, x: { grid: { display: false }, title: { display: true, text: 'יום בחודש' } } }
+      scales: { y: { beginAtZero: true, suggestedMax: goalHours ? Math.ceil(goalHours * 1.15) : undefined, title: { display: true, text: 'שעות' } }, x: { grid: { display: false }, title: { display: true, text: 'יום בחודש' } } }
     }
   });
 }
@@ -4407,6 +4672,7 @@ function renderMonthlyChart(emp, hoursData){
 const SETTINGS_CATEGORIES = [
   { key: 'sound', icon: '🔔', label: 'התראות ותזכורות', hint: 'הודעות קוליות, צלילים וצלצולי תזכורת בטלפון' },
   { key: 'appearance', icon: '🎨', label: 'עיצוב ותצוגה', hint: 'צבעים, מצב כהה ואפשרויות תצוגה' },
+  { key: 'goal', icon: '🎯', label: 'יעד יומי', hint: 'קביעת יעד יומי בשקלים או בשעות', action: true },
   { key: 'security', icon: '🔒', label: 'אבטחה', hint: 'שינוי קוד הכניסה למערכת', action: true },
   { key: 'requests', icon: '📨', label: 'בקשה למנהל', hint: 'שליחת הודעה חופשית וצפייה בסטטוס בקשות קודמות', action: true }
 ];
@@ -4535,6 +4801,7 @@ async function renderEmployeeSettings(emp){
       const cat = SETTINGS_CATEGORIES.find(c => c.key === btn.dataset.openCategory);
       if(cat && cat.action && cat.key === 'requests'){ renderEmployeeRequests(emp); return; }
       if(cat && cat.action && cat.key === 'security'){ renderEmployeeSecurity(emp); return; }
+      if(cat && cat.action && cat.key === 'goal'){ renderEmployeeGoal(emp); return; }
       renderEmployeeSettingsCategory(emp, btn.dataset.openCategory);
     };
   });
