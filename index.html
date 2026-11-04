@@ -3626,6 +3626,8 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     const [yy, mm] = month.split('-').map(Number);
     const daysInMonth = new Date(yy, mm, 0).getDate();
     const showPay = emp.payType !== 'fixed';
+    const dailyType = getChartType('daily');
+    const monthlyType = getChartType('monthly');
     app.innerHTML = `
       <div class="top-actions" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
         <button type="button" class="btn ghost small" id="entriesBackBtn">→ חזרה</button>
@@ -3637,7 +3639,13 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         <span class="subtitle">${monthLabel(month)} · ${fmtHours(totalHours)} שעות${emp.payType !== 'fixed' ? ' · ' + fmtMoney(pay) : ''}</span>
       </div>
       <div class="card">
-        <h3 style="margin-top:0;">שעות עבודה לפי יום</h3>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+          <h3 style="margin:0;">שעות עבודה לפי יום</h3>
+          <div style="display:flex; gap:6px;">
+            ${chartTypeBtn('daily', 'bar', '📊 עמודות', dailyType)}
+            ${chartTypeBtn('daily', 'line', '📈 קו', dailyType)}
+          </div>
+        </div>
         ${entries.length === 0 ? '<div class="empty-state">אין נתונים להצגה בגרף.</div>' : `
           <div style="position:relative; height:260px;"><canvas id="dailyHoursChart"></canvas></div>
           ${showPay ? `<div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; font-size:13px;">
@@ -3652,9 +3660,13 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       <div class="card">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
           <h3 style="margin:0;">סיכום לפי חודשים (12 החודשים האחרונים)</h3>
-          <button type="button" class="btn ghost small" id="monthlyChartToggle">${getMonthlyChartType() === 'pie' ? '📊 עמודות' : '🥧 עוגה'}</button>
+          <div style="display:flex; gap:6px;">
+            ${chartTypeBtn('monthly', 'pie', '🥧 עוגה', monthlyType)}
+            ${chartTypeBtn('monthly', 'bar', '📊 עמודות', monthlyType)}
+            ${chartTypeBtn('monthly', 'line', '📈 קו', monthlyType)}
+          </div>
         </div>
-        <div style="position:relative; height:${getMonthlyChartType() === 'pie' ? 280 : 170}px; margin-top:12px;"><canvas id="monthlyChart"></canvas></div>
+        <div style="position:relative; height:${monthlyType === 'pie' ? 280 : 200}px; margin-top:12px;"><canvas id="monthlyChart"></canvas></div>
       </div>
       <div class="card">
         <h3 style="margin-top:0;">רישומי החודש</h3>
@@ -3675,10 +3687,9 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     document.getElementById('nextMonthBtn').onclick = () => shiftMonth(1);
     renderDailyHoursChart(entries, yy, mm, daysInMonth, showPay ? emp.rate : null);
     renderMonthlyChart(emp, hoursData);
-    document.getElementById('monthlyChartToggle').onclick = () => {
-      setMonthlyChartType(getMonthlyChartType() === 'pie' ? 'bar' : 'pie');
-      renderEmployeeDashboard(emp, null, true);
-    };
+    document.querySelectorAll('[data-chart-kind]').forEach(btn => {
+      btn.onclick = () => { setChartType(btn.dataset.chartKind, btn.dataset.chartType); renderEmployeeDashboard(emp, null, true); };
+    });
     bindEntryRowButtons(emp, entries, month);
     return;
   }
@@ -4375,10 +4386,17 @@ function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate){
     if(sd && sd.text === 'שישי' && h > 0) return null;
     return sd;
   });
+  const type = getChartType('daily');
+  const values = perDay.map(v => Math.round(v * 100) / 100);
+  const dataset = type === 'line'
+    // גרף קו: מחבר רק ימים שעבדו בהם, כל נקודה בצבע לפי הסכום היומי
+    ? { label: 'שעות', data: values.map(v => v > 0 ? v : null), spanGaps: true, borderColor: accent, borderWidth: 2.5, tension: 0.3, cubicInterpolationMode: 'monotone',
+        fill: true, backgroundColor: hexToRgba(accent, 0.12), pointBackgroundColor: colors, pointBorderColor: '#fff', pointBorderWidth: 1.5, pointRadius: 5, pointHoverRadius: 7 }
+    : { label: 'שעות', data: values, backgroundColor: colors, borderRadius: 4 };
   state._dailyChart = new Chart(canvas, {
-    type: 'bar',
+    type,
     plugins: [makeSpecialDaysPlugin(specialDays)],
-    data: { labels, datasets: [{ label: 'שעות', data: perDay.map(v => Math.round(v * 100) / 100), backgroundColor: colors, borderRadius: 4 }] },
+    data: { labels, datasets: [dataset] },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
@@ -4392,17 +4410,28 @@ function renderDailyHoursChart(entries, yy, mm, daysInMonth, rate){
           }
         } }
       },
-      scales: { y: { beginAtZero: true, title: { display: true, text: 'שעות' } }, x: { title: { display: true, text: 'יום בחודש' } } }
+      scales: { y: { beginAtZero: true, title: { display: true, text: 'שעות' } }, x: { grid: { display: false }, title: { display: true, text: 'יום בחודש' } } }
     }
   });
 }
 
-// סוג גרף החודשים: 'pie' (עוגה, ברירת מחדל) או 'bar' (עמודות). הבחירה נשמרת במכשיר.
-function getMonthlyChartType(){
-  try{ return localStorage.getItem('monthlyChartType') === 'bar' ? 'bar' : 'pie'; }catch(e){ return 'pie'; }
+// סוג הגרף שנבחר, נשמר במכשיר. יומי: bar / line. חודשי: pie / bar / line.
+const CHART_TYPES = { daily: { allowed: ['bar', 'line'], def: 'bar' }, monthly: { allowed: ['pie', 'bar', 'line'], def: 'pie' } };
+function getChartType(kind){
+  const cfg = CHART_TYPES[kind];
+  try{ const v = localStorage.getItem(kind + 'ChartType'); return cfg.allowed.includes(v) ? v : cfg.def; }catch(e){ return cfg.def; }
 }
-function setMonthlyChartType(t){
-  try{ localStorage.setItem('monthlyChartType', t); }catch(e){}
+function setChartType(kind, type){
+  try{ localStorage.setItem(kind + 'ChartType', type); }catch(e){}
+}
+function hexToRgba(color, alpha){
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(color).trim());
+  if(!m) return 'rgba(95,191,143,' + alpha + ')';
+  const n = parseInt(m[1], 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
+}
+function chartTypeBtn(kind, type, label, current){
+  return `<button type="button" class="btn ${current === type ? 'brass' : 'ghost'} small" data-chart-kind="${kind}" data-chart-type="${type}">${label}</button>`;
 }
 // פלאגין: כותב על כל פרוסה בעוגה את שם החודש והסכום, בלי צורך במעבר עכבר
 function makePieLabelsPlugin(names, amounts){
@@ -4445,7 +4474,7 @@ function renderMonthlyChart(emp, hoursData){
   }
   const hours = keys.map(k => (hoursData[k] || []).reduce((sum, e) => { const h = computeEntryHours(e); return sum + (h !== null ? h : 0); }, 0));
   const pays = hours.map(h => h > 0 ? Math.round(calcPay(emp, h) * 100) / 100 : 0);
-  const type = getMonthlyChartType();
+  const type = getChartType('monthly');
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--brass').trim() || '#5FBF8F';
 
   if(type === 'pie'){
@@ -4470,9 +4499,13 @@ function renderMonthlyChart(emp, hoursData){
   }
 
   const labels = keys.map(k => { const [y, m] = k.split('-'); return m + '/' + y.slice(2); });
+  const dataset = type === 'line'
+    ? { label: '₪', data: pays, borderColor: accent, borderWidth: 2.5, tension: 0.3, cubicInterpolationMode: 'monotone', fill: true, backgroundColor: hexToRgba(accent, 0.12),
+        pointBackgroundColor: accent, pointBorderColor: '#fff', pointBorderWidth: 1.5, pointRadius: 5, pointHoverRadius: 7 }
+    : { label: '₪', data: pays, backgroundColor: accent, borderRadius: 4 };
   state._monthlyChart = new Chart(canvas, {
-    type: 'bar',
-    data: { labels, datasets: [{ label: '₪', data: pays, backgroundColor: accent, borderRadius: 4 }] },
+    type,
+    data: { labels, datasets: [dataset] },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
@@ -4482,7 +4515,7 @@ function renderMonthlyChart(emp, hoursData){
           label: (item) => fmtMoney(item.raw)
         } }
       },
-      scales: { y: { beginAtZero: true } }
+      scales: { y: { beginAtZero: true }, x: { grid: { display: false } } }
     }
   });
 }
