@@ -4105,6 +4105,23 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           <span class="hint">(${monthLabel(prevKey)}: ${fmtHours(prevHours)} שעות)</span>
         `}
       </div>`;
+    // סיכום החודש: ימי עבודה (כל תאריך נספר פעם אחת) וממוצע ליום
+    const hoursByDate = {};
+    entries.forEach(e => { const h = computeEntryHours(e); if(h) hoursByDate[e.date] = (hoursByDate[e.date] || 0) + h; });
+    const workDays = Object.keys(hoursByDate).length;
+    const r2 = (v) => Math.round(v * 100) / 100;
+    const summaryHtml = workDays === 0 ? '' : `
+      <div class="card" style="padding:14px 18px; margin-bottom:14px;">
+        <div style="font-size:15px; font-weight:600; margin-bottom:10px;">📊 סיכום ${monthLabel(month)}</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; text-align:center;">
+          <div style="background:var(--paper-alt); border-radius:10px; padding:10px 6px;"><div class="mono" style="font-size:22px; font-weight:700;">${workDays}</div><div class="hint" style="font-size:12.5px;">ימי עבודה</div></div>
+          <div style="background:var(--paper-alt); border-radius:10px; padding:10px 6px;"><div class="mono" style="font-size:22px; font-weight:700;">${fmtHours(r2(totalHours))}</div><div class="hint" style="font-size:12.5px;">סה"כ שעות</div></div>
+          <div style="background:var(--paper-alt); border-radius:10px; padding:10px 6px;"><div class="mono" style="font-size:22px; font-weight:700;">${fmtHours(r2(totalHours / workDays))}</div><div class="hint" style="font-size:12.5px;">ממוצע שעות ליום</div></div>
+          ${showPay ? `
+          <div style="background:var(--paper-alt); border-radius:10px; padding:10px 6px;"><div class="mono" style="font-size:22px; font-weight:700;">${fmtMoney(r2(pay))}</div><div class="hint" style="font-size:12.5px;">סה"כ לתשלום</div></div>
+          <div style="background:var(--paper-alt); border-radius:10px; padding:10px 6px;"><div class="mono" style="font-size:22px; font-weight:700;">${fmtMoney(r2(pay / workDays))}</div><div class="hint" style="font-size:12.5px;">ממוצע ליום</div></div>` : ''}
+        </div>
+      </div>`;
     // נטו משוער (רק אם המנהל אישר להציג לעובדים)
     if(!state._appSettings) state._appSettings = await loadAppSettings();
     const showNet = state._appSettings.showNetToEmployees !== false && totalHours > 0;
@@ -4142,6 +4159,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         <span class="subtitle">${monthLabel(month)} · ${fmtHours(totalHours)} שעות${emp.payType !== 'fixed' ? ' · ' + fmtMoney(pay) : ''}</span>
       </div>
       ${compareHtml}
+      ${summaryHtml}
       ${netHtml}
       <div class="card">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
@@ -4532,7 +4550,17 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const tm = currentMonthStr();
       if(!fresh[tm]) fresh[tm] = [];
       if(findOpenEntryToday(fresh[tm])){ errEl.textContent = 'כבר קיים יום עבודה פתוח להיום'; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
-      fresh[tm].push({ id: uid(), date: todayStr(), start: startTime, end: null, breaks: [] });
+      // כבר עבד היום ויצא? פותחים מחדש את אותו יום, והזמן שבחוץ נרשם כהפסקה (שורה אחת ליום)
+      const doneToday = fresh[tm].filter(x => x.date === todayStr() && x.end).sort((a, b) => String(a.end).localeCompare(String(b.end)));
+      const lastDone = doneToday[doneToday.length - 1];
+      if(lastDone){
+        if(startTime <= lastDone.end){ errEl.textContent = 'שעת הכניסה צריכה להיות אחרי שעת היציאה הקודמת (' + hhmm(lastDone.end) + ').'; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
+        if(!lastDone.breaks) lastDone.breaks = [];
+        lastDone.breaks.push({ id: uid(), start: lastDone.end, end: startTime, type: 'pause' });
+        lastDone.end = null;
+      } else {
+        fresh[tm].push({ id: uid(), date: todayStr(), start: startTime, end: null, breaks: [] });
+      }
       const ok = await saveHours(emp.id, fresh);
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; submitBtn.disabled=false; submitBtn.textContent='🟢 התחלת יום עבודה'; return; }
       if(!(empSettings.muteOpeningAnnouncement ?? false)){
