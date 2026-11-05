@@ -4008,6 +4008,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     state._formDraft = null;
   }
   const editBreaks = state._editBreaks || [];
+  if(state._editingBreakId === '__open__'){ const ob = editBreaks.find(b => !b.end); state._editingBreakId = ob ? ob.id : null; }
   const editingOpenEntry = !!(editingEntry && !editingEntry.end);
   const formDraft = state._formDraft;
   const draftDate = formDraft ? formDraft.date : (editingEntry ? editingEntry.date : todayStr());
@@ -4447,15 +4448,22 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
                 <thead><tr><th>משעה</th><th>עד שעה</th><th>סה"כ</th><th></th></tr></thead>
                 <tbody>
                   ${editBreaks.map(b => `
+                    ${state._editingBreakId === b.id ? `
                     <tr>
                       <td><input type="time" class="mono" data-break-start="${b.id}" value="${hhmm(b.start) || ''}" style="min-width:110px;" /></td>
-                      <td>
-                        <input type="time" class="mono" data-break-end="${b.id}" value="${b.end ? (hhmm(b.end) || '') : ''}" style="min-width:110px;" />
-                        ${!b.end ? '<div class="hint" style="font-size:12px; margin-top:2px;">⏳ הפסקה פתוחה – הזינו שעת סיום</div>' : ''}
-                      </td>
+                      <td><input type="time" class="mono" data-break-end="${b.id}" value="${b.end ? (hhmm(b.end) || '') : ''}" style="min-width:110px;" /></td>
                       <td class="mono" data-break-total="${b.id}">${b.end ? fmtHours(computeHoursFromRange(b.start, b.end)) + ' שעות' : '—'}</td>
-                      <td><button type="button" class="btn danger" data-del-break="${b.id}">מחיקה</button></td>
-                    </tr>
+                      <td style="white-space:nowrap;"><button type="button" class="btn brass small" data-done-break="${b.id}">אישור</button></td>
+                    </tr>` : `
+                    <tr>
+                      <td class="mono">${hhmm(b.start) || '—'}</td>
+                      <td class="mono">${b.end ? (hhmm(b.end) || '—') : 'מתמשכת'}</td>
+                      <td class="mono">${b.end ? fmtHours(computeHoursFromRange(b.start, b.end)) + ' שעות' : '—'}</td>
+                      <td style="white-space:nowrap;">
+                        <button type="button" class="btn ghost small" data-edit-break="${b.id}">עריכה</button>
+                        <button type="button" class="btn danger" data-del-break="${b.id}">מחיקה</button>
+                      </td>
+                    </tr>`}
                   `).join('')}
                 </tbody>
               </table>
@@ -4602,6 +4610,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   const fixBreakEndBtn = document.getElementById('fixBreakEndBtn');
   if(fixBreakEndBtn && openEntry) fixBreakEndBtn.onclick = () => {
     state._editBreaksKey = null; // טוען מחדש את ההפסקות של היום לעריכה
+    state._editingBreakId = '__open__';
     renderEmployeeDashboard(emp, openEntry.id, true);
     setTimeout(() => { const el = document.querySelector('[data-break-end]:placeholder-shown, [data-break-end][value=""]'); if(el){ el.focus(); try{ el.scrollIntoView({ block: 'center' }); }catch(_){} } }, 300);
   };
@@ -4785,7 +4794,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   if(manualToggleHeader && !editingEntry){
     manualToggleHeader.onclick = () => {
       state._manualOpen = !state._manualOpen;
-      if(state._manualOpen){ state._editBreaks = []; state._editBreaksKey = 'new'; state._formDraft = null; }
+      if(state._manualOpen){ state._editBreaks = []; state._editBreaksKey = 'new'; state._formDraft = null; state._editingBreakId = null; }
       renderEmployeeDashboard(emp, null, true);
     };
   }
@@ -4810,7 +4819,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 
     const cancelBtn = document.getElementById('cancelEditHours');
     if(cancelBtn) cancelBtn.onclick = () => {
-      state._editBreaks = []; state._editBreaksKey = 'new'; state._formDraft = null;
+      state._editBreaks = []; state._editBreaksKey = 'new'; state._formDraft = null; state._editingBreakId = null;
       renderEmployeeDashboard(emp, null, true);
     };
 
@@ -4840,6 +4849,14 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const h = b.end ? computeHoursFromRange(b.start, b.end) : null;
       if(cell) cell.textContent = h !== null && h > 0 ? fmtHours(Math.round(h * 100) / 100) + ' שעות' : '—';
     };
+    document.querySelectorAll('[data-edit-break]').forEach(btn => { btn.onclick = () => { saveDraft(); state._editingBreakId = btn.dataset.editBreak; renderEmployeeDashboard(emp, editingEntry ? editingEntry.id : null, true); }; });
+    document.querySelectorAll('[data-done-break]').forEach(btn => { btn.onclick = () => {
+      const b = (state._editBreaks || []).find(x => x.id === btn.dataset.doneBreak);
+      const errB = document.getElementById('addBreakErr');
+      if(b && b.end){ const h = computeHoursFromRange(hhmm(b.start), hhmm(b.end)); if(h === null || h <= 0){ if(errB) errB.textContent = 'שעת סיום ההפסקה צריכה להיות אחרי שעת ההתחלה'; return; } }
+      if(errB) errB.textContent = '';
+      saveDraft(); state._editingBreakId = null; renderEmployeeDashboard(emp, editingEntry ? editingEntry.id : null, true);
+    }; });
     document.querySelectorAll('[data-break-start]').forEach(inp => { inp.oninput = () => onBreakEdit(inp.dataset.breakStart, 'start', inp.value); });
     document.querySelectorAll('[data-break-end]').forEach(inp => { inp.oninput = () => onBreakEdit(inp.dataset.breakEnd, 'end', inp.value); });
     document.querySelectorAll('[data-del-break]').forEach(btn => {
@@ -4906,7 +4923,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       submitBtn.textContent = editingEntry ? 'עדכון שינויים' : 'הוספה';
       if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
       if(entryMonth !== month){ state._empMonth = entryMonth; }
-      state._editBreaks = []; state._editBreaksKey = 'new'; state._formDraft = null;
+      state._editBreaks = []; state._editBreaksKey = 'new'; state._formDraft = null; state._editingBreakId = null;
       renderEmployeeDashboard(emp, null, fresh);
     };
   }
