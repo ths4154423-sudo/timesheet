@@ -1919,6 +1919,39 @@ function attachLongPress(el, onLongPress, onClick){
 
 
 
+// מדריך שימוש לעובד
+function renderEmployeeGuide(emp){
+  stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog();
+  setHeader('מדריך שימוש', '<button class="btn ghost small" id="guideBackBtn">חזרה</button>');
+  const sec = (icon, title, body) => `<div class="card"><h3 style="margin-top:0;">${icon} ${title}</h3><div style="font-size:14.5px; line-height:1.9;">${body}</div></div>`;
+  app.innerHTML = `
+    ${sec('🟢', 'דיווח באתר', `
+      בתחילת היום לוחצים <b>"התחלת יום עבודה"</b>, ובסוף היום <b>"סיום יום עבודה"</b>.<br>
+      יוצאים להפסקה קצרה? <b>"התחלת הפסקה"</b>, וכשחוזרים <b>"סיום הפסקה"</b>.<br>
+      יוצאים לכמה שעות וחוזרים באותו יום? <b>"סיום יום עבודה בינתיים"</b>, וכשחוזרים <b>"המשך יום עבודה"</b>.`)}
+    ${sec('📞', 'דיווח בטלפון', `
+      מתקשרים למספר של שעון הנוכחות: <b>שיחה ראשונה ביום = כניסה</b>, <b>השיחה הבאה = יציאה</b>.<br>
+      אם השיחה <b>התנתקה מיד</b> – הדיווח התקבל.<br>
+      אחרי דיווח צריך לחכות לפחות <b>10 דקות</b> לפני הדיווח הבא (כדי ששיחה כפולה בטעות לא תיחשב).<br>
+      יצאתם וחזרתם באותו יום? מתקשרים שוב – היום ממשיך, והזמן שהייתם בחוץ נרשם כהפסקה.<br>
+      הדיווח בטלפון עובד רק מהמספר שרשום אצלכם במערכת.`)}
+    ${sec('🔔', 'צלצולי תזכורת', `
+      אם לא דיווחתם כניסה עד השעה שנקבעה, או לא דיווחתם יציאה בערב – שעון הנוכחות יצלצל אליכם. <b>אין צורך לענות</b>, הצלצול הוא רק תזכורת.<br>
+      לא רוצים תזכורות? <b>הגדרות ← התראות ותזכורות</b>.`)}
+    ${sec('⚠️', 'שכחתי משהו', `
+      <b>שכחתי לסיים הפסקה:</b> בזמן ההפסקה לוחצים <b>"שכחתי לסיים – עדכון שעה"</b> ומזינים את השעה שבה ההפסקה באמת נגמרה.<br>
+      <b>שכחתי לדווח יציאה:</b> כשנכנסים לאתר יופיע חלון "יש יום עבודה פתוח" – לוחצים <b>"עדכון שעת סיום"</b>. מי שמתחיל למחרת יום חדש בטלפון יקבל על זה גם מייל.<br>
+      <b>טעות בשעות של יום קודם:</b> <b>רישומי החודש ← עריכה</b> ליד היום. ליד כל הפסקה יש <b>עריכה</b> ו<b>מחיקה</b>.`)}
+    ${sec('🏖️', 'חופשה ומחלה', `
+      ב<b>רישומי החודש</b>, בתחתית הדף, אפשר לסמן ימי חופשה ומחלה. בימים האלה לא תקבלו צלצול תזכורת לכניסה.`)}
+    ${sec('🕯️', 'שבת וחג', `
+      מהדלקת נרות ועד צאת השבת או החג (לפי זמני תל אביב) המערכת סגורה – אין דיווחים ואין תזכורות.`)}
+    ${sec('⚙️', 'עוד בהגדרות', `
+      <b>יעד יומי</b> – לקבוע יעד בשקלים או בשעות. <b>אבטחה</b> – לשנות את קוד הכניסה. <b>עיצוב ותצוגה</b> – צבעים ומצב כהה.`)}
+  `;
+  document.getElementById('guideBackBtn').onclick = () => renderEmployeeSettings(emp);
+}
+
 // מסך קביעת יעד יומי
 async function renderEmployeeGoal(emp){
   stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog();
@@ -3202,11 +3235,80 @@ function renderAdminCharts(rows){
   }
 }
 
+// ---------- מנהל: בדיקת תקינות של העובדים והרישומים ----------
+async function renderAdminHealthCheck(){
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `<div class="empty-state">בודק את כל הרישומים...</div>`;
+  const today = todayStr();
+  const employees = activeEmployees();
+  const issues = []; // { level: 'error'|'warn', who, text }
+  const add = (level, who, text) => issues.push({ level, who, text });
+  const fmtD = (d) => d.split('-').reverse().join('/');
+  const phoneOk = (p) => /^0(5\d{8}|[2-489]\d{7}|7\d{8})$/.test(String(p).replace(/\D/g, ''));
+  const seenPhones = {};
+  for(const emp of employees){
+    const ph = String(emp.phone || '').replace(/\D/g, '');
+    if(!ph) add('warn', emp.name, 'אין מספר טלפון – העובד לא יוכל לדווח בצלצול ולא יקבל תזכורות.');
+    else if(!phoneOk(ph)) add('error', emp.name, `מספר הטלפון ${emp.phone} נראה שגוי (${ph.length} ספרות).`);
+    else if(seenPhones[ph]) add('error', emp.name, `מספר הטלפון ${emp.phone} רשום גם אצל ${seenPhones[ph]} – הצלצול יירשם רק לאחד מהם.`);
+    if(ph) seenPhones[ph] = seenPhones[ph] || emp.name;
+    if(!emp.email) add('warn', emp.name, 'אין כתובת מייל – העובד לא יקבל מייל כשנשאר לו יום פתוח.');
+    if(emp.payType !== 'fixed' && !(Number(emp.rate) > 0)) add('error', emp.name, 'לא הוגדר תעריף לשעה – השכר יחושב כ-0.');
+  }
+  const all = await Promise.all(employees.map(async emp => ({ emp, hoursData: (await loadHours(emp.id)) || {} })));
+  for(const { emp, hoursData } of all){
+    Object.keys(hoursData).sort().forEach(month => {
+      const list = Array.isArray(hoursData[month]) ? hoursData[month] : [];
+      list.forEach(e => {
+        const d = fmtD(e.date || '');
+        if(!e.end && e.date < today) add('error', emp.name, `יום ${d} עדיין פתוח (נכנס/ה ב-${hhmm(e.start)}, אין שעת יציאה).`);
+        if(e.end){
+          const h = computeEntryHours(e);
+          if(h !== null && h > 14) add('warn', emp.name, `ביום ${d} נרשמו ${fmtHours(Math.round(h * 100) / 100)} שעות – כדאי לבדוק שזה נכון.`);
+          if(h !== null && h <= 0) add('error', emp.name, `ביום ${d} סה"כ השעות יוצא 0 או פחות – כנראה ההפסקות ארוכות מיום העבודה.`);
+        }
+        (e.breaks || []).forEach(b => {
+          if(!b.end && e.end) add('error', emp.name, `ביום ${d} יש הפסקה מ-${hhmm(b.start)} בלי שעת סיום, למרות שהיום נסגר.`);
+          if(b.end){
+            const bh = computeHoursFromRange(hhmm(b.start), hhmm(b.end));
+            if(bh === null || bh <= 0 || bh >= 12) add('error', emp.name, `ביום ${d} ההפסקה ${hhmm(b.start)}–${hhmm(b.end)} אינה תקינה.`);
+          }
+          if(b.start && e.start && hhmm(b.start) < hhmm(e.start)) add('warn', emp.name, `ביום ${d} ההפסקה מתחילה (${hhmm(b.start)}) לפני תחילת היום (${hhmm(e.start)}).`);
+        });
+      });
+      const byDate = {};
+      list.forEach(e => { byDate[e.date] = (byDate[e.date] || 0) + 1; });
+      Object.entries(byDate).filter(([, n]) => n > 1).forEach(([date, n]) => add('warn', emp.name, `ביום ${fmtD(date)} יש ${n} רישומים נפרדים (מלפני האיחוד לשורה אחת ליום). בסיכומים הם נספרים כיום אחד.`));
+    });
+  }
+  const errors = issues.filter(i => i.level === 'error'), warns = issues.filter(i => i.level === 'warn');
+  const block = (title, color, list) => !list.length ? '' : `
+    <div class="card">
+      <h3 style="margin-top:0; color:${color};">${title} (${list.length})</h3>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        ${list.map(i => `<div style="padding:9px 12px; background:var(--paper-alt); border-radius:8px; border-inline-start:4px solid ${color}; font-size:14px;"><b>${escapeHtml(i.who)}:</b> ${escapeHtml(i.text)}</div>`).join('')}
+      </div>
+    </div>`;
+  content.innerHTML = `
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+      <button class="btn ghost small" id="healthBack">→ חזרה לניהול עובדים</button>
+      <button class="btn ghost small" id="healthRerun">🔄 בדיקה מחדש</button>
+      <span class="subtitle">נבדקו ${employees.length} עובדים פעילים</span>
+    </div>
+    ${!issues.length ? '<div class="card"><div class="empty-state">✅ הכול תקין! לא נמצאו בעיות.</div></div>' : ''}
+    ${block('❌ בעיות שצריך לתקן', '#DC2626', errors)}
+    ${block('⚠️ כדאי לבדוק', '#D97706', warns)}
+  `;
+  document.getElementById('healthBack').onclick = renderAdminEmployees;
+  document.getElementById('healthRerun').onclick = renderAdminHealthCheck;
+}
+
 function renderAdminEmployees(){
   const content = document.getElementById('tabContent');
   content.innerHTML = `
-    <div style="text-align:right; margin-bottom:16px;">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
       <button class="btn brass" id="goToAddEmp">+ הוסף עובד חדש</button>
+      <button class="btn ghost" id="goToHealth">🩺 בדיקת תקינות</button>
     </div>
     <div class="card">
       <h3>רשימת עובדים</h3>
@@ -3216,6 +3318,7 @@ function renderAdminEmployees(){
     </div>
   `;
   document.getElementById('goToAddEmp').onclick = renderAddEmployeePage;
+  document.getElementById('goToHealth').onclick = renderAdminHealthCheck;
   renderEmpList();
 }
 
@@ -5233,6 +5336,7 @@ function renderMonthlyChart(emp, hoursData){
 const SETTINGS_CATEGORIES = [
   { key: 'sound', icon: '🔔', label: 'התראות ותזכורות', hint: 'הודעות קוליות, צלילים וצלצולי תזכורת בטלפון' },
   { key: 'appearance', icon: '🎨', label: 'עיצוב ותצוגה', hint: 'צבעים, מצב כהה ואפשרויות תצוגה' },
+  { key: 'guide', icon: '📖', label: 'מדריך שימוש', hint: 'איך מדווחים באתר ובטלפון, ומה עושים כשמשהו לא בסדר', action: true },
   { key: 'goal', icon: '🎯', label: 'יעד יומי', hint: 'קביעת יעד יומי בשקלים או בשעות', action: true },
   { key: 'security', icon: '🔒', label: 'אבטחה', hint: 'שינוי קוד הכניסה למערכת', action: true },
   { key: 'requests', icon: '📨', label: 'בקשה למנהל', hint: 'שליחת הודעה חופשית וצפייה בסטטוס בקשות קודמות', action: true }
@@ -5363,6 +5467,7 @@ async function renderEmployeeSettings(emp){
       if(cat && cat.action && cat.key === 'requests'){ renderEmployeeRequests(emp); return; }
       if(cat && cat.action && cat.key === 'security'){ renderEmployeeSecurity(emp); return; }
       if(cat && cat.action && cat.key === 'goal'){ renderEmployeeGoal(emp); return; }
+      if(cat && cat.action && cat.key === 'guide'){ renderEmployeeGuide(emp); return; }
       renderEmployeeSettingsCategory(emp, btn.dataset.openCategory);
     };
   });
