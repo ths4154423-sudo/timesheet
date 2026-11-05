@@ -3678,12 +3678,29 @@ async function renderAdminSettings(){
         </form>
       </div>
     `,
-    security: () => sectionsHtml.password() + `
+    security: () => {
+      // אבטחה: רשימת אפשרויות; לחיצה על שורה פותחת אותה (ושאר השורות נסגרות)
+      const open = state._adminSecOpen || null;
+      const items = [
+        { key: 'password', icon: '🔑', label: 'שינוי סיסמת מנהל', hint: 'החלפת הסיסמה לכניסה לפאנל הניהול', body: () => sectionsHtml.password().replace('<div class="card">', '<div style="padding:4px 2px 0;">').replace('<h3>שינוי סיסמת מנהל</h3>', '') },
+        { key: 'device', icon: '📱', label: 'מכשיר מהימן', hint: 'ניתוק המכשיר הזה מכניסה ללא אינטרנט', body: () => '<div style="padding:8px 2px 0;"><button type="button" class="btn danger" id="revokeTrustedDeviceBtn">ניתוק מכשיר זה מכניסה ללא אינטרנט</button></div>' }
+      ];
+      return `
       <div class="card">
-        <h3>מכשיר מהימן</h3>
-        <button type="button" class="btn danger" id="revokeTrustedDeviceBtn">ניתוק מכשיר זה מכניסה ללא אינטרנט</button>
-      </div>
-    `,
+        <h3>🔒 אבטחה</h3>
+        ${items.map((it, i) => `
+          <div style="margin-top:${i === 0 ? '0' : '10px'}; background:var(--paper-alt); border-radius:12px;">
+            <button type="button" data-sec-item="${it.key}" style="width:100%; text-align:right; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 16px; background:none; border:none; color:var(--ink); cursor:pointer; font-family:'Heebo',sans-serif; font-size:14px;">
+              <span>
+                <span style="display:block; font-weight:600;">${it.icon} ${it.label}</span>
+                <span class="hint" style="display:block; margin-top:2px; font-size:13px;">${it.hint}</span>
+              </span>
+              <span style="font-size:16px;">${open === it.key ? '▲' : '‹'}</span>
+            </button>
+            ${open === it.key ? `<div style="margin:0 10px 10px; padding:6px 14px 14px; background:var(--surface); border-radius:10px;">${it.body()}</div>` : ''}
+          </div>`).join('')}
+      </div>`;
+    },
     info: () => `
       <div class="card">
         <h3>סיסמה ושחזור סיסמה</h3>
@@ -3755,6 +3772,9 @@ async function renderAdminSettings(){
     </div>
     ${sectionsHtml[activeTab]()}
   `;
+  content.querySelectorAll('[data-sec-item]').forEach(btn => {
+    btn.onclick = () => { state._adminSecOpen = state._adminSecOpen === btn.dataset.secItem ? null : btn.dataset.secItem; renderAdminSettings(); };
+  });
   content.querySelectorAll('[data-settings-tab]').forEach(t => {
     t.onclick = () => {
       state._adminSettingsTab = t.dataset.settingsTab;
