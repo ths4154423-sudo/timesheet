@@ -4004,7 +4004,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   const editKey = editingEntry ? editingEntry.id : 'new';
   if(state._editBreaksKey !== editKey){
     state._editBreaksKey = editKey;
-    state._editBreaks = editingEntry ? (editingEntry.breaks || []).map(b => ({...b})) : [];
+    state._editBreaks = editingEntry ? (editingEntry.breaks || []).map(b => ({ ...b, id: b.id || uid() })) : []; // להפסקות ישנות אין מזהה - נותנים להן כדי שאפשר יהיה לערוך ולמחוק
     state._formDraft = null;
   }
   const editBreaks = state._editBreaks || [];
@@ -4370,7 +4370,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           ${onBreak
             ? (lastBreak.type === 'pause'
                 ? '<button type="button" class="btn brass" id="endBreakBtn">🔁 המשך יום עבודה</button>'
-                : '<button type="button" class="btn brass" id="endBreakBtn">▶️ סיום הפסקה</button>')
+                : '<button type="button" class="btn brass" id="endBreakBtn">▶️ סיום הפסקה</button>') + ' <button type="button" class="btn ghost small" id="fixBreakEndBtn" title="שכחתם לסיים את ההפסקה בזמן? אפשר לעדכן את השעה שבה היא הסתיימה בפועל">✏️ שכחתי לסיים – עדכון שעה</button>'
             : '<button type="button" class="btn ghost" id="startBreakBtn">☕ התחלת הפסקה</button>'
           }
         </div>
@@ -4448,9 +4448,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
                 <tbody>
                   ${editBreaks.map(b => `
                     <tr>
-                      <td class="mono">${hhmm(b.start) || '—'}</td>
-                      <td class="mono">${b.end ? (hhmm(b.end) || '—') : 'מתמשכת'}</td>
-                      <td class="mono">${b.end ? fmtHours(computeHoursFromRange(b.start, b.end)) + ' שעות' : '—'}</td>
+                      <td><input type="time" class="mono" data-break-start="${b.id}" value="${hhmm(b.start) || ''}" style="min-width:110px;" /></td>
+                      <td>
+                        <input type="time" class="mono" data-break-end="${b.id}" value="${b.end ? (hhmm(b.end) || '') : ''}" style="min-width:110px;" />
+                        ${!b.end ? '<div class="hint" style="font-size:12px; margin-top:2px;">⏳ הפסקה פתוחה – הזינו שעת סיום</div>' : ''}
+                      </td>
+                      <td class="mono" data-break-total="${b.id}">${b.end ? fmtHours(computeHoursFromRange(b.start, b.end)) + ' שעות' : '—'}</td>
                       <td><button type="button" class="btn danger" data-del-break="${b.id}">מחיקה</button></td>
                     </tr>
                   `).join('')}
@@ -4596,6 +4599,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   }
 
   // ---- end break / resume paused day ----
+  const fixBreakEndBtn = document.getElementById('fixBreakEndBtn');
+  if(fixBreakEndBtn && openEntry) fixBreakEndBtn.onclick = () => {
+    state._editBreaksKey = null; // טוען מחדש את ההפסקות של היום לעריכה
+    renderEmployeeDashboard(emp, openEntry.id, true);
+    setTimeout(() => { const el = document.querySelector('[data-break-end]:placeholder-shown, [data-break-end][value=""]'); if(el){ el.focus(); try{ el.scrollIntoView({ block: 'center' }); }catch(_){} } }, 300);
+  };
   const endBreakBtn = document.getElementById('endBreakBtn');
   if(endBreakBtn){
     const isPause = onBreak && lastBreak && lastBreak.type === 'pause';
@@ -4822,6 +4831,17 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         renderEmployeeDashboard(emp, editingEntry ? editingEntry.id : null, true);
       };
     }
+    // עריכת שעות של הפסקה קיימת (גם הפסקה שנשארה פתוחה)
+    const onBreakEdit = (id, field, value) => {
+      const b = (state._editBreaks || []).find(x => x.id === id);
+      if(!b) return;
+      b[field] = value ? value : (field === 'end' ? null : b[field]);
+      const cell = document.querySelector(`[data-break-total="${id}"]`);
+      const h = b.end ? computeHoursFromRange(b.start, b.end) : null;
+      if(cell) cell.textContent = h !== null && h > 0 ? fmtHours(Math.round(h * 100) / 100) + ' שעות' : '—';
+    };
+    document.querySelectorAll('[data-break-start]').forEach(inp => { inp.oninput = () => onBreakEdit(inp.dataset.breakStart, 'start', inp.value); });
+    document.querySelectorAll('[data-break-end]').forEach(inp => { inp.oninput = () => onBreakEdit(inp.dataset.breakEnd, 'end', inp.value); });
     document.querySelectorAll('[data-del-break]').forEach(btn => {
       btn.onclick = () => {
         saveDraft();
@@ -4848,6 +4868,16 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       }
       const entryMonth = date.slice(0,7);
       const breaksToSave = (state._editBreaks || []).map(b => ({...b}));
+      for(const b of breaksToSave){
+        const bs = hhmm(b.start), be = b.end ? hhmm(b.end) : null;
+        if(!bs){ fail('לאחת ההפסקות חסרה שעת התחלה'); return; }
+        if(be){
+          const bh = computeHoursFromRange(bs, be);
+          if(bh === null || bh <= 0 || bh >= 12){ fail(`ההפסקה ${bs}–${be} אינה תקינה: שעת הסיום צריכה להיות אחרי שעת ההתחלה`); return; }
+        } else if(end){ fail(`להפסקה שהתחילה ב-${bs} חסרה שעת סיום. יום שנסגר לא יכול להכיל הפסקה פתוחה.`); return; }
+      }
+      const openBreaks = breaksToSave.filter(b => !b.end);
+      if(openBreaks.length > 1){ fail('יכולה להיות רק הפסקה פתוחה אחת. הזינו שעת סיום להפסקות הקודמות.'); return; }
       errEl.style.color = '';
       errEl.textContent = '';
       submitBtn.disabled = true;
