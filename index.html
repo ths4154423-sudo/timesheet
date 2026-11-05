@@ -1425,7 +1425,7 @@ function startBreakWatchdog(emp){
   breakWatchdogInterval = setInterval(() => {
     if(new Date().getHours() >= 20){
       stopBreakWatchdog();
-      renderEmployeeDashboard(emp, null, true);
+      renderEmployeeDashboard(emp, null, true); // הבדיקה עצמה (כולל "התחילה לפני 20:00") נעשית בדשבורד
     }
   }, 15000);
 }
@@ -4037,10 +4037,11 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   // Auto-close the work day if the employee went on break / paused the day and never came back before 20:00.
   // The day is ended at the moment the break started, and the break itself is dropped from the record entirely.
   let autoCloseNotice = null;
-  if(openEntry && onBreak && lastBreak && !editingEntry && new Date().getHours() >= 20){
-    autoCloseNotice = `יום העבודה נסגר אוטומטית בשעה ${hhmm(lastBreak.start)}, מכיוון שלא חזרת עד השעה 20:00. ההפסקה לא תופיע ברישום.`;
+  // רק הפסקה שהתחילה לפני 20:00 (הפסקה שהתחילה אחרי 20:00 לא נסגרת אוטומטית)
+  if(openEntry && onBreak && lastBreak && !editingEntry && new Date().getHours() >= 20 && hhmm(lastBreak.start) < '20:00'){
+    autoCloseNotice = `יום העבודה נסגר אוטומטית בשעה ${hhmm(lastBreak.start)}, מכיוון שלא חזרת מההפסקה עד השעה 20:00. אם חזרת לעבוד, אפשר לתקן את שעת הסיום ברישומי החודש.`;
     openEntry.end = lastBreak.start;
-    openEntry.breaks = [];
+    openEntry.breaks = openEntry.breaks.slice(0, -1); // מוחקים רק את ההפסקה הפתוחה; הפסקות קודמות נשמרות
     await saveHours(emp.id, hoursData);
     openEntry = null;
     onBreak = false;
