@@ -484,6 +484,7 @@
     <div>
       <div class="brand"><img src="logo.jpg" alt="דירתא" class="header-logo" /></div>
       <div class="subtitle" id="headerSubtitle">רישום שעות עבודה ושכר</div>
+      <div class="subtitle" id="hebDateLine" style="font-size:12.5px; opacity:.85; margin-top:2px;"></div>
     </div>
     <div id="headerActions"></div>
   </header>
@@ -857,6 +858,150 @@ async function getEmpSettings(empId){
   const settings = await loadSettings(empId);
   state._settingsCache = { empId, settings };
   return settings;
+}
+
+function activeEmployees(){ return (state.employees || []).filter(e => !e.frozen); }
+// ---------- תאריך עברי מלא לראש הדף ----------
+function hebYearStr(y){
+  let n = y % 1000;
+  const parts = [];
+  const vals = [[400,'ת'],[300,'ש'],[200,'ר'],[100,'ק'],[90,'צ'],[80,'פ'],[70,'ע'],[60,'ס'],[50,'נ'],[40,'מ'],[30,'ל'],[20,'כ'],[10,'י'],[9,'ט'],[8,'ח'],[7,'ז'],[6,'ו'],[5,'ה'],[4,'ד'],[3,'ג'],[2,'ב'],[1,'א']];
+  for(const [v, ch] of vals){ while(n >= v){ if(n === 15 || n === 16){ parts.push('ט', n === 15 ? 'ו' : 'ז'); n = 0; break; } parts.push(ch); n -= v; } }
+  const str = parts.join('');
+  return str.length > 1 ? str.slice(0, -1) + '״' + str.slice(-1) : str + '׳';
+}
+function israelNowParts(date){
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }).formatToParts(date || new Date()).map(x => [x.type, x.value]));
+  return { y: Number(p.year), m: Number(p.month), d: Number(p.day), wd: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(p.weekday) };
+}
+function fullHebrewDateLine(){
+  try{
+    const n = israelNowParts();
+    const ds = n.y + '-' + String(n.m).padStart(2, '0') + '-' + String(n.d).padStart(2, '0');
+    const hy = Number(new Intl.DateTimeFormat('en-u-ca-hebrew', { year: 'numeric' }).formatToParts(new Date(n.y, n.m - 1, n.d, 12)).find(x => x.type === 'year').value);
+    const days = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+    return `יום ${days[n.wd]}, ${hebrewDateStr(ds)} ${hebYearStr(hy)}`;
+  }catch(e){ return ''; }
+}
+function refreshHebDateLine(){ const el = document.getElementById('hebDateLine'); if(el) el.textContent = fullHebrewDateLine(); }
+
+// ---------- זמני שבת וחג לתל אביב ----------
+// שקיעה וצאת הכוכבים לפי נוסחת NOAA. הדלקת נרות: 21 דקות לפני השקיעה; יציאה: צאת הכוכבים (השמש 8.5° מתחת לאופק).
+const TLV_COORDS = { lat: 32.0853, lng: 34.7818 };
+function sunEveningUTC(y, m, d, zenith){
+  const rad = Math.PI / 180, lat = TLV_COORDS.lat, lng = TLV_COORDS.lng;
+  const N = Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 0)) / 86400000);
+  const lngHour = lng / 15, t = N + ((18 - lngHour) / 24);
+  const M = (0.9856 * t) - 3.289;
+  let L = M + (1.916 * Math.sin(M * rad)) + (0.020 * Math.sin(2 * M * rad)) + 282.634; L = ((L % 360) + 360) % 360;
+  let RA = Math.atan(0.91764 * Math.tan(L * rad)) / rad; RA = ((RA % 360) + 360) % 360;
+  RA = (RA + (Math.floor(L / 90) * 90 - Math.floor(RA / 90) * 90)) / 15;
+  const sinDec = 0.39782 * Math.sin(L * rad), cosDec = Math.cos(Math.asin(sinDec));
+  const cosH = (Math.cos(zenith * rad) - (sinDec * Math.sin(lat * rad))) / (cosDec * Math.cos(lat * rad));
+  const H = Math.acos(Math.max(-1, Math.min(1, cosH))) / rad / 15;
+  let UT = (H + RA - (0.06571 * t) - 6.622) - lngHour; UT = ((UT % 24) + 24) % 24;
+  return new Date(Date.UTC(y, m - 1, d) + UT * 3600000);
+}
+function candleLighting(y, m, d){ return new Date(sunEveningUTC(y, m, d, 90.833).getTime() - 21 * 60000); }
+function tzeitHakochavim(y, m, d){ return sunEveningUTC(y, m, d, 98.5); }
+const ISSUR_YOM_TOV = { 'Tishri-1': 'ראש השנה', 'Tishri-2': 'ראש השנה', 'Tishri-10': 'יום הכיפורים', 'Tishri-15': 'סוכות', 'Tishri-22': 'שמחת תורה', 'Nisan-15': 'פסח', 'Nisan-21': 'שביעי של פסח', 'Sivan-6': 'שבועות' };
+let _hebDayFmt = null;
+function issurDayName(y, m, d){
+  const dt = new Date(y, m - 1, d, 12);
+  try{
+    if(!_hebDayFmt) _hebDayFmt = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'long' });
+    const pr = _hebDayFmt.formatToParts(dt);
+    const key = pr.find(x => x.type === 'month').value + '-' + Number(pr.find(x => x.type === 'day').value);
+    if(ISSUR_YOM_TOV[key]) return ISSUR_YOM_TOV[key];
+  }catch(e){}
+  return dt.getDay() === 6 ? 'שבת' : null;
+}
+function addDays(y, m, d, k){ const dt = new Date(y, m - 1, d + k, 12); return [dt.getFullYear(), dt.getMonth() + 1, dt.getDate()]; }
+// האם עכשיו שבת או יום טוב (מהדלקת נרות ועד צאת הכוכבים), ומתי זה נגמר
+function shabbatStatus(now){
+  now = now || new Date();
+  const t = israelNowParts(now);
+  const today = [t.y, t.m, t.d], tomorrow = addDays(t.y, t.m, t.d, 1);
+  let start = null;
+  if(issurDayName(...today) && now < tzeitHakochavim(...today)) start = today;
+  else if(issurDayName(...tomorrow) && now >= candleLighting(...today)) start = tomorrow;
+  if(!start) return { closed: false };
+  let last = start;
+  for(let i = 0; i < 4; i++){ const nx = addDays(...last, 1); if(issurDayName(...nx)) last = nx; else break; }
+  const name = issurDayName(...start);
+  return { closed: true, name, reopenAt: tzeitHakochavim(...last) };
+}
+function renderShabbatScreen(st){
+  const greet = st.name === 'שבת' ? 'שבת שלום' : (st.name === 'יום הכיפורים' ? 'גמר חתימה טובה' : 'חג שמח');
+  headerSubtitle.textContent = st.name === 'שבת' ? 'שבת קודש' : st.name;
+  headerActions.innerHTML = '';
+  refreshHebDateLine();
+  const t = st.reopenAt.toLocaleTimeString('he-IL', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit' });
+  app.innerHTML = `
+    <div class="center-stage"><div class="login-card" style="text-align:center;">
+      <div style="font-size:46px; margin-bottom:8px;">🕯️🕯️</div>
+      <h2 style="margin:0 0 10px;">${greet}!</h2>
+      <p style="font-size:16px; margin:0 0 6px;">המערכת סגורה ב${st.name === 'שבת' ? 'שבת' : 'חג'}.</p>
+      <p class="hint" style="margin:0;">תחזור לפעול ${st.name === 'שבת' ? 'במוצאי שבת' : 'במוצאי החג'} בשעה ${t} (זמני תל אביב).</p>
+    </div></div>`;
+}
+// בודק ומציג את מסך השבת אם צריך. מחזיר true אם המערכת סגורה כרגע.
+function shabbatGuard(){
+  const st = shabbatStatus();
+  if(st.closed){ state._shabbatMode = true; renderShabbatScreen(st); return true; }
+  return false;
+}
+setInterval(() => {
+  const st = shabbatStatus();
+  if(st.closed && !state._shabbatMode){ state._shabbatMode = true; renderShabbatScreen(st); }
+  else if(!st.closed && state._shabbatMode){ location.reload(); }
+  refreshHebDateLine();
+}, 30000);
+
+// ---------- הישגים: רצף ימים שבהם היעד היומי הושג ----------
+// ימי עבודה = ראשון עד חמישי, בלי שבת, חג או יום חופשה/מחלה. "שבוע מושלם" = כל ימי העבודה בשבוע (ראשון-חמישי) עמדו ביעד.
+function goalAchievements(emp, goal, hoursData, daysOff){
+  const offSet = new Set((daysOff || []).map(d => d.date));
+  const dayAch = (ds) => {
+    const [y, m] = ds.split('-');
+    const list = (hoursData[y + '-' + m] || []).filter(e => e.date === ds);
+    const h = list.reduce((sum, e) => sum + entryHoursSoFar(e), 0);
+    return goal.type === 'pay' ? h * (emp.rate || 0) : h;
+  };
+  const isWorkday = (dt) => dt.getDay() <= 4 && !issurDayName(dt.getFullYear(), dt.getMonth() + 1, dt.getDate()) && !specialDayLabel(dt.getFullYear(), dt.getMonth() + 1, dt.getDate())?.kind?.includes('holiday') && !offSet.has(ymd(dt));
+  function ymd(dt){ return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); }
+  // רצף נוכחי: סופרים אחורה מהיום (היום נספר רק אם היעד כבר הושג)
+  let streak = 0;
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  for(let i = 0; i < 400; i++){
+    const dt = new Date(today); dt.setDate(today.getDate() - i);
+    if(!isWorkday(dt)) continue;
+    const met = dayAch(ymd(dt)) >= goal.value;
+    if(met) streak++;
+    else if(i === 0) continue; // היום עוד לא נגמר
+    else break;
+  }
+  // שבועות מושלמים: עוברים על השבועות שיש בהם נתונים
+  const weeks = new Set();
+  Object.values(hoursData).forEach(list => (list || []).forEach(e => {
+    const [y, m, d] = e.date.split('-').map(Number); const dt = new Date(y, m - 1, d, 12);
+    dt.setDate(dt.getDate() - dt.getDay()); weeks.add(ymd(dt));
+  }));
+  let perfectWeeks = 0;
+  const thisSunday = new Date(today); thisSunday.setDate(today.getDate() - today.getDay());
+  weeks.forEach(ws => {
+    const [y, m, d] = ws.split('-').map(Number); const sun = new Date(y, m - 1, d, 12);
+    if(sun >= thisSunday && today.getDay() < 4) return; // השבוע הנוכחי נספר רק כשהוא נגמר (מיום חמישי)
+    let required = 0, ok = true;
+    for(let k = 0; k <= 4; k++){
+      const dt = new Date(sun); dt.setDate(sun.getDate() + k);
+      if(!isWorkday(dt)) continue;
+      required++;
+      if(dayAch(ymd(dt)) < goal.value){ ok = false; break; }
+    }
+    if(ok && required > 0) perfectWeeks++;
+  });
+  return { streak, perfectWeeks };
 }
 
 // ---------- שעות "עד עכשיו" לרישום (גם ליום פתוח: עד השעה הנוכחית, בניכוי הפסקות) ----------
@@ -1398,7 +1543,7 @@ async function init(){
     // "לגרור" בטעות בחזרה לפאנל הניהול גם כשבפועל המשתמש עבר במכוון לצפות בדשבורד של עובד.
     const session = loadSession();
     if(session && session.role === 'employee'){
-      const emp = state.employees.find(x => x.id === session.empId);
+      const emp = activeEmployees().find(x => x.id === session.empId);
       if(emp){ renderEmployeeDashboard(emp); return; }
       clearSession();
     }
@@ -1431,12 +1576,14 @@ function tryTrustedDeviceAdminLogin(){
 }
 
 function setHeader(subtitle, actionsHtml){
+  refreshHebDateLine();
   headerSubtitle.textContent = subtitle;
   headerActions.innerHTML = actionsHtml || '';
 }
 
 // ---------- LANDING ----------
 function renderLanding(){
+  if(shabbatGuard()) return;
   state.view = 'landing';
   resetTheme();
   setHeader('רישום שעות עבודה ושכר', '');
@@ -1568,13 +1715,13 @@ function renderForgotPassword(){
 // ---------- EMPLOYEE LOGIN ----------
 function renderEmployeeLogin(){
   setHeader('כניסת עובד', '');
-  const options = state.employees.map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+  const options = activeEmployees().map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
   app.innerHTML = `
     <div class="center-stage">
       <div class="login-card">
         <h1>כניסת עובד</h1>
         <p class="hint">בחרו את שמכם והזינו קוד אישי</p>
-        ${state.employees.length === 0 ? '<p class="hint">עדיין לא נוספו עובדים על ידי המנהל.</p>' : `
+        ${activeEmployees().length === 0 ? '<p class="hint">עדיין לא נוספו עובדים על ידי המנהל.</p>' : `
         <form id="empLoginForm" autocomplete="off">
           <div class="field">
             <label>שם עובד</label>
@@ -1591,7 +1738,7 @@ function renderEmployeeLogin(){
           </div>
         </form>
         `}
-        ${state.employees.length === 0 ? '<div class="actions"><button class="btn ghost" id="backBtn2">חזרה</button></div>' : ''}
+        ${activeEmployees().length === 0 ? '<div class="actions"><button class="btn ghost" id="backBtn2">חזרה</button></div>' : ''}
       </div>
     </div>
   `;
@@ -1603,7 +1750,7 @@ function renderEmployeeLogin(){
       e.preventDefault();
       const empId = document.getElementById('empSelect').value;
       const pin = document.getElementById('empPinInput').value;
-      const emp = state.employees.find(x => x.id === empId);
+      const emp = activeEmployees().find(x => x.id === empId);
       if(emp && emp.pin === pin){
         saveSession({ role: 'employee', empId: emp.id });
         const hoursData = await loadHours(emp.id);
@@ -1644,6 +1791,34 @@ function sanitizeTimeInput(raw){
 }
 
 // Custom confirm modal (replaces native confirm() so we can style/animate the message)
+// חלון קופץ: יש יום עבודה פתוח מיום קודם
+function showStaleOpenNotice(emp, stale){
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = `
+    <div class="confirm-box">
+      <h3 style="margin-top:0;">⚠️ יש יום עבודה פתוח</h3>
+      <p style="margin:0 0 8px;">${stale.length === 1 ? 'יום העבודה הזה לא נסגר:' : 'ימי העבודה האלה לא נסגרו:'}</p>
+      <ul style="margin:0 0 10px; padding-inline-start:20px;">
+        ${stale.map(e => `<li>${e.date.split('-').reverse().join('/')} (${hebrewDateStr(e.date)}) – נכנסת ב-${hhmm(e.start)}</li>`).join('')}
+      </ul>
+      <p class="hint" style="margin:0 0 12px; font-size:13.5px;">אפשר להתחיל יום עבודה חדש כרגיל. כדי שהשכר יחושב נכון, כדאי לעדכן את שעת הסיום.</p>
+      <div class="actions" style="justify-content:flex-start;">
+        <button type="button" class="btn brass" id="staleFixBtn">עדכון שעת סיום</button>
+        <button type="button" class="btn ghost" id="staleCloseBtn">אחר כך</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#staleCloseBtn').onclick = close;
+  overlay.querySelector('#staleFixBtn').onclick = () => {
+    close();
+    const e = stale[0];
+    state._empMonth = e.date.slice(0, 7);
+    renderEmployeeDashboard(emp, e.id, true);
+  };
+}
+
 // חלון קופץ אחרי התחלת יום עבודה: כפתור מעבר לאתר דירתא (נפתח בלשונית חדשה)
 function showDirataPopup(){
   const overlay = document.createElement('div');
@@ -2458,6 +2633,7 @@ function resizeImageFile(file, maxSize, quality){
 
 // ---------- ADMIN DASHBOARD ----------
 function renderAdminDashboard(tab){
+  if(shabbatGuard()) return;
   resetTheme();
   setHeader('פאנל ניהול', '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
   app.innerHTML = `
@@ -2657,8 +2833,8 @@ function computeCreditPoints(gender, childYears, extra, taxYear){
 async function renderAdminNetCalc(){
   const content = document.getElementById('tabContent');
   const month = state._netMonth || currentMonthStr();
-  const empId = state._netEmpId || (state.employees[0] && state.employees[0].id) || '';
-  const emp = state.employees.find(e => e.id === empId);
+  const empId = (activeEmployees().find(e => e.id === state._netEmpId) || activeEmployees()[0] || {}).id || '';
+  const emp = activeEmployees().find(e => e.id === empId);
   let gross = 0, hours = 0;
   if(emp){
     const hoursData = await loadHours(emp.id) || {};
@@ -2677,10 +2853,10 @@ async function renderAdminNetCalc(){
   content.innerHTML = `
     <div class="card">
       <h3 style="margin-top:0;">🧮 מחשבון נטו (הערכה)</h3>
-      ${!state.employees.length ? '<div class="empty-state">אין עדיין עובדים במערכת.</div>' : `
+      ${!activeEmployees().length ? '<div class="empty-state">אין עדיין עובדים פעילים במערכת.</div>' : `
       <div class="emp-row-form" style="align-items:flex-end; flex-wrap:wrap; gap:10px;">
         <div class="field" style="margin-top:0;"><label>עובד</label>
-          <select id="netEmp">${state.employees.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${escapeHtml(e.name)}</option>`).join('')}</select>
+          <select id="netEmp">${activeEmployees().map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${escapeHtml(e.name)}</option>`).join('')}</select>
         </div>
         <div class="field" style="margin-top:0;"><label>חודש</label><input type="month" id="netMonth" value="${month}" /></div>
         <div class="field" style="margin-top:0;"><label>ברוטו (₪)</label><input type="number" id="netGross" min="0" step="1" value="${Math.round(gross * 100) / 100}" dir="ltr" /></div>
@@ -2799,7 +2975,7 @@ async function renderAdminNow(){
   content.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
   const t = todayStr();
   const month = t.slice(0, 7);
-  const rows = await Promise.all(state.employees.map(async emp => {
+  const rows = await Promise.all(activeEmployees().map(async emp => {
     const [hoursData, settings] = await Promise.all([loadHours(emp.id), loadSettings(emp.id)]);
     const today = ((hoursData || {})[month] || []).filter(e => e.date === t);
     const off = getDaysOff(settings).find(d => d.date === t);
@@ -2836,7 +3012,7 @@ async function renderAdminNow(){
       <span class="subtitle">היום, ${t.split('-').reverse().join('/')} (${hebrewDateStr(t)}) · מעודכן ל-${timeNow}</span>
       <button type="button" class="btn ghost small" id="nowRefreshBtn">🔄 רענון</button>
     </div>
-    ${state.employees.length === 0 ? '<div class="card"><div class="empty-state">אין עדיין עובדים במערכת.</div></div>' : `
+    ${activeEmployees().length === 0 ? '<div class="card"><div class="empty-state">אין עדיין עובדים פעילים במערכת.</div></div>' : `
     <div class="card" style="display:flex; gap:16px; flex-wrap:wrap; font-size:15px;">
       ${counts.map(c => `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:12px; height:12px; border-radius:50%; background:${ST[c.k].color}; display:inline-block;"></span><b>${ST[c.k].label}:</b> ${c.n}</span>`).join('')}
     </div>
@@ -2869,7 +3045,7 @@ async function renderAdminSummary(){
   content.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
 
   const rows = [];
-  for(const emp of state.employees){
+  for(const emp of activeEmployees()){
     const hoursData = await loadHours(emp.id) || {};
     const entries = hoursData[month] || [];
     const totalHours = entries.reduce((s,e) => s + (computeEntryHours(e) || 0), 0);
@@ -2883,9 +3059,9 @@ async function renderAdminSummary(){
     <div class="top-actions">
       <input type="month" class="month-picker" id="monthPicker" value="${month}" />
       <span class="subtitle">${monthLabel(month)}</span>
-      ${state.employees.length ? '<button type="button" class="btn brass small" id="payrollExportBtn">📥 דוח שכר לאקסל</button>' : ''}
+      ${activeEmployees().length ? '<button type="button" class="btn brass small" id="payrollExportBtn">📥 דוח שכר לאקסל</button>' : ''}
     </div>
-    ${state.employees.length === 0 ? '<div class="card"><div class="empty-state">אין עדיין עובדים במערכת. עברו לטאב "ניהול עובדים" כדי להוסיף.</div></div>' : `
+    ${activeEmployees().length === 0 ? '<div class="card"><div class="empty-state">אין עדיין עובדים במערכת. עברו לטאב "ניהול עובדים" כדי להוסיף.</div></div>' : `
     <div class="card">
       <div class="table-scroll">
         <table>
@@ -2942,7 +3118,7 @@ async function exportPayrollReport(month){
   if(typeof XLSX === 'undefined'){ showToast('ספריית האקסל לא נטענה. נסו לרענן את הדף.'); return; }
   const summary = [], detail = [];
   let sumHours = 0, sumPay = 0;
-  for(const emp of state.employees){
+  for(const emp of activeEmployees()){
     const [hoursData, settings] = await Promise.all([loadHours(emp.id), loadSettings(emp.id)]);
     const entries = (((hoursData || {})[month]) || []).slice().sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
     const totalHours = entries.reduce((sum, e) => sum + (computeEntryHours(e) || 0), 0);
@@ -3159,7 +3335,8 @@ function showEmployeeDetailsModal(emp){
 function renderEmpList(){
   const listEl = document.getElementById('empList');
   if(!listEl || state.employees.length === 0) return;
-  listEl.innerHTML = state.employees.map(emp => `
+  const frozen = state.employees.filter(e => e.frozen);
+  listEl.innerHTML = activeEmployees().map(emp => `
     <div class="list-item clickable" data-emp-row="${emp.id}">
       <div class="avatar-row">
         ${avatarHtml(emp, 'small')}
@@ -3176,14 +3353,45 @@ function renderEmpList(){
       </div>
       <div class="row-actions">
         <button class="btn ghost small" data-edit="${emp.id}">עריכה</button>
+        <button class="btn ghost small" data-freeze="${emp.id}">❄️ הקפאה</button>
         <button class="btn danger" data-del="${emp.id}">מחיקה</button>
       </div>
     </div>
-  `).join('');
+  `).join('') + (frozen.length ? `
+    <h4 style="margin:22px 0 8px;">❄️ עובדים מוקפאים (${frozen.length})</h4>
+    <div class="hint" style="font-size:13px; margin-bottom:8px;">עובד מוקפא לא יכול להיכנס, לא מופיע בדוחות ובתזכורות, וכל הנתונים שלו נשמרים.</div>
+    ${frozen.map(emp => `
+      <div class="list-item" style="opacity:.7;">
+        <div class="avatar-row">
+          ${avatarHtml(emp, 'small')}
+          <div>
+            <div class="name">${escapeHtml(emp.name)}</div>
+            <div class="meta">הוקפא${emp.frozenAt ? ' ב-' + emp.frozenAt.split('-').reverse().join('/') : ''}</div>
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="btn brass small" data-unfreeze="${emp.id}">החזרה לפעילות</button>
+        </div>
+      </div>`).join('')}` : '');
+  const setFrozen = async (id, frozenVal) => {
+    const list = await loadEmployees();
+    if(list === null){ showToast('לא הצלחנו להתחבר לשרת'); return; }
+    const updated = list.map(x => x.id === id ? (frozenVal ? { ...x, frozen: true, frozenAt: todayStr() } : (({ frozen, frozenAt, ...rest }) => rest)(x)) : x);
+    const ok = await saveEmployees(updated);
+    if(ok !== true){ showToast('שגיאה בשמירה'); return; }
+    state.employees = updated;
+    showToast(frozenVal ? 'העובד הוקפא' : 'העובד הוחזר לפעילות');
+    renderAdminEmployees();
+  };
+  listEl.querySelectorAll('[data-freeze]').forEach(btn => btn.onclick = () => {
+    const emp = state.employees.find(x => x.id === btn.dataset.freeze);
+    if(emp && confirm(`להקפיא את ${emp.name}? הוא לא יוכל להיכנס ולא יופיע בדוחות, אבל כל הנתונים שלו יישמרו ואפשר להחזיר אותו בכל רגע.`)) setFrozen(emp.id, true);
+  });
+  listEl.querySelectorAll('[data-unfreeze]').forEach(btn => btn.onclick = () => setFrozen(btn.dataset.unfreeze, false));
 
   listEl.querySelectorAll('[data-emp-row]').forEach(row => {
     row.onclick = (e) => {
-      if(e.target.closest('[data-edit], [data-del]')) return;
+      if(e.target.closest('[data-edit], [data-del], [data-freeze]')) return;
       const emp = state.employees.find(x => x.id === row.dataset.empRow);
       if(emp) showEmployeeDetailsModal(emp);
     };
@@ -3334,7 +3542,6 @@ function renderEditEmployee(empId){
 }
 
 const ADMIN_SETTINGS_TABS = [
-  { key: 'password', label: 'סיסמה' },
   { key: 'email', label: 'כתובת אימייל / וואטסאפ' },
   { key: 'autosend', label: 'שליחה אוטומטית' },
   { key: 'announcement', label: 'הודעה לעובדים' },
@@ -3345,7 +3552,8 @@ const ADMIN_SETTINGS_TABS = [
 async function renderAdminSettings(){
   const content = document.getElementById('tabContent');
   content.innerHTML = `<div class="empty-state">טוען...</div>`;
-  const activeTab = state._adminSettingsTab || 'password';
+  if(state._adminSettingsTab === 'password') state._adminSettingsTab = 'security';
+  const activeTab = state._adminSettingsTab || 'email';
   const announcement = activeTab === 'announcement' ? await loadAnnouncement() : null;
   const managerEmail = activeTab === 'email' ? await loadManagerEmail() : null;
   const managerWhatsapp = activeTab === 'email' ? await loadManagerWhatsapp() : null;
@@ -3470,7 +3678,7 @@ async function renderAdminSettings(){
         </form>
       </div>
     `,
-    security: () => `
+    security: () => sectionsHtml.password() + `
       <div class="card">
         <h3>מכשיר מהימן</h3>
         <button type="button" class="btn danger" id="revokeTrustedDeviceBtn">ניתוק מכשיר זה מכניסה ללא אינטרנט</button>
@@ -3732,6 +3940,7 @@ async function renderAdminSettings(){
 
 // ---------- EMPLOYEE DASHBOARD ----------
 async function renderEmployeeDashboard(emp, editingId, useCache){
+  if(shabbatGuard()) return;
   stopLiveTimer();
   stopLiveMoneyTimer();
   stopClockFieldTimers();
@@ -3797,6 +4006,10 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   const todayMonth = currentMonthStr();
   const todayEntries = hoursData[todayMonth] || [];
   let openEntry = findOpenEntryToday(todayEntries);
+  // יום עבודה פתוח מיום קודם (לא נסגר): מודיעים לעובד פעם אחת ביום
+  const staleOpen = [];
+  Object.values(hoursData).forEach(list => (list || []).forEach(e => { if(!e.end && e.date < todayStr()) staleOpen.push(e); }));
+  staleOpen.sort((a, b) => a.date.localeCompare(b.date));
   let onBreak = !!(openEntry && openEntry.breaks && openEntry.breaks.length && !openEntry.breaks[openEntry.breaks.length - 1].end);
   let lastBreak = onBreak ? openEntry.breaks[openEntry.breaks.length - 1] : null;
 
@@ -4057,6 +4270,14 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         <div id="goalBar" style="height:100%; width:${pr.pct}%; background:${pr.done ? '#10B981' : 'var(--brass)'}; border-radius:999px; transition:width .6s;"></div>
       </div>
       <div id="goalText" style="margin-top:8px; font-size:14.5px;">${goalTextHtml(pr, goal)}</div>
+      ${(() => {
+        const ach = goalAchievements(emp, goal, hoursData, getDaysOff(empSettings));
+        return `<div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:14px;">
+          <span title="ימי עבודה ברצף שבהם היעד הושג">🔥 רצף: <b>${ach.streak}</b> ${ach.streak === 1 ? 'יום' : 'ימים'}</span>
+          <span title="שבועות שבהם היעד הושג בכל ימי העבודה (ראשון עד חמישי)">🏆 שבועות מושלמים: <b>${ach.perfectWeeks}</b></span>
+          ${ach.streak >= 5 ? '<span style="color:#B45309; font-weight:600;">⭐ שבוע שלם ברצף ביעד!</span>' : ''}
+        </div>`;
+      })()}
     </div>`;
     })()}
 
@@ -4220,6 +4441,10 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
 
   document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); renderLanding(); };
   document.getElementById('settingsBtn').onclick = () => renderEmployeeSettings(emp);
+  if(staleOpen.length && !editingEntry && state._staleNoticeShown !== emp.id + todayStr()){
+    state._staleNoticeShown = emp.id + todayStr();
+    showStaleOpenNotice(emp, staleOpen);
+  }
   const editGoalBtn = document.getElementById('editGoalBtn');
   if(editGoalBtn) editGoalBtn.onclick = () => renderEmployeeGoal(emp);
   // עדכון חי של פס היעד כל 30 שניות, כל עוד הוא מוצג
