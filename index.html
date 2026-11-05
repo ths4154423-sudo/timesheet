@@ -4909,8 +4909,12 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   if(dateInput && startInput && endInput){
     const preview = document.getElementById('computedHoursPreview');
     function updatePreview(){
-      const h = computeHoursFromRange(startInput.value, endInput.value);
-      preview.textContent = h !== null ? ('סה"כ: ' + fmtHours(h) + ' שעות') : '';
+      // סה"כ אחרי ניכוי ההפסקות (כמו מה שבאמת נשמר)
+      const gross = computeHoursFromRange(startInput.value, endInput.value);
+      if(gross === null){ preview.textContent = ''; return; }
+      const br = (state._editBreaks || []).reduce((sum, b) => sum + (b.end ? (computeHoursFromRange(hhmm(b.start), hhmm(b.end)) || 0) : 0), 0);
+      const net = Math.max(0, Math.round((gross - br) * 100) / 100);
+      preview.textContent = 'סה"כ: ' + fmtHours(net) + ' שעות' + (br > 0 ? ' (אחרי ניכוי הפסקות)' : '');
     }
     function saveDraft(){
       state._formDraft = { date: dateInput.value, start: startInput.value, end: endInput.value };
@@ -4952,6 +4956,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       const cell = document.querySelector(`[data-break-total="${id}"]`);
       const h = b.end ? computeHoursFromRange(b.start, b.end) : null;
       if(cell) cell.textContent = h !== null && h > 0 ? fmtHours(Math.round(h * 100) / 100) + ' שעות' : '—';
+      const pv = document.getElementById('hoursStart'); if(pv) pv.dispatchEvent(new Event('input')); // מרענן את הסה"כ של היום
     };
     document.querySelectorAll('[data-edit-break]').forEach(btn => { btn.onclick = () => { saveDraft(); state._editingBreakId = btn.dataset.editBreak; renderEmployeeDashboard(emp, editingEntry ? editingEntry.id : null, true); }; });
     document.querySelectorAll('[data-done-break]').forEach(btn => { btn.onclick = () => {
