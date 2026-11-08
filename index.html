@@ -494,7 +494,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, signInWithCustomToken, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCJY3Pv_p7zF-DoCXhT3xgUuA-fSKElO_k",
@@ -516,6 +516,22 @@ const db = initializeFirestore(fbApp, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
 const auth = getAuth(fbApp);
+
+// ---------- גשר (שרת ב-Render) ----------
+// הקודים האישיים של העובדים נבדקים בגשר ולא בדפדפן, כך שהם לא נשלחים לאף אחד.
+// אחרי קוד נכון הגשר מחזיר "טוקן" שבעזרתו העובד מתחבר ל-Firebase.
+const BRIDGE_URL = 'https://my-gesher.onrender.com';
+async function bridge(name, data){
+  try{
+    const r = await withTimeout(fetch(BRIDGE_URL + '/api/' + name, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(data || {})
+    }), 60000, 'bridge:' + name);
+    return await r.json();
+  }catch(e){ console.error('bridge ' + name + ' error', e); return { error: 'network' }; }
+}
+async function empIdToken(){
+  try{ return auth.currentUser ? await auth.currentUser.getIdToken() : null; }catch(e){ return null; }
+}
 
 const app = document.getElementById('app');
 
@@ -1477,32 +1493,27 @@ async function handleEmailRequestAction(reqId, action){
       </div>
     `;
   };
-  const list = await loadRequests();
-  if(list === null){
+  const res = await bridge('request-action', { reqId, action });
+  if(res.error === 'network' || res.error === 'server'){
     showResult('שגיאת תקשורת', 'לא הצלחנו להתחבר לשרת. נסו שוב בעוד כמה רגעים.', true);
     return;
   }
-  const req = list.find(r => r.id === reqId);
-  if(!req){
+  if(res.error === 'not-found'){
     showResult('הבקשה לא נמצאה', 'ייתכן שהיא כבר טופלה או נמחקה.', true);
     return;
   }
-  if(req.status !== 'pending'){
-    const STATUS_LABEL = { approved: 'אושרה', rejected: 'נדחתה' };
-    showResult('הבקשה כבר טופלה', `הבקשה של ${req.empName} כבר ${STATUS_LABEL[req.status] || req.status} קודם לכן.`, false);
+  if(res.error){
+    showResult('שגיאה בשמירה', 'שגיאה: ' + res.error, true);
     return;
   }
-  req.status = action === 'approve' ? 'approved' : 'rejected';
-  req.respondedAt = new Date().toISOString();
-  req.seenByEmployee = false;
-  const ok = await saveRequests(list);
-  if(ok !== true){
-    showResult('שגיאה בשמירה', 'שגיאה: ' + ok, true);
+  if(res.already){
+    const STATUS_LABEL = { approved: 'אושרה', rejected: 'נדחתה' };
+    showResult('הבקשה כבר טופלה', `הבקשה של ${res.empName} כבר ${STATUS_LABEL[res.status] || res.status} קודם לכן.`, false);
     return;
   }
   showResult(
     action === 'approve' ? '✅ הבקשה אושרה' : '❌ הבקשה נדחתה',
-    `הבקשה של ${req.empName} ("${req.text}") ${action === 'approve' ? 'אושרה' : 'נדחתה'} בהצלחה. העובד יראה את הסטטוס העדכני באתר.`,
+    `הבקשה של ${res.empName} ("${res.text}") ${action === 'approve' ? 'אושרה' : 'נדחתה'} בהצלחה. העובד יראה את הסטטוס העדכני באתר.`,
     false
   );
 }
@@ -1519,8 +1530,54 @@ async function init(){
     return;
   }
 
-  const loadedEmployees = await loadEmployees();
-  if(loadedEmployees === null){
+  // רשימת העובדים המלאה (כולל קודים אישיים) נטענת רק אחרי כניסת מנהל - לא לפני
+  state.loading = false;
+
+  onAuthStateChanged(auth, async (user) => {
+    if(authReady) return; // only handle the initial resolution; explicit sign-in/out render themselves
+    authReady = true;
+    const session = loadSession();
+    // עובד שנכנס עם קוד אישי: מחובר ל-Firebase עם טוקן מהגשר (משתמש בלי אימייל)
+    if(user && !user.email){
+      if(session && session.role === 'employee' && session.empId === user.uid){
+        const res = await bridge('emp-me', { idToken: await empIdToken() });
+        if(res.emp){
+          saveSession({ role: 'employee', empId: user.uid, emp: res.emp });
+          state.employees = [res.emp];
+          renderEmployeeDashboard(res.emp);
+          return;
+        }
+        // בלי אינטרנט: ממשיכים עם הפרטים שנשמרו בכניסה האחרונה
+        if(res.error === 'network' && session.emp){
+          state.employees = [session.emp];
+          renderEmployeeDashboard(session.emp);
+          return;
+        }
+      }
+      // העובד הוקפא/נמחק, או שהסשן לא תקין - חוזרים למסך הכניסה
+      clearSession();
+      try{ await signOut(auth); }catch(e){ console.error('sign-out error', e); }
+      renderLanding();
+      return;
+    }
+    // סשן עובד מגרסה קודמת של האתר (בלי התחברות ל-Firebase) - צריך להיכנס מחדש עם הקוד
+    if(session && session.role === 'employee') clearSession();
+    if(user){
+      if(!(await ensureEmployeesLoaded())) return;
+      state.isAdmin = true;
+      state.adminEmail = user.email;
+      renderAdminDashboard('summary');
+      return;
+    }
+    if(tryTrustedDeviceAdminLogin()) return;
+    renderLanding();
+  });
+}
+
+// טוען את רשימת העובדים המלאה - רק למנהל מחובר
+async function ensureEmployeesLoaded(){
+  const list = await loadEmployees();
+  if(list === null){
     app.innerHTML = `
       <div class="center-stage">
         <div class="login-card">
@@ -1530,32 +1587,10 @@ async function init(){
         </div>
       </div>
     `;
-    return;
+    return false;
   }
-  state.employees = loadedEmployees;
-  state.loading = false;
-
-  onAuthStateChanged(auth, (user) => {
-    if(authReady) return; // only handle the initial resolution; explicit sign-in/out render themselves
-    authReady = true;
-    // סשן עובד שמור במפורש (כניסה עם PIN) משקף את הפעולה המכוונת האחרונה של המשתמש - הוא גובר
-    // על מצב Firebase Auth, כי signOut() לא תמיד מצליח להתעדכן באופן מלא כשאין אינטרנט, מה שיכול
-    // "לגרור" בטעות בחזרה לפאנל הניהול גם כשבפועל המשתמש עבר במכוון לצפות בדשבורד של עובד.
-    const session = loadSession();
-    if(session && session.role === 'employee'){
-      const emp = activeEmployees().find(x => x.id === session.empId);
-      if(emp){ renderEmployeeDashboard(emp); return; }
-      clearSession();
-    }
-    if(user){
-      state.isAdmin = true;
-      state.adminEmail = user.email;
-      renderAdminDashboard('summary');
-      return;
-    }
-    if(tryTrustedDeviceAdminLogin()) return;
-    renderLanding();
-  });
+  state.employees = list;
+  return true;
 }
 
 // בודק אם המכשיר הזה סומן כ"מהימן" מכניסת מנהל קודמת, ואם כן ומצליח - נכנס ישירות לפאנל
@@ -1568,7 +1603,7 @@ function tryTrustedDeviceAdminLogin(){
     if(trusted && trusted.email){
       state.isAdmin = true;
       state.adminEmail = trusted.email;
-      renderAdminDashboard('summary');
+      ensureEmployeesLoaded().then(ok => { if(ok) renderAdminDashboard('summary'); });
       return true;
     }
   }catch(e){}
@@ -1645,6 +1680,7 @@ function renderAdminLogin(){
     submitBtn.textContent = 'מתחבר...';
     try{
       await signInWithEmailAndPassword(auth, email, pass);
+      if(!(await ensureEmployeesLoaded())) return;
       state.isAdmin = true;
       state.adminEmail = email;
       // מסמן את המכשיר הזה כ"מהימן" - מאפשר כניסה אוטומטית במצב לא-מקוון בעתיד,
@@ -1713,15 +1749,36 @@ function renderForgotPassword(){
 }
 
 // ---------- EMPLOYEE LOGIN ----------
-function renderEmployeeLogin(){
+async function renderEmployeeLogin(){
   setHeader('כניסת עובד', '');
-  const options = activeEmployees().map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+  app.innerHTML = '<div class="empty-state">טוען...</div>';
+  // רק שמות לבחירה - הקודים האישיים נשארים בשרת
+  const res = await bridge('emp-list');
+  if(!res.list){
+    app.innerHTML = `
+      <div class="center-stage">
+        <div class="login-card">
+          <h1>כניסת עובד</h1>
+          <p class="hint">${res.error === 'network' ? 'אין חיבור לשרת כרגע. בדקו את החיבור לאינטרנט ונסו שוב.' : 'שגיאת מערכת זמנית. נסו שוב בעוד כמה רגעים.'}</p>
+          <div class="actions">
+            <button type="button" class="btn brass" id="retryEmpList">ניסיון נוסף</button>
+            <button type="button" class="btn ghost" id="backBtn">חזרה</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById('retryEmpList').onclick = renderEmployeeLogin;
+    document.getElementById('backBtn').onclick = renderLanding;
+    return;
+  }
+  const emps = res.list;
+  const options = emps.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}</option>`).join('');
   app.innerHTML = `
     <div class="center-stage">
       <div class="login-card">
         <h1>כניסת עובד</h1>
         <p class="hint">בחרו את שמכם והזינו קוד אישי</p>
-        ${activeEmployees().length === 0 ? '<p class="hint">עדיין לא נוספו עובדים על ידי המנהל.</p>' : `
+        ${emps.length === 0 ? '<p class="hint">עדיין לא נוספו עובדים על ידי המנהל.</p>' : `
         <form id="empLoginForm" autocomplete="off">
           <div class="field">
             <label>שם עובד</label>
@@ -1738,7 +1795,7 @@ function renderEmployeeLogin(){
           </div>
         </form>
         `}
-        ${activeEmployees().length === 0 ? '<div class="actions"><button class="btn ghost" id="backBtn2">חזרה</button></div>' : ''}
+        ${emps.length === 0 ? '<div class="actions"><button class="btn ghost" id="backBtn2">חזרה</button></div>' : ''}
       </div>
     </div>
   `;
@@ -1750,23 +1807,41 @@ function renderEmployeeLogin(){
       e.preventDefault();
       const empId = document.getElementById('empSelect').value;
       const pin = document.getElementById('empPinInput').value;
-      const emp = activeEmployees().find(x => x.id === empId);
-      if(emp && emp.pin === pin){
-        saveSession({ role: 'employee', empId: emp.id });
-        const hoursData = await loadHours(emp.id);
-        if(hoursData === null){
-          renderEmployeeDashboard(emp, null, false);
-          return;
-        }
-        const todayEntries = hoursData[currentMonthStr()] || [];
-        const alreadyStarted = !!findOpenEntryToday(todayEntries);
-        if(alreadyStarted){
-          renderEmployeeDashboard(emp, null, hoursData);
-        }else{
-          showWelcomeSplash(emp, () => renderEmployeeDashboard(emp, null, hoursData));
-        }
+      const errEl = document.getElementById('empErr');
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      errEl.textContent = '';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'בודק...';
+      const done = (msg) => { submitBtn.disabled = false; submitBtn.textContent = 'כניסה'; if(msg) errEl.textContent = msg; };
+      const login = await bridge('emp-login', { empId, pin });
+      if(!login.token){
+        const LOGIN_ERR = {
+          'bad-pin': 'קוד אישי שגוי',
+          'locked': 'יותר מדי ניסיונות שגויים. נסו שוב בעוד 15 דקות.',
+          'network': 'אין חיבור לשרת. בדקו את החיבור לאינטרנט ונסו שוב.'
+        };
+        return done(LOGIN_ERR[login.error] || 'שגיאת מערכת זמנית. נסו שוב בעוד כמה רגעים.');
+      }
+      try{
+        await signInWithCustomToken(auth, login.token);
+      }catch(err){
+        console.error('employee sign-in error', err);
+        return done('שגיאת התחברות: ' + ((err && err.code) || 'לא ידועה'));
+      }
+      const emp = login.emp;
+      saveSession({ role: 'employee', empId: emp.id, emp });
+      state.employees = [emp];
+      const hoursData = await loadHours(emp.id);
+      if(hoursData === null){
+        renderEmployeeDashboard(emp, null, false);
+        return;
+      }
+      const todayEntries = hoursData[currentMonthStr()] || [];
+      const alreadyStarted = !!findOpenEntryToday(todayEntries);
+      if(alreadyStarted){
+        renderEmployeeDashboard(emp, null, hoursData);
       }else{
-        document.getElementById('empErr').textContent = 'קוד אישי שגוי';
+        showWelcomeSplash(emp, () => renderEmployeeDashboard(emp, null, hoursData));
       }
     };
   }
@@ -2068,20 +2143,22 @@ function renderEmployeeChangePin(emp){
     if(!/^\d{4,6}$/.test(next)){ errEl.textContent = 'הקוד החדש צריך להיות 4 עד 6 ספרות.'; return; }
     if(next !== next2){ errEl.textContent = 'הקוד החדש לא תואם בשתי ההקלדות.'; return; }
     btn.disabled = true; btn.textContent = 'שומר...';
-    // טוענים את הרשימה העדכנית מהשרת, כדי לא לדרוס שינויים של המנהל
-    const list = await loadEmployees();
-    if(list === null){ btn.disabled = false; btn.textContent = 'עדכון קוד'; errEl.textContent = 'לא הצלחנו להתחבר לשרת. נסו שוב.'; return; }
-    const me = list.find(x => x.id === emp.id);
-    if(!me){ btn.disabled = false; btn.textContent = 'עדכון קוד'; errEl.textContent = 'העובד לא נמצא במערכת.'; return; }
-    if(String(me.pin) !== cur){ btn.disabled = false; btn.textContent = 'עדכון קוד'; errEl.textContent = 'הקוד הנוכחי שגוי.'; return; }
-    if(next === cur){ btn.disabled = false; btn.textContent = 'עדכון קוד'; errEl.textContent = 'הקוד החדש זהה לקוד הנוכחי.'; return; }
-    const updated = list.map(x => x.id === emp.id ? { ...x, pin: next } : x);
-    const ok = await saveEmployees(updated);
+    // הבדיקה והשמירה נעשות בגשר - הקוד הנוכחי לא נשמר בדפדפן
+    const res = await bridge('emp-change-pin', { idToken: await empIdToken(), cur, next });
     btn.disabled = false; btn.textContent = 'עדכון קוד';
-    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
-    state.employees = updated;
-    emp.pin = next;
-    if(state.currentEmployee && state.currentEmployee.id === emp.id) state.currentEmployee.pin = next;
+    if(res.error){
+      const PIN_ERR = {
+        'bad-pin': 'הקוד הנוכחי שגוי.',
+        'same': 'הקוד החדש זהה לקוד הנוכחי.',
+        'bad-new': 'הקוד החדש צריך להיות 4 עד 6 ספרות.',
+        'locked': 'יותר מדי ניסיונות שגויים. נסו שוב בעוד 15 דקות.',
+        'inactive': 'העובד לא נמצא במערכת.',
+        'auth': 'החיבור פג. צאו והיכנסו מחדש עם הקוד, ואז נסו שוב.',
+        'network': 'לא הצלחנו להתחבר לשרת. נסו שוב.'
+      };
+      errEl.textContent = PIN_ERR[res.error] || ('שגיאה בשמירה: ' + res.error);
+      return;
+    }
     showToast('קוד הכניסה עודכן');
     renderEmployeeSecurity(emp);
   };
@@ -2688,6 +2765,7 @@ function renderAdminDashboard(tab){
   });
   document.getElementById('logoutBtn').onclick = async () => {
     state.isAdmin = false;
+    state.employees = [];
     // הערה: לא מוחקים כאן את סימון "המכשיר המהימן" - "יציאה" כאן משמשת גם כניווט חזרה למסך
     // הראשי (למשל כדי להגיע לדשבורד של עובד), לא רק כניתוק אמיתי. ניתוק מלא של המכשיר נמצא
     // בנפרד בהגדרות → אבטחה, בשביל מקרה של אובדן/מכירת המכשיר.
@@ -4580,7 +4658,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           </div>` : `<div class="hint" style="font-size:13.5px;">אין ימי חופשה או מחלה ב${monthLabel(month)}.</div>`}
       </div>
     `;
-    document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; state._entriesPage = false; clearSession(); renderLanding(); };
+    document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; state._entriesPage = false; clearSession(); signOut(auth).catch(e => console.error('sign-out error', e)); renderLanding(); };
     document.getElementById('settingsBtn').onclick = () => { state._entriesPage = false; renderEmployeeSettings(emp); };
     document.getElementById('entriesBackBtn').onclick = () => { state._entriesPage = false; renderEmployeeDashboard(emp, null, true); window.scrollTo(0, 0); };
     const picker = document.getElementById('empMonthPicker');
@@ -4848,7 +4926,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     </div>
   `;
 
-  document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); renderLanding(); };
+  document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); signOut(auth).catch(e => console.error('sign-out error', e)); renderLanding(); };
   document.getElementById('settingsBtn').onclick = () => renderEmployeeSettings(emp);
   if(staleOpen.length && !editingEntry && state._staleNoticeShown !== emp.id + todayStr()){
     state._staleNoticeShown = emp.id + todayStr();
