@@ -1,14 +1,14 @@
 rules_version = '2';
 // כללי האבטחה של Firebase (Firestore) לאתר שעון הנוכחות.
 // הקובץ הזה לא מופעל אוטומטית: מעתיקים אותו ל-Firebase Console → Firestore → Rules → Publish.
-// לפני ההדבקה: להחליף את ADMIN_EMAIL באימייל שאיתו המנהל נכנס לאתר (אפשר כמה, מופרדים בפסיק).
+// אימייל המנהל: t0504154423@gmail.com (להוספת מנהל נוסף - מוסיפים אימייל לרשימה, מופרד בפסיק).
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // מנהל: מחובר עם אימייל וסיסמה, ורק מהאימיילים שברשימה
     function isAdmin() {
       return request.auth != null
-        && request.auth.token.email in ['ADMIN_EMAIL'];
+        && request.auth.token.email in ['t0504154423@gmail.com'];
     }
     // עובד: נכנס עם קוד אישי דרך הגשר (טוקן עם role=employee)
     function isEmployee() {
