@@ -2672,8 +2672,10 @@ function renderAdminDashboard(tab){
   app.innerHTML = `
     <div class="tabs">
       <div class="tab" data-tab="now">🟢 מי בעבודה</div>
+      <div class="tab" data-tab="dashboard">📊 דשבורד</div>
       <div class="tab" data-tab="summary">סיכום חודשי</div>
       <div class="tab" data-tab="employees">ניהול עובדים</div>
+      <div class="tab" data-tab="timeoff">🏖️ חופשות</div>
       <div class="tab" data-tab="netcalc">🧮 מחשבון נטו</div>
       <div class="tab" data-tab="requests">בקשות</div>
       <div class="tab" data-tab="settings">הגדרות</div>
@@ -2694,6 +2696,8 @@ function renderAdminDashboard(tab){
   };
 
   if(tab === 'now') renderAdminNow();
+  else if(tab === 'dashboard') renderAdminWeekDashboard();
+  else if(tab === 'timeoff') renderAdminTimeOff();
   else if(tab === 'summary') renderAdminSummary();
   else if(tab === 'employees') renderAdminEmployees();
   else if(tab === 'netcalc') renderAdminNetCalc();
@@ -2706,6 +2710,257 @@ function renderAdminDashboard(tab){
     const pending = list.filter(r => r.status === 'pending').length;
     const reqTab = document.querySelector('.tab[data-tab="requests"]');
     if(reqTab && pending > 0) reqTab.textContent = `בקשות (${pending})`;
+  });
+}
+
+
+// ---------- מכסות ימי חופשה ומחלה (המכסה השנתית נשמרת ברשומת העובד: vacationDays, sickDays) ----------
+// ספירה: ימים מסומנים בשנה הנבחרת, בלי שבתות
+function dayOffUsage(daysOff, year){
+  const inYear = (daysOff || []).filter(d => d.date.slice(0, 4) === String(year) && new Date(d.date + 'T12:00:00').getDay() !== 6);
+  return { vacation: inYear.filter(d => d.type === 'vacation').length, sick: inYear.filter(d => d.type === 'sick').length, list: inYear };
+}
+function quotaNum(v){ const n = Number(v); return (v === null || v === undefined || v === '' || isNaN(n)) ? null : n; }
+function timeOffBalanceHtml(emp, daysOff){
+  const vq = quotaNum(emp.vacationDays), sq = quotaNum(emp.sickDays);
+  if(vq === null && sq === null) return '';
+  const year = new Date().getFullYear();
+  const u = dayOffUsage(daysOff, year);
+  const part = (icon, label, used, quota) => quota === null ? '' : `
+    <div style="flex:1 1 140px; padding:10px 12px; background:var(--paper-alt); border-radius:10px;">
+      <div class="hint" style="font-size:13px;">${icon} ${label} ${year}</div>
+      <div style="font-size:18px; font-weight:700; margin-top:2px;">נשארו ${fmtHours(Math.max(0, quota - used))}</div>
+      <div class="hint" style="font-size:12.5px;">נוצלו ${used} מתוך ${fmtHours(quota)}</div>
+    </div>`;
+  return `<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">${part('🏖️', 'ימי חופשה', u.vacation, vq)}${part('🤒', 'ימי מחלה', u.sick, sq)}</div>`;
+}
+
+// ---------- מנהל: לשונית חופשות – מכסות, ניצול ויתרה לכל עובד ----------
+async function renderAdminTimeOff(){
+  const content = document.getElementById('tabContent');
+  const year = state._toYear || new Date().getFullYear();
+  content.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
+  const emps = activeEmployees();
+  const rows = await Promise.all(emps.map(async emp => {
+    const settings = await loadSettings(emp.id) || {};
+    const daysOff = getDaysOff(settings);
+    return { emp, settings, daysOff, u: dayOffUsage(daysOff, year) };
+  }));
+  const cell = (used, quota) => quota === null ? `<span class="mono">${used}</span>`
+    : `<span class="mono">${used} / ${fmtHours(quota)}</span> <span class="hint" style="font-size:12.5px;">(נשארו ${fmtHours(Math.max(0, quota - used))})</span>`;
+  content.innerHTML = `
+    <div class="top-actions">
+      <button type="button" class="btn ghost small" id="toPrev">‹ ${year - 1}</button>
+      <span class="subtitle" style="font-weight:700;">שנת ${year}</span>
+      <button type="button" class="btn ghost small" id="toNext">${year + 1} ›</button>
+    </div>
+    ${!emps.length ? '<div class="card"><div class="empty-state">אין עדיין עובדים פעילים במערכת.</div></div>' : `
+    <div class="card">
+      <h3 style="margin-top:0;">🏖️ ימי חופשה ומחלה</h3>
+      <p class="hint" style="font-size:13px; margin-top:-4px;">המכסה היא מספר הימים בשנה. שבתות לא נספרות. השאירו ריק אם אין מכסה.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>עובד</th><th>מכסת חופשה</th><th>מכסת מחלה</th><th>חופשה: נוצלו</th><th>מחלה: נוצלו</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${escapeHtml(r.emp.name)}</td>
+                <td><input type="number" min="0" step="0.5" style="width:80px;" data-quota-vac="${r.emp.id}" value="${quotaNum(r.emp.vacationDays) ?? ''}" /></td>
+                <td><input type="number" min="0" step="0.5" style="width:80px;" data-quota-sick="${r.emp.id}" value="${quotaNum(r.emp.sickDays) ?? ''}" /></td>
+                <td>${cell(r.u.vacation, quotaNum(r.emp.vacationDays))}</td>
+                <td>${cell(r.u.sick, quotaNum(r.emp.sickDays))}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="actions" style="margin-top:10px;"><button type="button" class="btn brass" id="saveQuotasBtn">שמירת מכסות</button></div>
+      <div class="error-msg" id="quotaErr"></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;">➕ סימון ימי חופשה / מחלה לעובד</h3>
+      <div class="emp-row-form" style="align-items:flex-end; flex-wrap:wrap; gap:10px;">
+        <div class="field" style="margin-top:0;"><label>עובד</label><select id="toEmp">${emps.map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('')}</select></div>
+        <div class="field" style="margin-top:0;"><label>מתאריך</label><input type="date" id="toFrom" value="${todayStr()}" /></div>
+        <div class="field" style="margin-top:0;"><label>עד תאריך (לא חובה)</label><input type="date" id="toTo" /></div>
+        <div class="field" style="margin-top:0;"><label>סוג</label><select id="toType">${Object.entries(DAY_OFF_TYPES).map(([k, t]) => `<option value="${k}">${t.icon} ${t.label}</option>`).join('')}</select></div>
+        <div class="field" style="flex:0 0 auto; margin-top:0;"><button type="button" class="btn brass" id="toAddBtn">הוספה</button></div>
+      </div>
+      <div class="error-msg" id="toErr" style="margin-top:8px;"></div>
+    </div>
+    ${rows.map(r => `
+      <div class="card">
+        <details>
+          <summary style="cursor:pointer; font-weight:700;">${escapeHtml(r.emp.name)} · ${r.u.list.length} ימים מסומנים ב-${year}</summary>
+          ${r.u.list.length ? `<div style="display:flex; flex-direction:column; gap:6px; margin-top:10px;">
+            ${r.u.list.slice().sort((a, b) => a.date.localeCompare(b.date)).map(d => `
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; background:var(--paper-alt); border-radius:8px;">
+                <span>${DAY_OFF_TYPES[d.type].icon} <b>${DAY_OFF_TYPES[d.type].label}</b> · ${d.date} <span class="hint">(${hebrewDateStr(d.date)})</span></span>
+                <button type="button" class="btn ghost small" data-to-remove="${r.emp.id}|${d.date}">הסרה</button>
+              </div>`).join('')}
+          </div>` : '<div class="hint" style="margin-top:8px;">אין ימים מסומנים בשנה הזו.</div>'}
+        </details>
+      </div>`).join('')}
+    `}
+  `;
+  document.getElementById('toPrev').onclick = () => { state._toYear = year - 1; renderAdminTimeOff(); };
+  document.getElementById('toNext').onclick = () => { state._toYear = year + 1; renderAdminTimeOff(); };
+  if(!emps.length) return;
+
+  document.getElementById('saveQuotasBtn').onclick = async (e) => {
+    const btn = e.target, errEl = document.getElementById('quotaErr');
+    errEl.textContent = '';
+    const read = sel => { const v = document.querySelector(sel).value.trim(); return v === '' ? null : Number(v); };
+    const fresh = await loadEmployees();
+    if(fresh === null){ errEl.textContent = 'שגיאה בטעינת העובדים מהשרת. נסו שוב.'; return; }
+    const updated = fresh.map(x => {
+      if(!document.querySelector(`[data-quota-vac="${x.id}"]`)) return x;
+      return { ...x, vacationDays: read(`[data-quota-vac="${x.id}"]`), sickDays: read(`[data-quota-sick="${x.id}"]`) };
+    });
+    if(updated.some(x => (x.vacationDays !== null && x.vacationDays !== undefined && (isNaN(x.vacationDays) || x.vacationDays < 0)) || (x.sickDays !== null && x.sickDays !== undefined && (isNaN(x.sickDays) || x.sickDays < 0)))){
+      errEl.textContent = 'יש להזין מספר חיובי או להשאיר ריק.'; return;
+    }
+    btn.disabled = true; btn.textContent = 'שומר...';
+    const ok = await saveEmployees(updated);
+    btn.disabled = false; btn.textContent = 'שמירת מכסות';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    state.employees = updated;
+    showToast('המכסות נשמרו');
+    renderAdminTimeOff();
+  };
+
+  const saveOff = async (empId, fn) => {
+    const settings = await loadSettings(empId) || {};
+    const list = fn(getDaysOff(settings));
+    const ok = await saveSettings(empId, { ...settings, daysOff: list });
+    if(state._settingsCache && state._settingsCache.empId === empId) state._settingsCache = null;
+    return ok;
+  };
+  document.getElementById('toAddBtn').onclick = async () => {
+    const errEl = document.getElementById('toErr');
+    const empId = document.getElementById('toEmp').value;
+    const from = document.getElementById('toFrom').value;
+    const to = document.getElementById('toTo').value || from;
+    const type = document.getElementById('toType').value;
+    errEl.textContent = '';
+    if(!from){ errEl.textContent = 'יש לבחור תאריך.'; return; }
+    if(to < from){ errEl.textContent = 'תאריך הסיום לפני תאריך ההתחלה.'; return; }
+    const dates = [];
+    const [fy, fm, fd] = from.split('-').map(Number);
+    for(let dt = new Date(fy, fm - 1, fd, 12); ; dt.setDate(dt.getDate() + 1)){
+      const ds = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+      if(ds > to) break;
+      if(dt.getDay() !== 6) dates.push(ds); // בלי שבתות
+      if(dates.length > 62){ errEl.textContent = 'אפשר לסמן עד חודשיים בבת אחת.'; return; }
+    }
+    if(!dates.length){ errEl.textContent = 'בטווח שנבחר אין ימי חול.'; return; }
+    const ok = await saveOff(empId, list => list.filter(d => !dates.includes(d.date)).concat(dates.map(date => ({ date, type }))));
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    showToast('נשמר');
+    renderAdminTimeOff();
+  };
+  document.querySelectorAll('[data-to-remove]').forEach(btn => {
+    btn.onclick = async () => {
+      const [empId, date] = btn.dataset.toRemove.split('|');
+      const ok = await saveOff(empId, list => list.filter(d => d.date !== date));
+      if(ok !== true){ showToast('שגיאה בשמירה'); return; }
+      renderAdminTimeOff();
+    };
+  });
+}
+
+// ---------- מנהל: דשבורד שבועי – שעות לפי ימים ועובדים ----------
+const DASH_COLORS = ['#3B82F6', '#F59E0B', '#10B981', '#EC4899', '#8B5CF6', '#EF4444', '#14B8A6', '#6366F1', '#84CC16', '#F97316'];
+function weekStart(offset){
+  const d = new Date(); d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - d.getDay() + (offset || 0) * 7); // יום ראשון
+  return d;
+}
+function ymdLocal(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+async function renderAdminWeekDashboard(){
+  const content = document.getElementById('tabContent');
+  const offset = state._dashWeek || 0;
+  content.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
+  const start = weekStart(offset);
+  const days = [...Array(7)].map((_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+  const dates = days.map(ymdLocal);
+  const months = [...new Set(dates.map(d => d.slice(0, 7)))];
+  const today = todayStr();
+  const DAY_LETTERS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
+  const labels = days.map((d, i) => `${DAY_LETTERS[i]} ${d.getDate()}.${d.getMonth() + 1}`);
+
+  const emps = activeEmployees();
+  const rows = await Promise.all(emps.map(async (emp, idx) => {
+    const [hoursData, settings] = await Promise.all([loadHours(emp.id), loadSettings(emp.id)]);
+    const entries = months.flatMap(m => (hoursData || {})[m] || []);
+    const perDay = dates.map(ds => entries.filter(e => e.date === ds).reduce((s, e) => s + (e.end ? (computeEntryHours(e) || 0) : (ds === today ? entryHoursSoFar(e) : 0)), 0));
+    const off = getDaysOff(settings).filter(d => dates.includes(d.date));
+    const total = perDay.reduce((a, b) => a + b, 0);
+    const working = entries.some(e => e.date === today && !e.end);
+    return { emp, perDay, total, workDays: perDay.filter(h => h > 0).length, off, working, color: DASH_COLORS[idx % DASH_COLORS.length], loadFailed: hoursData === null };
+  }));
+  const grand = rows.reduce((s, r) => s + r.total, 0);
+  const top = rows.slice().sort((a, b) => b.total - a.total)[0];
+  const hourlyCost = rows.filter(r => r.emp.payType !== 'fixed').reduce((s, r) => s + r.total * (Number(r.emp.rate) || 0), 0);
+  const workingNow = rows.filter(r => r.working).length;
+  const rangeLabel = `${days[0].getDate()}.${days[0].getMonth() + 1} – ${days[6].getDate()}.${days[6].getMonth() + 1}.${days[6].getFullYear()}`;
+  const tile = (label, value, sub) => `
+    <div style="flex:1 1 150px; padding:14px 16px; background:var(--paper-alt); border-radius:12px;">
+      <div class="hint" style="font-size:13px;">${label}</div>
+      <div style="font-size:22px; font-weight:800; margin-top:4px;">${value}</div>
+      ${sub ? `<div class="hint" style="font-size:12.5px; margin-top:2px;">${sub}</div>` : ''}
+    </div>`;
+
+  content.innerHTML = `
+    <div class="top-actions">
+      <button type="button" class="btn ghost small" id="dashPrev">‹ שבוע קודם</button>
+      <span class="subtitle" style="font-weight:700;">${offset === 0 ? 'השבוע · ' : ''}${rangeLabel}</span>
+      <button type="button" class="btn ghost small" id="dashNext" ${offset >= 0 ? 'disabled' : ''}>שבוע הבא ›</button>
+      ${offset !== 0 ? '<button type="button" class="btn ghost small" id="dashToday">השבוע</button>' : ''}
+    </div>
+    ${!emps.length ? '<div class="card"><div class="empty-state">אין עדיין עובדים פעילים במערכת.</div></div>' : `
+    <div class="card">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        ${tile('סה"כ שעות בשבוע', fmtHours(Math.round(grand * 100) / 100), `${rows.filter(r => r.total > 0).length} עובדים עבדו`)}
+        ${tile('עובד מוביל', top && top.total > 0 ? escapeHtml(top.emp.name) : '—', top && top.total > 0 ? fmtHours(Math.round(top.total * 100) / 100) + ' שעות' : '')}
+        ${tile('עלות שעתית משוערת', fmtMoney(Math.round(hourlyCost)), 'לפני מסים · בלי עובדים בשכר קבוע')}
+        ${offset === 0 ? tile('בעבודה עכשיו', String(workingNow), workingNow ? rows.filter(r => r.working).map(r => escapeHtml(r.emp.name)).join(', ') : 'אף אחד') : ''}
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;">📊 שעות לפי ימים</h3>
+      <div style="position:relative; height:300px;"><canvas id="weekChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>עובד</th>${labels.map(l => `<th>${l}</th>`).join('')}<th>סה"כ</th><th>חופשה/מחלה</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:${r.color}; margin-inline-end:6px;"></span>${escapeHtml(r.emp.name)}${r.working ? ' 🟢' : ''}${r.loadFailed ? ' <span class="hint">(שגיאת טעינה)</span>' : ''}</td>
+                ${r.perDay.map((h, i) => { const o = r.off.find(d => d.date === dates[i]); return `<td class="mono">${h > 0 ? fmtHours(Math.round(h * 100) / 100) : (o ? DAY_OFF_TYPES[o.type].icon : '—')}</td>`; }).join('')}
+                <td class="mono"><b>${fmtHours(Math.round(r.total * 100) / 100)}</b></td>
+                <td>${r.off.length ? r.off.map(d => DAY_OFF_TYPES[d.type].icon).join(' ') + ' ' + r.off.length : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <p class="hint" style="font-size:12.5px; margin-bottom:0;">יום עבודה שעדיין פתוח נספר עד השעה הנוכחית.</p>
+    </div>`}
+  `;
+  document.getElementById('dashPrev').onclick = () => { state._dashWeek = offset - 1; renderAdminWeekDashboard(); };
+  const nx = document.getElementById('dashNext'); if(nx && offset < 0) nx.onclick = () => { state._dashWeek = offset + 1; renderAdminWeekDashboard(); };
+  const td = document.getElementById('dashToday'); if(td) td.onclick = () => { state._dashWeek = 0; renderAdminWeekDashboard(); };
+  if(!emps.length || !window.Chart) return;
+  if(state._weekChart){ try{ state._weekChart.destroy(); }catch(e){} }
+  state._weekChart = new Chart(document.getElementById('weekChart'), {
+    type: 'bar',
+    data: { labels, datasets: rows.map(r => ({ label: r.emp.name, data: r.perDay.map(h => Math.round(h * 100) / 100), backgroundColor: r.color, borderRadius: 4 })) },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', rtl: true }, tooltip: { rtl: true, callbacks: { label: c => `${c.dataset.label}: ${fmtHours(c.parsed.y)} שעות` } } },
+      scales: { x: { stacked: true, reverse: true }, y: { stacked: true, beginAtZero: true, title: { display: true, text: 'שעות' } } }
+    }
   });
 }
 
@@ -4304,6 +4559,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       </div>
       <div class="card">
         <h3 style="margin-top:0;">ימי חופשה ומחלה</h3>
+        ${timeOffBalanceHtml(emp, daysOff)}
         <div class="emp-row-form" style="align-items:flex-end; flex-wrap:wrap; gap:10px;">
           <div class="field" style="margin-top:0;"><label>מתאריך</label><input type="date" id="offFrom" value="${todayStr()}" /></div>
           <div class="field" style="margin-top:0;"><label>עד תאריך (לא חובה)</label><input type="date" id="offTo" /></div>
