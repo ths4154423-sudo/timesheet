@@ -131,7 +131,8 @@
   .tab.active{ color:var(--ink); border-bottom-color:var(--brass); }
 
   /* ---------- פאנל ניהול: תפריט צד + ריבועי סיכום ---------- */
-  body.admin-mode .wrap{ max-width:1240px; }
+  body.admin-mode .wrap{ max-width:none; padding-left:32px; padding-right:32px; }
+  @media (max-width:600px){ body.admin-mode .wrap{ padding-left:16px; padding-right:16px; } }
   .admin-layout{ display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; align-items:start; }
   .admin-nav{
     position:sticky; top:16px; background:var(--surface); border-radius:16px; padding:12px;
