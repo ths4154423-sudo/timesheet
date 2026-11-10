@@ -130,6 +130,43 @@
   }
   .tab.active{ color:var(--ink); border-bottom-color:var(--brass); }
 
+  /* ---------- פאנל ניהול: תפריט צד + ריבועי סיכום ---------- */
+  body.admin-mode .wrap{ max-width:1240px; }
+  .admin-layout{ display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; align-items:start; }
+  .admin-nav{
+    position:sticky; top:16px; background:var(--surface); border-radius:16px; padding:12px;
+    display:flex; flex-direction:column; gap:4px; box-shadow:0 1px 3px rgba(18,41,63,.06);
+  }
+  .admin-nav-title{ font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.5px; padding:6px 12px 8px; }
+  .admin-nav-item{
+    display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border:none; border-radius:10px;
+    background:transparent; color:var(--ink-soft); font:inherit; font-size:14.5px; font-weight:500; cursor:pointer; text-align:right;
+    transition:background .15s, color .15s;
+  }
+  @media (hover:hover){ .admin-nav-item:hover{ background:var(--paper-alt); color:var(--ink); } }
+  .admin-nav-item.active{ background:var(--brass); color:var(--brass-text); font-weight:700; }
+  .admin-nav-item .ico{ width:22px; text-align:center; font-size:16px; flex:0 0 auto; }
+  .admin-nav-item .lbl{ flex:1; }
+  .admin-nav-item .badge{ min-width:20px; padding:1px 7px; border-radius:999px; background:var(--danger); color:#fff; font-size:12px; font-weight:700; text-align:center; }
+  .admin-nav-item .badge:empty{ display:none; }
+  .admin-nav-item.active .badge{ background:#fff; color:var(--danger); }
+  .kpi-strip{ display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:14px; margin-bottom:22px; }
+  .kpi{ background:var(--surface); border-radius:14px; padding:14px 16px; box-shadow:0 1px 3px rgba(18,41,63,.06); }
+  .kpi .k-label{ font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  .kpi .k-value{ font-size:24px; font-weight:800; margin-top:4px; color:var(--ink); }
+  .kpi .k-sub{ font-size:12.5px; color:var(--muted); margin-top:2px; min-height:16px; }
+  .kpi.loading .k-value{ color:var(--line); }
+  .admin-main #tabContent > .card:first-child, .admin-main #tabContent > .top-actions:first-child{ margin-top:0; }
+  @media (max-width:860px){
+    .admin-layout{ grid-template-columns:minmax(0,1fr); gap:14px; }
+    .admin-nav{ position:static; flex-direction:row; overflow-x:auto; padding:8px; gap:6px; scrollbar-width:none; }
+    .admin-nav::-webkit-scrollbar{ display:none; }
+    .admin-nav-title{ display:none; }
+    .admin-nav-item{ width:auto; flex:0 0 auto; white-space:nowrap; padding:8px 12px; }
+    .kpi-strip{ grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; }
+    .kpi .k-value{ font-size:20px; }
+  }
+
   table{ width:100%; border-collapse:collapse; font-size:14.5px; }
   th{ text-align:right; font-weight:500; color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.4px; padding:8px 10px; border-bottom:1.5px solid var(--ink); }
   td{ padding:11px 10px; border-bottom:1px solid var(--line); }
@@ -1611,6 +1648,7 @@ function tryTrustedDeviceAdminLogin(){
 }
 
 function setHeader(subtitle, actionsHtml){
+  document.body.classList.remove('admin-mode');
   refreshHebDateLine();
   headerSubtitle.textContent = subtitle;
   headerActions.innerHTML = actionsHtml || '';
@@ -2840,30 +2878,48 @@ function resizeImageFile(file, maxSize, quality){
 }
 
 // ---------- ADMIN DASHBOARD ----------
+const ADMIN_TABS = [
+  { key: 'now', icon: '🟢', label: 'מי בעבודה' },
+  { key: 'dashboard', icon: '📊', label: 'דשבורד' },
+  { key: 'summary', icon: '📅', label: 'סיכום חודשי' },
+  { key: 'employees', icon: '👥', label: 'ניהול עובדים' },
+  { key: 'timeoff', icon: '🏖️', label: 'חופשות' },
+  { key: 'netcalc', icon: '🧮', label: 'מחשבון נטו' },
+  { key: 'requests', icon: '📨', label: 'בקשות' },
+  { key: 'settings', icon: '⚙️', label: 'הגדרות' },
+];
 function renderAdminDashboard(tab){
   if(shabbatGuard()) return;
   resetTheme();
   setHeader('פאנל ניהול', '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
+  document.body.classList.add('admin-mode');
+  const kpi = (id, icon, label) => `<div class="kpi loading" id="kpi_${id}"><div class="k-label">${icon} ${label}</div><div class="k-value">—</div><div class="k-sub"></div></div>`;
   app.innerHTML = `
-    <div class="tabs">
-      <div class="tab" data-tab="now">🟢 מי בעבודה</div>
-      <div class="tab" data-tab="dashboard">📊 דשבורד</div>
-      <div class="tab" data-tab="summary">סיכום חודשי</div>
-      <div class="tab" data-tab="employees">ניהול עובדים</div>
-      <div class="tab" data-tab="timeoff">🏖️ חופשות</div>
-      <div class="tab" data-tab="netcalc">🧮 מחשבון נטו</div>
-      <div class="tab" data-tab="requests">בקשות</div>
-      <div class="tab" data-tab="settings">הגדרות</div>
+    <div class="admin-layout">
+      <nav class="admin-nav">
+        <div class="admin-nav-title">תפריט ניהול</div>
+        ${ADMIN_TABS.map(t => `<button type="button" class="admin-nav-item${t.key === tab ? ' active' : ''}" data-tab="${t.key}"><span class="ico">${t.icon}</span><span class="lbl">${t.label}</span><span class="badge" data-badge="${t.key}"></span></button>`).join('')}
+      </nav>
+      <section class="admin-main">
+        <div class="kpi-strip">
+          ${kpi('hours', '⏱️', 'שעות החודש')}
+          ${kpi('pay', '💰', 'שכר החודש')}
+          ${kpi('now', '🟢', 'בעבודה עכשיו')}
+          ${kpi('req', '📨', 'בקשות ממתינות')}
+        </div>
+        <div id="tabContent"></div>
+      </section>
     </div>
-    <div id="tabContent"></div>
   `;
-  document.querySelectorAll('.tab').forEach(t => {
-    if(t.dataset.tab === tab) t.classList.add('active');
+  document.querySelectorAll('.admin-nav-item').forEach(t => {
     t.onclick = () => renderAdminDashboard(t.dataset.tab);
   });
+  const activeNav = document.querySelector('.admin-nav-item.active');
+  if(activeNav && activeNav.scrollIntoView && window.innerWidth <= 860) activeNav.scrollIntoView({ block: 'nearest', inline: 'center' });
   document.getElementById('logoutBtn').onclick = async () => {
     state.isAdmin = false;
     state.employees = [];
+    state._kpi = null;
     // הערה: לא מוחקים כאן את סימון "המכשיר המהימן" - "יציאה" כאן משמשת גם כניווט חזרה למסך
     // הראשי (למשל כדי להגיע לדשבורד של עובד), לא רק כניתוק אמיתי. ניתוק מלא של המכשיר נמצא
     // בנפרד בהגדרות → אבטחה, בשביל מקרה של אובדן/מכירת המכשיר.
@@ -2880,13 +2936,46 @@ function renderAdminDashboard(tab){
   else if(tab === 'requests') renderAdminRequests();
   else renderAdminSettings();
 
-  // מספר בקשות ממתינות ליד שם הלשונית (לא חוסם את הרינדור הראשי)
-  loadRequests().then(list => {
-    if(!list) return;
-    const pending = list.filter(r => r.status === 'pending').length;
-    const reqTab = document.querySelector('.tab[data-tab="requests"]');
-    if(reqTab && pending > 0) reqTab.textContent = `בקשות (${pending})`;
-  });
+
+  fillAdminKpis();
+}
+
+// ריבועי הסיכום בראש פאנל הניהול – נטענים ברקע, ונשמרים לדקה כדי לא לטעון שוב בכל מעבר לשונית
+async function fillAdminKpis(){
+  const set = (id, value, sub) => {
+    const el = document.getElementById('kpi_' + id); if(!el) return;
+    el.classList.remove('loading');
+    el.querySelector('.k-value').textContent = value;
+    el.querySelector('.k-sub').textContent = sub || '';
+  };
+  let d = state._kpi && (Date.now() - state._kpi.at < 60000) ? state._kpi.data : null;
+  if(!d){
+    const month = currentMonthStr(), today = todayStr();
+    const emps = activeEmployees();
+    const [rows, reqs] = await Promise.all([
+      Promise.all(emps.map(async emp => {
+        const entries = ((await loadHours(emp.id)) || {})[month] || [];
+        const hours = entries.reduce((s, e) => s + (computeEntryHours(e) || 0), 0);
+        return { emp, hours, pay: calcPay(emp, hours), working: entries.some(e => e.date === today && !e.end) };
+      })),
+      loadRequests()
+    ]);
+    d = {
+      month,
+      hours: rows.reduce((s, r) => s + r.hours, 0),
+      pay: rows.reduce((s, r) => s + (Number(r.pay) || 0), 0),
+      working: rows.filter(r => r.working).map(r => r.emp.name),
+      emps: emps.length,
+      pending: reqs ? reqs.filter(r => r.status === 'pending').length : null
+    };
+    state._kpi = { at: Date.now(), data: d };
+  }
+  set('hours', fmtHours(Math.round(d.hours * 100) / 100), monthLabel(d.month));
+  set('pay', fmtMoney(Math.round(d.pay)), 'לפני מסים');
+  set('now', `${d.working.length} / ${d.emps}`, d.working.length ? d.working.join(', ') : 'אף אחד כרגע');
+  set('req', d.pending === null ? '—' : String(d.pending), d.pending ? 'ממתינות לטיפול' : 'אין בקשות ממתינות');
+  const badge = document.querySelector('[data-badge="requests"]');
+  if(badge) badge.textContent = d.pending ? String(d.pending) : '';
 }
 
 
