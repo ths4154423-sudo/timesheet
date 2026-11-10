@@ -1793,6 +1793,7 @@ async function renderEmployeeLogin(){
             <button type="submit" class="btn brass">כניסה</button>
             <button type="button" class="btn ghost" id="backBtn">חזרה</button>
           </div>
+          <p class="hint" style="margin-top:16px;"><a href="#" id="forgotPinLink" style="color:var(--brass-dark); text-decoration:underline;">שכחתי את הקוד האישי</a></p>
         </form>
         `}
         ${emps.length === 0 ? '<div class="actions"><button class="btn ghost" id="backBtn2">חזרה</button></div>' : ''}
@@ -1801,6 +1802,8 @@ async function renderEmployeeLogin(){
   `;
   const back = document.getElementById('backBtn') || document.getElementById('backBtn2');
   if(back) back.onclick = renderLanding;
+  const forgotPin = document.getElementById('forgotPinLink');
+  if(forgotPin) forgotPin.onclick = (e) => { e.preventDefault(); renderEmployeeForgotPin(emps, document.getElementById('empSelect').value); };
   const form = document.getElementById('empLoginForm');
   if(form){
     form.onsubmit = async (e) => {
@@ -1845,6 +1848,101 @@ async function renderEmployeeLogin(){
       }
     };
   }
+}
+
+
+// ---------- עובד: שכחתי קוד אישי – קוד חד-פעמי נשלח למייל הרשום, ואז בוחרים קוד חדש ----------
+function renderEmployeeForgotPin(emps, selectedId){
+  setHeader('שכחתי קוד', '');
+  app.innerHTML = `
+    <div class="center-stage">
+      <div class="login-card">
+        <h1>שכחתי את הקוד האישי</h1>
+        <p class="hint">בחרו את שמכם. קוד אימות יישלח לאימייל שרשום אצל המנהל.</p>
+        <form id="fpSendForm" autocomplete="off">
+          <div class="field">
+            <label>שם עובד</label>
+            <select id="fpEmp">${emps.map(e => `<option value="${escapeHtml(e.id)}" ${e.id === selectedId ? 'selected' : ''}>${escapeHtml(e.name)}</option>`).join('')}</select>
+          </div>
+          <div class="error-msg" id="fpErr"></div>
+          <div class="actions">
+            <button type="submit" class="btn brass">שליחת קוד למייל</button>
+            <button type="button" class="btn ghost" id="fpBack">חזרה</button>
+          </div>
+        </form>
+        <form id="fpSetForm" autocomplete="off" style="display:none;">
+          <p class="hint" id="fpSentMsg"></p>
+          <div class="field">
+            <label>קוד האימות מהמייל</label>
+            <input type="text" id="fpCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" />
+          </div>
+          <div class="field">
+            <label>קוד אישי חדש (4 עד 6 ספרות)</label>
+            <input type="text" id="fpNew" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" style="-webkit-text-security: disc; text-security: disc;" />
+          </div>
+          <div class="field">
+            <label>שוב את הקוד החדש</label>
+            <input type="text" id="fpNew2" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" style="-webkit-text-security: disc; text-security: disc;" />
+          </div>
+          <div class="error-msg" id="fpErr2"></div>
+          <div class="actions">
+            <button type="submit" class="btn brass">שמירת קוד חדש</button>
+            <button type="button" class="btn ghost" id="fpBack2">חזרה</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.getElementById('fpBack').onclick = renderEmployeeLogin;
+  document.getElementById('fpBack2').onclick = renderEmployeeLogin;
+  let empId = '';
+  document.getElementById('fpSendForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]'), errEl = document.getElementById('fpErr');
+    empId = document.getElementById('fpEmp').value;
+    errEl.textContent = ''; btn.disabled = true; btn.textContent = 'שולח...';
+    const res = await bridge('emp-reset-request', { empId });
+    btn.disabled = false; btn.textContent = 'שליחת קוד למייל';
+    if(!res.ok){
+      const ERR = {
+        'no-email': 'לא רשום אימייל לעובד הזה. פנו למנהל כדי שיעדכן את האימייל או יאפס לכם את הקוד.',
+        'too-many': 'נשלחו כבר כמה קודים בשעה האחרונה. בדקו את תיבת המייל (גם בספאם) או נסו שוב מאוחר יותר.',
+        'locked': 'יותר מדי ניסיונות. נסו שוב בעוד 15 דקות.',
+        'network': 'אין חיבור לשרת. בדקו את החיבור לאינטרנט ונסו שוב.'
+      };
+      errEl.textContent = ERR[res.error] || 'לא הצלחנו לשלוח את המייל. נסו שוב מאוחר יותר או פנו למנהל.';
+      return;
+    }
+    document.getElementById('fpSendForm').style.display = 'none';
+    document.getElementById('fpSetForm').style.display = '';
+    document.getElementById('fpSentMsg').textContent = `קוד אימות נשלח אל ${res.masked}. הוא תקף ל-15 דקות. אם הוא לא מגיע, בדקו גם בתיקיית הספאם.`;
+    document.getElementById('fpCode').focus();
+  };
+  document.getElementById('fpSetForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]'), errEl = document.getElementById('fpErr2');
+    const clean = id => document.getElementById(id).value.replace(/[\u200e\u200f\u202a-\u202e\s]/g, '');
+    const code = clean('fpCode'), next = clean('fpNew'), next2 = clean('fpNew2');
+    errEl.textContent = '';
+    if(!/^\d{6}$/.test(code)){ errEl.textContent = 'קוד האימות הוא 6 ספרות.'; return; }
+    if(!/^\d{4,6}$/.test(next)){ errEl.textContent = 'הקוד החדש צריך להיות 4 עד 6 ספרות.'; return; }
+    if(next !== next2){ errEl.textContent = 'הקוד החדש לא תואם בשתי ההקלדות.'; return; }
+    btn.disabled = true; btn.textContent = 'שומר...';
+    const res = await bridge('emp-reset-confirm', { empId, code, next });
+    btn.disabled = false; btn.textContent = 'שמירת קוד חדש';
+    if(!res.ok){
+      const ERR = {
+        'bad-code': 'קוד האימות שגוי.',
+        'expired': 'קוד האימות פג או שנוסו יותר מדי פעמים. חזרו ושלחו קוד חדש.',
+        'bad-new': 'הקוד החדש צריך להיות 4 עד 6 ספרות.',
+        'network': 'אין חיבור לשרת. נסו שוב.'
+      };
+      errEl.textContent = ERR[res.error] || 'שגיאה בשמירה. נסו שוב.';
+      return;
+    }
+    showToast('הקוד האישי עודכן. אפשר להיכנס עם הקוד החדש');
+    renderEmployeeLogin();
+  };
 }
 
 function escapeHtml(s){
