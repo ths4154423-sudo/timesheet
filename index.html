@@ -159,6 +159,23 @@
   .kpi .k-sub{ font-size:12.5px; color:var(--muted); margin-top:2px; min-height:16px; }
   .kpi.loading .k-value{ color:var(--line); }
   .admin-main #tabContent > .card:first-child, .admin-main #tabContent > .top-actions:first-child{ margin-top:0; }
+
+  /* ---------- מראה רשמי לפאנל הניהול ---------- */
+  body.admin-mode{ background:#F3F6F9; }
+  body.admin-mode .admin-nav{ border:1px solid #DCE3EA; box-shadow:none; border-radius:10px; }
+  body.admin-mode .admin-nav-title{ text-transform:none; font-size:11.5px; letter-spacing:.6px; color:#6B7C8D; }
+  body.admin-mode .admin-nav-item{ border-radius:6px; font-size:14px; color:#334E68; }
+  body.admin-mode .admin-nav-item .ico{ display:inline-flex; align-items:center; justify-content:center; color:#6B7C8D; }
+  body.admin-mode .admin-nav-item.active{ background:var(--ink); color:#fff; font-weight:600; }
+  body.admin-mode .admin-nav-item.active .ico{ color:#fff; }
+  body.admin-mode .kpi{ border:1px solid #DCE3EA; box-shadow:none; border-radius:10px; }
+  body.admin-mode .kpi .k-label{ font-size:12.5px; color:#6B7C8D; font-weight:500; }
+  body.admin-mode .kpi .k-label svg{ width:15px; height:15px; }
+  body.admin-mode .kpi .k-value{ font-weight:700; font-size:22px; letter-spacing:-.2px; }
+  body.admin-mode .card{ border:1px solid #DCE3EA; border-radius:10px; box-shadow:none; animation:none; }
+  body.admin-mode .card h2, body.admin-mode .card h3{ font-family:'Heebo', sans-serif; font-weight:700; font-size:16px; color:var(--ink); }
+  body.admin-mode .btn{ border-radius:6px; }
+  @media (hover:hover){ body.admin-mode .admin-nav-item:hover:not(.active){ background:#EEF2F6; color:var(--ink); } }
   @media (max-width:860px){
     .admin-layout{ grid-template-columns:minmax(0,1fr); gap:14px; }
     .admin-nav{ position:static; height:auto; flex-direction:row; overflow-x:auto; overflow-y:hidden; padding:8px; gap:6px; scrollbar-width:none; }
@@ -2880,6 +2897,19 @@ function resizeImageFile(file, maxSize, quality){
 }
 
 // ---------- ADMIN DASHBOARD ----------
+const ADMIN_ICONS = {
+  now: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  dashboard: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+  summary: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  employees: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  timeoff: '<path d="M23 12a11.05 11.05 0 0 0-22 0zm-5 7a3 3 0 0 1-6 0v-7"/>',
+  netcalc: '<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="11" x2="8" y2="11.01"/><line x1="12" y1="11" x2="12" y2="11.01"/><line x1="16" y1="11" x2="16" y2="11.01"/><line x1="8" y1="15" x2="8" y2="15.01"/><line x1="12" y1="15" x2="12" y2="15.01"/><line x1="16" y1="15" x2="16" y2="15.01"/><line x1="8" y1="18" x2="16" y2="18"/>',
+  requests: '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  hours: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  pay: '<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
+};
+function adminIcon(key){ return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ADMIN_ICONS[key] || ''}</svg>`; }
 const ADMIN_TABS = [
   { key: 'now', icon: '🟢', label: 'מי בעבודה' },
   { key: 'dashboard', icon: '📊', label: 'דשבורד' },
@@ -2895,19 +2925,19 @@ function renderAdminDashboard(tab){
   resetTheme();
   setHeader('פאנל ניהול', '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
   document.body.classList.add('admin-mode');
-  const kpi = (id, icon, label) => `<div class="kpi loading" id="kpi_${id}"><div class="k-label">${icon} ${label}</div><div class="k-value">—</div><div class="k-sub"></div></div>`;
+  const kpi = (id, icon, label) => `<div class="kpi loading" id="kpi_${id}"><div class="k-label">${adminIcon(icon)} ${label}</div><div class="k-value">—</div><div class="k-sub"></div></div>`;
   app.innerHTML = `
     <div class="admin-layout">
       <nav class="admin-nav">
         <div class="admin-nav-title">תפריט ניהול</div>
-        ${ADMIN_TABS.map(t => `<button type="button" class="admin-nav-item${t.key === tab ? ' active' : ''}" data-tab="${t.key}"><span class="ico">${t.icon}</span><span class="lbl">${t.label}</span><span class="badge" data-badge="${t.key}"></span></button>`).join('')}
+        ${ADMIN_TABS.map(t => `<button type="button" class="admin-nav-item${t.key === tab ? ' active' : ''}" data-tab="${t.key}"><span class="ico">${adminIcon(t.key)}</span><span class="lbl">${t.label}</span><span class="badge" data-badge="${t.key}"></span></button>`).join('')}
       </nav>
       <section class="admin-main">
         <div class="kpi-strip">
-          ${kpi('hours', '⏱️', 'שעות החודש')}
-          ${kpi('pay', '💰', 'שכר החודש')}
-          ${kpi('now', '🟢', 'בעבודה עכשיו')}
-          ${kpi('req', '📨', 'בקשות ממתינות')}
+          ${kpi('hours', 'hours', 'שעות החודש')}
+          ${kpi('pay', 'pay', 'שכר החודש')}
+          ${kpi('now', 'employees', 'בעבודה עכשיו')}
+          ${kpi('req', 'requests', 'בקשות ממתינות')}
         </div>
         <div id="tabContent"></div>
       </section>
@@ -3023,7 +3053,7 @@ async function renderAdminTimeOff(){
     </div>
     ${!emps.length ? '<div class="card"><div class="empty-state">אין עדיין עובדים פעילים במערכת.</div></div>' : `
     <div class="card">
-      <h3 style="margin-top:0;">🏖️ ימי חופשה ומחלה</h3>
+      <h3 style="margin-top:0;">ימי חופשה ומחלה</h3>
       <p class="hint" style="font-size:13px; margin-top:-4px;">המכסה היא מספר הימים בשנה. שבתות לא נספרות. השאירו ריק אם אין מכסה.</p>
       <div class="table-scroll">
         <table>
@@ -3044,7 +3074,7 @@ async function renderAdminTimeOff(){
       <div class="error-msg" id="quotaErr"></div>
     </div>
     <div class="card">
-      <h3 style="margin-top:0;">➕ סימון ימי חופשה / מחלה לעובד</h3>
+      <h3 style="margin-top:0;">סימון ימי חופשה או מחלה לעובד</h3>
       <div class="emp-row-form" style="align-items:flex-end; flex-wrap:wrap; gap:10px;">
         <div class="field" style="margin-top:0;"><label>עובד</label><select id="toEmp">${emps.map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('')}</select></div>
         <div class="field" style="margin-top:0;"><label>מתאריך</label><input type="date" id="toFrom" value="${todayStr()}" /></div>
@@ -3136,7 +3166,7 @@ async function renderAdminTimeOff(){
 }
 
 // ---------- מנהל: דשבורד שבועי – שעות לפי ימים ועובדים ----------
-const DASH_COLORS = ['#3B82F6', '#F59E0B', '#10B981', '#EC4899', '#8B5CF6', '#EF4444', '#14B8A6', '#6366F1', '#84CC16', '#F97316'];
+const DASH_COLORS = ['#1F4E79', '#2E8B8B', '#B7862F', '#5B4B8A', '#A4505A', '#4F7A4A', '#5B7186', '#8C6D46', '#3E7CB1', '#7A7A7A'];
 function weekStart(offset){
   const d = new Date(); d.setHours(12, 0, 0, 0);
   d.setDate(d.getDate() - d.getDay() + (offset || 0) * 7); // יום ראשון
@@ -3194,7 +3224,7 @@ async function renderAdminWeekDashboard(){
       </div>
     </div>
     <div class="card">
-      <h3 style="margin-top:0;">📊 שעות לפי ימים</h3>
+      <h3 style="margin-top:0;">שעות לפי ימים</h3>
       <div style="position:relative; height:300px;"><canvas id="weekChart"></canvas></div>
     </div>
     <div class="card">
