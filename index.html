@@ -3628,6 +3628,61 @@ async function renderAdminNow(){
   if(btn) btn.onclick = () => renderAdminNow();
 }
 
+
+// ---------- תלוש חודשי לעובד (דף להדפסה / שמירה כ-PDF) ----------
+// סיכום פנימי של שעות ושכר – לא תלוש שכר רשמי. הנטו משוער לפי פרטי המחשבון.
+async function openPayslip(emp, month){
+  const win = window.open('', '_blank');
+  if(!win){ showToast('הדפדפן חסם את החלון. אפשרו חלונות קופצים לאתר.'); return; }
+  win.document.write('<p style="font-family:sans-serif;direction:rtl">טוען...</p>');
+  const [hoursData, settings] = await Promise.all([loadHours(emp.id), loadSettings(emp.id)]);
+  const entries = ((hoursData || {})[month] || []).slice().sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  const closed = entries.filter(e => e.end);
+  const hours = closed.reduce((s, e) => s + (computeEntryHours(e) || 0), 0);
+  const days = new Set(closed.map(e => e.date)).size;
+  const gross = calcPay(emp, hours);
+  const net = employeeNetEstimate(emp, gross, Number(month.slice(0, 4)));
+  const off = getDaysOff(settings).filter(d => d.date.slice(0, 7) === month);
+  const r2 = n => Math.round(n * 100) / 100;
+  const rows = closed.map(e => {
+    const br = (e.breaks || []).filter(b => b.end).reduce((s, b) => s + (computeHoursFromRange(b.start, b.end) || 0), 0);
+    return `<tr><td>${e.date.split('-').reverse().join('/')}</td><td>${hebrewDateStr(e.date)}</td><td>${hhmm(e.start)}</td><td>${hhmm(e.end)}</td><td>${br ? fmtHours(r2(br)) : '—'}</td><td>${fmtHours(r2(computeEntryHours(e) || 0))}</td></tr>`;
+  }).join('');
+  const line = (k, v, b) => `<tr${b ? ' class="b"' : ''}><td>${k}</td><td>${v}</td></tr>`;
+  const html = `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>תלוש ${escapeHtml(emp.name)} – ${monthLabel(month)}</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#12293F;margin:32px auto;padding:0 24px;max-width:820px}
+    h1{font-size:22px;margin:0 0 4px} .sub{color:#5B7186;font-size:13px;margin-bottom:22px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px}
+    table{width:100%;border-collapse:collapse;font-size:13.5px} td,th{padding:7px 8px;border-bottom:1px solid #DCE3EA;text-align:right}
+    th{color:#5B7186;font-weight:600;font-size:12.5px;border-bottom:1.5px solid #12293F}
+    .box{border:1px solid #DCE3EA;border-radius:8px;padding:12px 14px} .box h3{margin:0 0 8px;font-size:14px}
+    tr.b td{font-weight:700;border-top:1.5px solid #12293F} .note{color:#5B7186;font-size:12px;margin-top:18px}
+    .actions{margin-bottom:18px} button{padding:8px 16px;font-size:14px;cursor:pointer}
+    @media print{.actions{display:none} body{margin:12mm}}
+  </style></head><body>
+  <div class="actions"><button onclick="print()">הדפסה / שמירה כ-PDF</button></div>
+  <h1>סיכום חודשי – ${escapeHtml(emp.name)}</h1>
+  <div class="sub">${monthLabel(month)} · הופק ב-${new Date().toLocaleDateString('he-IL')}</div>
+  <div class="grid">
+    <div class="box"><h3>שעות</h3><table>
+      ${line('ימי עבודה', days)}${line('סה"כ שעות', fmtHours(r2(hours)))}
+      ${line('ימי חופשה', off.filter(d => d.type === 'vacation').length)}${line('ימי מחלה', off.filter(d => d.type === 'sick').length)}
+    </table></div>
+    <div class="box"><h3>שכר (משוער)</h3><table>
+      ${line('סוג שכר', emp.payType === 'fixed' ? 'חודשי קבוע' : 'שעתי · ' + fmtMoney(Number(emp.rate) || 0) + ' לשעה')}
+      ${line('ברוטו', fmtMoney(r2(gross)), true)}
+      ${line('מס הכנסה', fmtMoney(net.incomeTax))}${line('ביטוח לאומי', fmtMoney(net.ni))}${line('ביטוח בריאות', fmtMoney(net.health))}${line('פנסיה (' + net.pensionPct + '%)', fmtMoney(net.pension))}
+      ${line('נטו משוער', fmtMoney(net.net), true)}
+    </table></div>
+  </div>
+  <table><thead><tr><th>תאריך</th><th>תאריך עברי</th><th>כניסה</th><th>יציאה</th><th>הפסקות (שעות)</th><th>שעות</th></tr></thead>
+  <tbody>${rows || '<tr><td colspan="6">אין רישומים בחודש הזה.</td></tr>'}</tbody></table>
+  <div class="note">זהו סיכום פנימי של שעות ושכר ואינו תלוש שכר רשמי. הנטו מחושב בהערכה, לפי הפרטים שהוזנו במחשבון הנטו${net.configured ? '' : ' (לעובד הזה עוד לא הוזנו פרטים, ולכן החישוב לפי ברירת מחדל)'}.</div>
+  </body></html>`;
+  win.document.open(); win.document.write(html); win.document.close();
+}
+
 async function renderAdminSummary(){
   const content = document.getElementById('tabContent');
   const month = state._adminMonth || currentMonthStr();
@@ -3654,7 +3709,7 @@ async function renderAdminSummary(){
     <div class="card">
       <div class="table-scroll">
         <table>
-          <thead><tr><th>עובד</th><th>סוג שכר</th><th>סה"כ שעות</th><th>סה"כ לתשלום</th></tr></thead>
+          <thead><tr><th>עובד</th><th>סוג שכר</th><th>סה"כ שעות</th><th>סה"כ לתשלום</th><th></th></tr></thead>
           <tbody>
             ${rows.map(r => `
               <tr>
@@ -3662,12 +3717,14 @@ async function renderAdminSummary(){
                 <td>${r.emp.payType === 'hourly' ? `<span class="pill hourly">שעתי · ${fmtMoney(r.emp.rate)}/שעה</span>` : `<span class="pill fixed">חודשי קבוע</span>`}</td>
                 <td class="mono">${fmtHours(r.totalHours)}</td>
                 <td class="mono">${fmtMoney(r.pay)}</td>
+                <td><button type="button" class="btn ghost small" data-payslip="${r.emp.id}">תלוש</button></td>
               </tr>
             `).join('')}
             <tr class="total-row">
               <td colspan="2">סה"כ לכל העובדים</td>
               <td class="mono" id="grandHoursCell">0</td>
               <td class="mono" id="grandPayCell">${fmtMoney(0)}</td>
+              <td></td>
             </tr>
           </tbody>
         </table>
@@ -3694,6 +3751,15 @@ async function renderAdminSummary(){
     catch(e){ console.error(e); showToast('לא הצלחנו להכין את הדוח'); }
     exportBtn.disabled = false; exportBtn.textContent = '📥 דוח שכר לאקסל';
   };
+  document.querySelectorAll('[data-payslip]').forEach(btn => {
+    btn.onclick = async () => {
+      const emp = activeEmployees().find(e => e.id === btn.dataset.payslip);
+      if(!emp) return;
+      btn.disabled = true;
+      try{ await openPayslip(emp, month); }catch(e){ console.error(e); showToast('לא הצלחנו להכין את התלוש'); }
+      btn.disabled = false;
+    };
+  });
   document.getElementById('grandHoursCell').textContent = fmtHours(grandHours);
   document.getElementById('grandPayCell').textContent = fmtMoney(grandPay);
 
@@ -4201,10 +4267,84 @@ function renderEditEmployee(empId){
 }
 
 
+
+// ---------- הגדרות: שעות הצינתוק (השרת של הקו קורא אותן מ-meta/reminder) ----------
+// הזמנים והימים כלליים לכל העובדים. השתקה אישית נמצאת בהגדרות של כל עובד.
+const REM_DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
+async function loadReminderTimes(){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'reminder')), 30000, 'loadReminderTimes');
+    const d = snap.exists() ? snap.data() : {};
+    const ok = t => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(t || ''));
+    return {
+      time: ok(d.time) ? d.time : '10:30',
+      exitTime: ok(d.exitTime) ? d.exitTime : '19:00',
+      exitOn: d.exitOn !== false,
+      enabled: d.enabled !== false,
+      days: Array.isArray(d.days) ? d.days.map(Number) : [0, 1, 2, 3, 4]
+    };
+  }catch(e){ console.error('loadReminderTimes error', e); return { error: true }; }
+}
+function reminderTimesHtml(c){
+  if(!c || c.error) return '<div class="card"><div class="empty-state">שגיאה בטעינת ההגדרות. נסו לרענן.</div></div>';
+  return `
+    <div class="card">
+      <h3>שעות הצינתוק</h3>
+      <p class="hint" style="font-size:13.5px; margin-top:-6px;">
+        צינתוק כניסה נשלח למי שעוד לא רשם כניסה, וצינתוק יציאה למי שיום העבודה שלו עדיין פתוח.
+        לא נשלח בחגים ובערבי חג. כל עובד יכול להשתיק לעצמו בהגדרות שלו. אפשר לשנות את השעות גם בקו, בתפריט המנהל (מקש 9 ואז 5).
+      </p>
+      <form id="remTimesForm">
+        <label style="display:flex; align-items:center; gap:10px; font-weight:600; margin-bottom:12px;">
+          <input type="checkbox" id="rtEnabled" ${c.enabled ? 'checked' : ''} style="width:18px; height:18px;" /> הצינתוקים פעילים
+        </label>
+        <div class="emp-row-form" style="align-items:flex-end; flex-wrap:wrap; gap:12px;">
+          <div class="field" style="margin-top:0;"><label>שעת צינתוק כניסה</label><input type="time" id="rtTime" value="${c.time}" required /></div>
+          <div class="field" style="margin-top:0;"><label>שעת צינתוק יציאה</label><input type="time" id="rtExitTime" value="${c.exitTime}" required /></div>
+          <label style="display:flex; align-items:center; gap:8px; padding-bottom:10px;">
+            <input type="checkbox" id="rtExitOn" ${c.exitOn ? 'checked' : ''} style="width:18px; height:18px;" /> צינתוק יציאה פעיל
+          </label>
+        </div>
+        <div style="margin-top:14px;">
+          <div class="hint" style="font-size:13px; margin-bottom:6px;">ימים שבהם נשלח צינתוק</div>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            ${REM_DAY_NAMES.map((n, i) => `<label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" data-rt-day="${i}" ${c.days.includes(i) ? 'checked' : ''} /> ${n}</label>`).join('')}
+          </div>
+        </div>
+        <div class="error-msg" id="rtErr"></div>
+        <div class="actions" style="justify-content:flex-start;"><button type="submit" class="btn brass">שמירה</button></div>
+      </form>
+    </div>`;
+}
+function bindReminderTimes(c){
+  const f = document.getElementById('remTimesForm');
+  if(!f || c.error) return;
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('rtErr');
+    const btn = f.querySelector('button[type=submit]');
+    const time = document.getElementById('rtTime').value, exitTime = document.getElementById('rtExitTime').value;
+    const days = [...document.querySelectorAll('[data-rt-day]')].filter(x => x.checked).map(x => Number(x.dataset.rtDay));
+    errEl.textContent = '';
+    if(!/^\d{2}:\d{2}$/.test(time) || !/^\d{2}:\d{2}$/.test(exitTime)){ errEl.textContent = 'יש לבחור שעות תקינות.'; return; }
+    if(!days.length){ errEl.textContent = 'יש לבחור לפחות יום אחד.'; return; }
+    btn.disabled = true; btn.textContent = 'שומר...';
+    const ok = await saveDoc(() => setDoc(doc(db, 'meta', 'reminder'), {
+      time, exitTime, days,
+      exitOn: document.getElementById('rtExitOn').checked,
+      enabled: document.getElementById('rtEnabled').checked
+    }, { merge: true }), 'saveReminderTimes');
+    btn.disabled = false; btn.textContent = 'שמירה';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    showToast('שעות הצינתוק נשמרו');
+  };
+}
+
 const ADMIN_SETTINGS_TABS = [
   { key: 'email', label: 'כתובת אימייל / וואטסאפ' },
   { key: 'autosend', label: 'שליחה אוטומטית' },
   { key: 'announcement', label: 'הודעה לעובדים' },
+  { key: 'remtimes', label: 'שעות הצינתוק' },
   { key: 'security', label: 'אבטחה' },
   { key: 'info', label: 'ℹ️ מידע' }
 ];
@@ -4227,7 +4367,9 @@ async function renderAdminSettings(){
   }
   const draft = state._emailjsDraft;
 
+  const remCfg = activeTab === 'remtimes' ? await loadReminderTimes() : null;
   const sectionsHtml = {
+    remtimes: () => reminderTimesHtml(remCfg),
     password: () => `
       <div class="card">
         <h3>שינוי סיסמת מנהל</h3>
@@ -4432,6 +4574,7 @@ async function renderAdminSettings(){
     </div>
     ${sectionsHtml[activeTab]()}
   `;
+  if(remCfg) bindReminderTimes(remCfg);
   content.querySelectorAll('[data-sec-item]').forEach(btn => {
     btn.onclick = () => { state._adminSecOpen = state._adminSecOpen === btn.dataset.secItem ? null : btn.dataset.secItem; renderAdminSettings(); };
   });
@@ -5942,7 +6085,15 @@ const EMPLOYEE_SETTINGS_DEFS = [
     category: 'sound',
     type: 'checkbox',
     label: 'השתקת צינתוק התזכורת היומי',
-    hint: 'כשמסומן, לא תקבל/י צינתוק בבוקר (בשעה 10:30) אם עדיין לא רשמת כניסה. ההרשמה לצינתוק נעשית פעם אחת בשלוחה הטלפונית, במקש 6.',
+    hint: 'כשמסומן, לא תקבל/י צינתוק בבוקר אם עדיין לא רשמת כניסה. ההרשמה לצינתוק נעשית פעם אחת בשלוחה הטלפונית, במקש 6.',
+    default: false
+  },
+  {
+    key: 'noExitReminder',
+    category: 'sound',
+    type: 'checkbox',
+    label: 'השתקת צינתוק היציאה',
+    hint: 'כשמסומן, לא תקבל/י צינתוק בערב אם יום העבודה שלך עדיין פתוח (שכחת לרשום יציאה).',
     default: false
   },
 
