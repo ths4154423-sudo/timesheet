@@ -2915,7 +2915,7 @@ const ADMIN_ICONS = {
 function btnIcon(key){ return `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px; margin-inline-end:4px;">${ADMIN_ICONS[key] || ''}</svg>`; }
 function adminIcon(key){ return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ADMIN_ICONS[key] || ''}</svg>`; }
 const ADMIN_TABS = [
-  { key: 'dashboard', icon: '📊', label: 'דשבורד' },
+  { key: 'dashboard', icon: '📊', label: 'לוח בקרה' },
   { key: 'now', icon: '🟢', label: 'מי בעבודה' },
   { key: 'requests', icon: '📨', label: 'בקשות' },
   { key: 'summary', icon: '📅', label: 'סיכום חודשי' },
@@ -4417,7 +4417,7 @@ async function renderAdminSettings(){
         <h3>מכשיר מהימן (כניסה ללא אינטרנט)</h3>
         <p class="hint" style="font-size:13.5px;">
           כדי לאפשר כניסת מנהל גם כשאין אינטרנט, המכשיר הזה מסומן כ"מהימן" מאז ההתחברות האחרונה שלך —
-          כניסה חוזרת אליו (למשל אחרי לחיצה על "יציאה" כדי להגיע לדשבורד של עובד) לא תדרוש סיסמה כשאין
+          כניסה חוזרת אליו (למשל אחרי לחיצה על "יציאה" כדי להגיע לדף של עובד) לא תדרוש סיסמה כשאין
           חיבור. אם המכשיר הזה אבד, נמכר, או שאתה חולק אותו עם מישהו שלא אמור לגשת לניהול — בלשונית "אבטחה"
           יש כפתור לביטול הסימון. כניסה הבאה, גם עם אינטרנט, תדרוש סיסמה מחדש.
         </p>
