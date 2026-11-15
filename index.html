@@ -1622,7 +1622,7 @@ async function init(){
       if(!(await ensureEmployeesLoaded())) return;
       state.isAdmin = true;
       state.adminEmail = user.email;
-      renderAdminDashboard('summary');
+      renderAdminDashboard('now');
       return;
     }
     if(tryTrustedDeviceAdminLogin()) return;
@@ -1659,7 +1659,7 @@ function tryTrustedDeviceAdminLogin(){
     if(trusted && trusted.email){
       state.isAdmin = true;
       state.adminEmail = trusted.email;
-      ensureEmployeesLoaded().then(ok => { if(ok) renderAdminDashboard('summary'); });
+      ensureEmployeesLoaded().then(ok => { if(ok) renderAdminDashboard('now'); });
       return true;
     }
   }catch(e){}
@@ -1743,7 +1743,7 @@ function renderAdminLogin(){
       // מסמן את המכשיר הזה כ"מהימן" - מאפשר כניסה אוטומטית במצב לא-מקוון בעתיד,
       // כי Firebase Auth (בשונה מ-Firestore) לא תמיד מצליח לאשש חיבור קיים בלי אינטרנט.
       try{ localStorage.setItem('trustedAdminDevice', JSON.stringify({ email, ts: Date.now() })); }catch(e){}
-      renderAdminDashboard('summary');
+      renderAdminDashboard('now');
     }catch(err){
       submitBtn.disabled = false;
       submitBtn.textContent = 'כניסה';
