@@ -1622,7 +1622,7 @@ async function init(){
       if(!(await ensureEmployeesLoaded())) return;
       state.isAdmin = true;
       state.adminEmail = user.email;
-      renderAdminDashboard('now');
+      renderAdminDashboard('dashboard');
       return;
     }
     if(tryTrustedDeviceAdminLogin()) return;
@@ -1659,7 +1659,7 @@ function tryTrustedDeviceAdminLogin(){
     if(trusted && trusted.email){
       state.isAdmin = true;
       state.adminEmail = trusted.email;
-      ensureEmployeesLoaded().then(ok => { if(ok) renderAdminDashboard('now'); });
+      ensureEmployeesLoaded().then(ok => { if(ok) renderAdminDashboard('dashboard'); });
       return true;
     }
   }catch(e){}
@@ -1743,7 +1743,7 @@ function renderAdminLogin(){
       // מסמן את המכשיר הזה כ"מהימן" - מאפשר כניסה אוטומטית במצב לא-מקוון בעתיד,
       // כי Firebase Auth (בשונה מ-Firestore) לא תמיד מצליח לאשש חיבור קיים בלי אינטרנט.
       try{ localStorage.setItem('trustedAdminDevice', JSON.stringify({ email, ts: Date.now() })); }catch(e){}
-      renderAdminDashboard('now');
+      renderAdminDashboard('dashboard');
     }catch(err){
       submitBtn.disabled = false;
       submitBtn.textContent = 'כניסה';
@@ -2915,9 +2915,9 @@ const ADMIN_ICONS = {
 function btnIcon(key){ return `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px; margin-inline-end:4px;">${ADMIN_ICONS[key] || ''}</svg>`; }
 function adminIcon(key){ return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ADMIN_ICONS[key] || ''}</svg>`; }
 const ADMIN_TABS = [
+  { key: 'dashboard', icon: '📊', label: 'דשבורד' },
   { key: 'now', icon: '🟢', label: 'מי בעבודה' },
   { key: 'requests', icon: '📨', label: 'בקשות' },
-  { key: 'dashboard', icon: '📊', label: 'דשבורד' },
   { key: 'summary', icon: '📅', label: 'סיכום חודשי' },
   { key: 'timeoff', icon: '🏖️', label: 'חופשות' },
   { key: 'employees', icon: '👥', label: 'ניהול עובדים' },
