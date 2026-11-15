@@ -4201,85 +4201,10 @@ function renderEditEmployee(empId){
 }
 
 
-// ---------- הגדרות: צינתוק תזכורת יומי (השרת של הקו שולח; כאן רק מציגים ומכבים) ----------
-// meta/reminder: lists (מי נרשם בטלפון, מקש 6), enabled=false מכבה לכולם, off = השתקה ישנה.
-// השתקה של עובד: settings/<עובד>.noEntryReminder – אותה תיבה שהעובד רואה בהגדרות שלו.
-async function loadReminderAdmin(){
-  let cfg = {};
-  try{
-    const snap = await withTimeout(getDoc(doc(db, 'meta', 'reminder')), 30000, 'loadReminder');
-    cfg = snap.exists() ? snap.data() : {};
-  }catch(e){ console.error('loadReminder error', e); return { error: true }; }
-  const rows = await Promise.all(activeEmployees().map(async emp => {
-    const settings = await loadSettings(emp.id) || {};
-    const muted = typeof settings.noEntryReminder === 'boolean' ? settings.noEntryReminder : !!((cfg.off || {})[emp.id]);
-    return { emp, settings, muted, registered: !!((cfg.lists || {})[emp.id]) };
-  }));
-  return { cfg, rows, enabled: cfg.enabled !== false };
-}
-function reminderSectionHtml(rem){
-  if(!rem || rem.error) return '<div class="card"><div class="empty-state">שגיאה בטעינת הגדרות התזכורת. נסו לרענן.</div></div>';
-  return `
-    <div class="card">
-      <h3>צינתוק תזכורת יומי</h3>
-      <p class="hint" style="font-size:13.5px; margin-top:-6px;">
-        בכל יום עבודה בבוקר (כרגע בשעה 10:30) הקו שולח צינתוק לעובד שעוד לא רשם כניסה. לא נשלח בשישי ובשבת, בחגים,
-        ולעובד שרשום לו יום חופשה או מחלה. עובד נרשם לתזכורת פעם אחת, מהטלפון שלו, בשלוחת שעון הנוכחות במקש 6.
-      </p>
-      <label style="display:flex; align-items:center; gap:10px; padding:12px 14px; background:var(--paper-alt); border-radius:8px; cursor:pointer; font-weight:600;">
-        <input type="checkbox" id="remGlobal" ${rem.enabled ? 'checked' : ''} style="width:18px; height:18px;" />
-        ${rem.enabled ? 'התזכורת פעילה' : 'התזכורת כבויה לכל העובדים'}
-      </label>
-      <p class="hint" style="font-size:12.5px; margin:6px 0 16px;">כשמבטלים את הסימון, לא יישלח צינתוק לאף עובד עד שמסמנים שוב.</p>
-      ${rem.rows.length ? `
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th>עובד</th><th>הרשמה</th><th>מושתק</th></tr></thead>
-          <tbody>
-            ${rem.rows.map(r => `
-              <tr style="${rem.enabled ? '' : 'opacity:.55;'}">
-                <td>${escapeHtml(r.emp.name)}</td>
-                <td>${r.registered ? 'רשום' : '<span class="hint">לא נרשם (מקש 6 בשלוחה)</span>'}</td>
-                <td><input type="checkbox" data-rem-mute="${r.emp.id}" ${r.muted ? 'checked' : ''} style="width:18px; height:18px;" /></td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-      <p class="hint" style="font-size:12.5px; margin-bottom:0;">"מושתק" = העובד לא יקבל צינתוק. זו אותה הגדרה שהעובד יכול לשנות בעצמו בהגדרות שלו באתר, או במקש 6 בשלוחה.</p>` : '<div class="empty-state">אין עובדים פעילים.</div>'}
-      <div class="error-msg" id="remErr"></div>
-    </div>`;
-}
-function bindReminderSection(rem){
-  if(!rem || rem.error) return;
-  const errEl = document.getElementById('remErr');
-  const g = document.getElementById('remGlobal');
-  if(g) g.onchange = async () => {
-    g.disabled = true;
-    const ok = await saveDoc(() => setDoc(doc(db, 'meta', 'reminder'), { enabled: g.checked }, { merge: true }), 'saveReminderEnabled');
-    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; g.checked = !g.checked; g.disabled = false; return; }
-    showToast(g.checked ? 'התזכורת הופעלה' : 'התזכורת כובתה לכל העובדים');
-    renderAdminSettings();
-  };
-  document.querySelectorAll('[data-rem-mute]').forEach(cb => {
-    cb.onchange = async () => {
-      const row = rem.rows.find(r => r.emp.id === cb.dataset.remMute);
-      if(!row) return;
-      cb.disabled = true;
-      const fresh = await loadSettings(row.emp.id) || {};
-      const ok = await saveSettings(row.emp.id, { ...fresh, noEntryReminder: cb.checked });
-      cb.disabled = false;
-      if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; cb.checked = !cb.checked; return; }
-      if(state._settingsCache && state._settingsCache.empId === row.emp.id) state._settingsCache = null;
-      showToast(cb.checked ? `התזכורת של ${row.emp.name} הושתקה` : `התזכורת של ${row.emp.name} הופעלה`);
-    };
-  });
-}
-
 const ADMIN_SETTINGS_TABS = [
   { key: 'email', label: 'כתובת אימייל / וואטסאפ' },
   { key: 'autosend', label: 'שליחה אוטומטית' },
   { key: 'announcement', label: 'הודעה לעובדים' },
-  { key: 'reminder', label: 'צינתוק תזכורת' },
   { key: 'security', label: 'אבטחה' },
   { key: 'info', label: 'ℹ️ מידע' }
 ];
@@ -4301,10 +4226,8 @@ async function renderAdminSettings(){
     };
   }
   const draft = state._emailjsDraft;
-  const rem = activeTab === 'reminder' ? await loadReminderAdmin() : null;
 
   const sectionsHtml = {
-    reminder: () => reminderSectionHtml(rem),
     password: () => `
       <div class="card">
         <h3>שינוי סיסמת מנהל</h3>
@@ -4509,7 +4432,6 @@ async function renderAdminSettings(){
     </div>
     ${sectionsHtml[activeTab]()}
   `;
-  if(rem) bindReminderSection(rem);
   content.querySelectorAll('[data-sec-item]').forEach(btn => {
     btn.onclick = () => { state._adminSecOpen = state._adminSecOpen === btn.dataset.secItem ? null : btn.dataset.secItem; renderAdminSettings(); };
   });
@@ -6019,18 +5941,11 @@ const EMPLOYEE_SETTINGS_DEFS = [
     key: 'noEntryReminder',
     category: 'sound',
     type: 'checkbox',
-    label: 'לא לקבל צלצול תזכורת לכניסה',
-    hint: 'כשמסומן, לא תקבל/י צלצול תזכורת בבוקר אם עדיין לא דיווחת כניסה.',
+    label: 'השתקת צינתוק התזכורת היומי',
+    hint: 'כשמסומן, לא תקבל/י צינתוק בבוקר (בשעה 10:30) אם עדיין לא רשמת כניסה. ההרשמה לצינתוק נעשית פעם אחת בשלוחה הטלפונית, במקש 6.',
     default: false
   },
-  {
-    key: 'noExitReminder',
-    category: 'sound',
-    type: 'checkbox',
-    label: 'לא לקבל צלצול תזכורת ליציאה',
-    hint: 'כשמסומן, לא תקבל/י צלצול תזכורת בערב אם עדיין לא דיווחת יציאה.',
-    default: false
-  },
+
   {
     key: 'themeColor',
     category: 'appearance',
