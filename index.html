@@ -4009,10 +4009,76 @@ function renderAdminEmployees(){
         ${state.employees.length === 0 ? '<div class="empty-state">עדיין לא נוספו עובדים.</div>' : ''}
       </div>
     </div>
+    <div id="trashCard"></div>
   `;
   document.getElementById('goToAddEmp').onclick = renderAddEmployeePage;
   document.getElementById('goToHealth').onclick = renderAdminHealthCheck;
   renderEmpList();
+  renderTrashCard();
+}
+
+// ---------- אשפה: עובד שנמחק נשמר 30 יום ב-meta/trash ואפשר לשחזר אותו (אחר כך השרת מוחק לצמיתות) ----------
+async function loadTrash(){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'trash')), 30000, 'loadTrash');
+    return snap.exists() ? (snap.data().list || []) : [];
+  }catch(e){ console.error('loadTrash error', e); return null; }
+}
+async function moveEmployeeToTrash(id){
+  const list = await loadEmployees();
+  if(list === null) return 'לא הצלחנו להתחבר לשרת';
+  const rec = list.find(x => x.id === id);
+  if(!rec) return 'העובד לא נמצא';
+  const trash = await loadTrash();
+  if(trash === null) return 'לא הצלחנו להתחבר לשרת';
+  const ok1 = await saveDoc(() => setDoc(doc(db, 'meta', 'trash'), { list: [{ ...rec, deletedAt: new Date().toISOString() }, ...trash.filter(x => x.id !== id)] }), 'saveTrash');
+  if(ok1 !== true) return ok1;
+  const updated = list.filter(x => x.id !== id);
+  const ok2 = await saveEmployees(updated);
+  if(ok2 === true) state.employees = updated;
+  return ok2;
+}
+async function restoreEmployeeFromTrash(id){
+  const trash = await loadTrash(), list = await loadEmployees();
+  if(trash === null || list === null) return 'לא הצלחנו להתחבר לשרת';
+  const rec = trash.find(x => x.id === id);
+  if(!rec) return 'העובד לא נמצא באשפה';
+  const { deletedAt, ...emp } = rec;
+  const updated = list.some(x => x.id === id) ? list : [...list, emp];
+  const ok1 = await saveEmployees(updated);
+  if(ok1 !== true) return ok1;
+  state.employees = updated;
+  return await saveDoc(() => setDoc(doc(db, 'meta', 'trash'), { list: trash.filter(x => x.id !== id) }), 'saveTrash');
+}
+async function renderTrashCard(){
+  const box = document.getElementById('trashCard');
+  if(!box) return;
+  const trash = await loadTrash();
+  if(!trash || !trash.length){ box.innerHTML = ''; return; }
+  const daysLeft = d => Math.max(0, 30 - Math.floor((Date.now() - Date.parse(d)) / 86400000));
+  box.innerHTML = `
+    <div class="card">
+      <h3>עובדים שנמחקו (${trash.length})</h3>
+      <div class="hint" style="font-size:13px; margin:-6px 0 8px;">עובד שנמחק נשמר כאן 30 יום ואפשר לשחזר אותו. אחר כך הוא נמחק לצמיתות.</div>
+      ${trash.map(emp => `
+        <div class="list-item" style="opacity:.75;">
+          <div class="avatar-row">
+            ${avatarHtml(emp, 'small')}
+            <div>
+              <div class="name">${escapeHtml(emp.name || '')}</div>
+              <div class="meta">נמחק ב-${new Date(emp.deletedAt).toLocaleDateString('he-IL')} · יימחק לצמיתות בעוד ${daysLeft(emp.deletedAt)} ימים</div>
+            </div>
+          </div>
+          <div class="row-actions"><button class="btn brass small" data-restore="${escapeHtml(emp.id)}">שחזור</button></div>
+        </div>`).join('')}
+    </div>`;
+  box.querySelectorAll('[data-restore]').forEach(btn => btn.onclick = async () => {
+    btn.disabled = true;
+    const ok = await restoreEmployeeFromTrash(btn.dataset.restore);
+    if(ok !== true){ showToast('שגיאה בשחזור: ' + ok); btn.disabled = false; return; }
+    showToast('העובד שוחזר');
+    renderAdminEmployees();
+  });
 }
 
 function renderAddEmployeePage(){
@@ -4195,10 +4261,10 @@ function renderEmpList(){
 
   listEl.querySelectorAll('[data-del]').forEach(btn => {
     btn.onclick = async () => {
-      if(!(await showConfirmModal('למחוק את העובד? כל נתוני השעות שלו יישארו במערכת אך לא יהיו נגישים דרך הכניסה.'))) return;
-      state.employees = state.employees.filter(x => x.id !== btn.dataset.del);
-      await saveEmployees(state.employees);
-      showToast('העובד נמחק');
+      if(!(await showConfirmModal('למחוק את העובד? הוא יעבור לאשפה, ואפשר יהיה לשחזר אותו במשך 30 יום.'))) return;
+      const ok = await moveEmployeeToTrash(btn.dataset.del);
+      if(ok !== true){ showToast('שגיאה במחיקה: ' + ok); return; }
+      showToast('העובד הועבר לאשפה');
       renderAdminEmployees();
     };
   });
