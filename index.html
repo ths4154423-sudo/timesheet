@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="שעון נוכחות">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Heebo:wght@300;400;500;700&family=IBM+Plex+Mono:wght@500;600&family=Noto+Rashi+Hebrew:wght@600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Heebo:wght@300;400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --paper: #EAF3FB;
@@ -29,6 +29,7 @@
     --brass-text: #FFFFFF;
     --surface: #FFFFFF;
   }
+  @font-face{ font-family:'Stam Ashkenaz'; src:url('fonts/StamAshkenazCLM.ttf') format('truetype'); font-display:block; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   body{
     margin:0;
@@ -361,7 +362,7 @@
   /* הפסוק: קשת בחלק העליון של המסך, נכנס מימין ומתבהר בעדינות */
   .welcome-arc{ position:absolute; top:2vh; left:50%; transform:translateX(-50%); width:min(96vw, 760px); height:auto; overflow:visible; pointer-events:none; visibility:hidden; }
   .welcome-arc-text{
-    fill:#E8C97A; font-family:'Noto Rashi Hebrew', 'Heebo', serif; font-weight:800; font-size:29px; letter-spacing:.5px;
+    fill:#E8C97A; font-family:'Stam Ashkenaz', 'Heebo', serif; font-weight:400; font-size:27px; letter-spacing:0;
     paint-order:stroke; stroke:rgba(0,0,0,.55); stroke-width:3px;
     opacity:0; animation: arcFade 1.6s ease-out 1.4s both;
   }
@@ -2915,7 +2916,7 @@ function showWelcomeSplash(emp, onDone){
       const W = overlay.clientWidth, H = overlay.clientHeight, r = img.naturalWidth / img.naturalHeight;
       const w = Math.min(W, H * r), h = w / r, left = (W - w) / 2, top = (H - h) / 2;
       arc.style.left = (left + w * 0.04) + 'px';
-      arc.style.top = (top + h * 0.025) + 'px';
+      arc.style.top = Math.max(top + h * 0.025, 12) + 'px';
       arc.style.width = (w * 0.92) + 'px';
       arc.style.transform = 'none';
       arc.style.visibility = 'visible';
