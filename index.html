@@ -29,7 +29,7 @@
     --brass-text: #FFFFFF;
     --surface: #FFFFFF;
   }
-  *{box-sizing:border-box;}
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   body{
     margin:0;
     font-family:'Heebo', sans-serif;
@@ -4003,18 +4003,23 @@ function renderAdminEmployees(){
       <button class="btn brass" id="goToAddEmp">+ הוסף עובד חדש</button>
       <button class="btn ghost" id="goToHealth">${btnIcon('check')}בדיקת תקינות</button>
     </div>
+    <div class="tabs" style="margin-bottom:16px;">
+      <div class="tab${state._empView !== 'trash' ? ' active' : ''}" data-emp-view="list">רשימת עובדים</div>
+      <div class="tab${state._empView === 'trash' ? ' active' : ''}" data-emp-view="trash" id="trashTab">אשפה</div>
+    </div>
+    ${state._empView === 'trash' ? '<div id="trashCard"><div class="card"><div class="empty-state">טוען...</div></div></div>' : `
     <div class="card">
       <h3>רשימת עובדים</h3>
       <div id="empList">
         ${state.employees.length === 0 ? '<div class="empty-state">עדיין לא נוספו עובדים.</div>' : ''}
       </div>
-    </div>
-    <div id="trashCard"></div>
+    </div>`}
   `;
+  document.querySelectorAll('[data-emp-view]').forEach(t => t.onclick = () => { state._empView = t.dataset.empView; renderAdminEmployees(); });
+  loadTrash().then(tr => { const tt = document.getElementById('trashTab'); if(tt && tr && tr.length) tt.textContent = `אשפה (${tr.length})`; });
   document.getElementById('goToAddEmp').onclick = renderAddEmployeePage;
   document.getElementById('goToHealth').onclick = renderAdminHealthCheck;
-  renderEmpList();
-  renderTrashCard();
+  if(state._empView === 'trash') renderTrashCard(); else renderEmpList();
 }
 
 // ---------- אשפה: עובד שנמחק נשמר 30 יום ב-meta/trash ואפשר לשחזר אותו (אחר כך השרת מוחק לצמיתות) ----------
@@ -4054,7 +4059,8 @@ async function renderTrashCard(){
   const box = document.getElementById('trashCard');
   if(!box) return;
   const trash = await loadTrash();
-  if(!trash || !trash.length){ box.innerHTML = ''; return; }
+  if(trash === null){ box.innerHTML = '<div class="card"><div class="empty-state">שגיאה בטעינת האשפה. נסו לרענן.</div></div>'; return; }
+  if(!trash.length){ box.innerHTML = '<div class="card"><div class="empty-state">האשפה ריקה. עובד שנמחק יופיע כאן 30 יום, ואפשר יהיה לשחזר אותו.</div></div>'; return; }
   const daysLeft = d => Math.max(0, 30 - Math.floor((Date.now() - Date.parse(d)) / 86400000));
   box.innerHTML = `
     <div class="card">
