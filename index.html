@@ -283,6 +283,8 @@
   .list-item .meta{ color:var(--muted); font-size:13px; margin-top:2px; }
 
   .row-actions{ display:flex; gap:8px; }
+  .emp-choice{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 16px; margin:4px 0; border:none; border-radius:8px; background:var(--paper-alt); color:var(--ink); font:inherit; text-align:right; cursor:pointer; }
+  .emp-choice:hover{ filter:brightness(.97); }
   @media (max-width:600px){
     .list-item{ flex-wrap:wrap; gap:10px; }
     .list-item .avatar-row{ min-width:0; flex:1 1 100%; }
@@ -3019,7 +3021,7 @@ function renderAdminDashboard(tab){
     </div>
   `;
   document.querySelectorAll('.admin-nav-item').forEach(t => {
-    t.onclick = () => renderAdminDashboard(t.dataset.tab);
+    t.onclick = () => { if(t.dataset.tab === 'employees') state._empView = null; renderAdminDashboard(t.dataset.tab); };
   });
   const activeNav = document.querySelector('.admin-nav-item.active');
   if(activeNav && activeNav.scrollIntoView && window.innerWidth <= 860) activeNav.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -4003,11 +4005,19 @@ function renderAdminEmployees(){
       <button class="btn brass" id="goToAddEmp">+ הוסף עובד חדש</button>
       <button class="btn ghost" id="goToHealth">${btnIcon('check')}בדיקת תקינות</button>
     </div>
-    <div class="tabs" style="margin-bottom:16px;">
-      <div class="tab${state._empView !== 'trash' ? ' active' : ''}" data-emp-view="list">רשימת עובדים</div>
-      <div class="tab${state._empView === 'trash' ? ' active' : ''}" data-emp-view="trash" id="trashTab">אשפה</div>
-    </div>
-    ${state._empView === 'trash' ? '<div id="trashCard"><div class="card"><div class="empty-state">טוען...</div></div></div>' : `
+    ${!state._empView ? `
+    <div class="card" style="padding:12px;">
+      <button type="button" class="emp-choice" data-emp-view="list">
+        <span><span style="display:block; font-weight:700;">רשימת עובדים</span><span class="hint" style="display:block; font-size:13px; margin-top:2px;">${activeEmployees().length} פעילים${state.employees.filter(e => e.frozen).length ? ' · ' + state.employees.filter(e => e.frozen).length + ' מוקפאים' : ''}</span></span>
+        <span style="font-size:18px;">‹</span>
+      </button>
+      <button type="button" class="emp-choice" data-emp-view="trash">
+        <span><span style="display:block; font-weight:700;">אשפה</span><span class="hint" style="display:block; font-size:13px; margin-top:2px;" id="trashCount">עובדים שנמחקו ב-30 הימים האחרונים</span></span>
+        <span style="font-size:18px;">‹</span>
+      </button>
+    </div>` : `
+    <div style="margin-bottom:12px;"><button type="button" class="btn ghost small" id="empViewBack">‹ חזרה</button></div>`}
+    ${!state._empView ? '' : state._empView === 'trash' ? '<div id="trashCard"><div class="card"><div class="empty-state">טוען...</div></div></div>' : `
     <div class="card">
       <h3>רשימת עובדים</h3>
       <div id="empList">
@@ -4016,10 +4026,11 @@ function renderAdminEmployees(){
     </div>`}
   `;
   document.querySelectorAll('[data-emp-view]').forEach(t => t.onclick = () => { state._empView = t.dataset.empView; renderAdminEmployees(); });
-  loadTrash().then(tr => { const tt = document.getElementById('trashTab'); if(tt && tr && tr.length) tt.textContent = `אשפה (${tr.length})`; });
+  const evb = document.getElementById('empViewBack'); if(evb) evb.onclick = () => { state._empView = null; renderAdminEmployees(); };
+  if(!state._empView) loadTrash().then(tr => { const tc = document.getElementById('trashCount'); if(tc && tr) tc.textContent = tr.length ? `${tr.length} עובדים שנמחקו · אפשר לשחזר במשך 30 יום` : 'ריקה'; });
   document.getElementById('goToAddEmp').onclick = renderAddEmployeePage;
   document.getElementById('goToHealth').onclick = renderAdminHealthCheck;
-  if(state._empView === 'trash') renderTrashCard(); else renderEmpList();
+  if(state._empView === 'trash') renderTrashCard(); else if(state._empView === 'list') renderEmpList();
 }
 
 // ---------- אשפה: עובד שנמחק נשמר 30 יום ב-meta/trash ואפשר לשחזר אותו (אחר כך השרת מוחק לצמיתות) ----------
