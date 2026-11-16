@@ -283,6 +283,12 @@
   .list-item .meta{ color:var(--muted); font-size:13px; margin-top:2px; }
 
   .row-actions{ display:flex; gap:8px; }
+  @media (max-width:600px){
+    .list-item{ flex-wrap:wrap; gap:10px; }
+    .list-item .avatar-row{ min-width:0; flex:1 1 100%; }
+    .list-item .avatar-row > div{ min-width:0; overflow-wrap:anywhere; }
+    .list-item .row-actions{ flex-wrap:wrap; }
+  }
 
   .empty-state{ text-align:center; padding:40px 20px; color:var(--muted); }
 
@@ -4169,7 +4175,7 @@ function renderEmpList(){
   };
   listEl.querySelectorAll('[data-freeze]').forEach(btn => btn.onclick = () => {
     const emp = state.employees.find(x => x.id === btn.dataset.freeze);
-    if(emp && confirm(`להקפיא את ${emp.name}? הוא לא יוכל להיכנס ולא יופיע בדוחות, אבל כל הנתונים שלו יישמרו ואפשר להחזיר אותו בכל רגע.`)) setFrozen(emp.id, true);
+    if(emp) showConfirmModal(`להקפיא את ${emp.name}? הוא לא יוכל להיכנס ולא יופיע בדוחות, אבל כל הנתונים שלו יישמרו ואפשר להחזיר אותו בכל רגע.`).then(ok => { if(ok) setFrozen(emp.id, true); });
   });
   listEl.querySelectorAll('[data-unfreeze]').forEach(btn => btn.onclick = () => setFrozen(btn.dataset.unfreeze, false));
 
@@ -4183,7 +4189,7 @@ function renderEmpList(){
 
   listEl.querySelectorAll('[data-del]').forEach(btn => {
     btn.onclick = async () => {
-      if(!confirm('למחוק את העובד? כל נתוני השעות שלו יישארו במערכת אך לא יהיו נגישים דרך הכניסה.')) return;
+      if(!(await showConfirmModal('למחוק את העובד? כל נתוני השעות שלו יישארו במערכת אך לא יהיו נגישים דרך הכניסה.'))) return;
       state.employees = state.employees.filter(x => x.id !== btn.dataset.del);
       await saveEmployees(state.employees);
       showToast('העובד נמחק');
