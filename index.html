@@ -579,7 +579,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signInWithCustomToken, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
@@ -879,7 +879,73 @@ async function loadHours(empId){
   }catch(e){ console.error('loadHours error', e); return null; }
 }
 async function saveHours(empId, data){
-  return saveDoc(() => setDoc(doc(db, 'hours', empId), data), 'saveHours');
+  // החודש נעול? (רק המנהל יכול לשנות בחודש נעול) + רישום ביומן השינויים
+  let prev = {};
+  try{ const snap = await withTimeout(getDoc(doc(db, 'hours', empId)), 15000, 'prevHours'); prev = snap.exists() ? snap.data() : {}; }catch(e){}
+  const changedMonths = Object.keys({ ...prev, ...data }).filter(k => /^\d{4}-\d{2}$/.test(k) && JSON.stringify(prev[k] || []) !== JSON.stringify(data[k] || []));
+  if(!state.isAdmin && changedMonths.length){
+    const locked = await loadLocks();
+    const hit = changedMonths.filter(m => locked.includes(m));
+    if(hit.length) return 'החודש ' + hit.map(monthLabel).join(', ') + ' נעול לעריכה. לתיקון יש לפנות למנהל.';
+  }
+  const ok = await saveDoc(() => setDoc(doc(db, 'hours', empId), data), 'saveHours');
+  if(ok === true){ try{ logHourChanges(empId, prev, data); }catch(e){ console.error('audit error', e); } }
+  return ok;
+}
+// ---------- נעילת חודשים (meta/locks.list) ----------
+async function loadLocks(force){
+  if(!force && state._locks && Date.now() - state._locks.at < 60000) return state._locks.list;
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'locks')), 15000, 'loadLocks');
+    const list = snap.exists() && Array.isArray(snap.data().list) ? snap.data().list : [];
+    state._locks = { at: Date.now(), list };
+    return list;
+  }catch(e){ console.error('loadLocks error', e); return (state._locks && state._locks.list) || []; }
+}
+async function setMonthLocked(month, locked){
+  const list = (await loadLocks(true)).filter(m => m !== month);
+  if(locked) list.push(month);
+  const ok = await saveDoc(() => setDoc(doc(db, 'meta', 'locks'), { list: list.sort() }), 'saveLocks');
+  if(ok === true) state._locks = { at: Date.now(), list };
+  return ok;
+}
+// ---------- יומן שינויים: תיקונים בשעות (לא כניסה/יציאה רגילה של היום) ----------
+function hourChangesText(prev, next){
+  const today = todayStr(), out = [];
+  const months = new Set([...Object.keys(prev || {}), ...Object.keys(next || {})].filter(k => /^\d{4}-\d{2}$/.test(k)));
+  const d = x => x ? x.split('-').reverse().slice(0, 2).join('/') : '';
+  const t = x => x ? hhmm(x) : 'פתוח';
+  months.forEach(m => {
+    const a = new Map((prev[m] || []).map(e => [e.id, e])), b = new Map((next[m] || []).map(e => [e.id, e]));
+    b.forEach((e, id) => {
+      const o = a.get(id);
+      if(!o){ if(!(e.date === today && !e.end)) out.push(`נוסף רישום ${d(e.date)} ${t(e.start)}–${t(e.end)}`); return; }
+      const ch = [];
+      if(o.date !== e.date) ch.push(`תאריך ${d(o.date)}→${d(e.date)}`);
+      if(o.start !== e.start) ch.push(`כניסה ${t(o.start)}→${t(e.start)}`);
+      if(o.end !== e.end && !(e.date === today && !o.end)) ch.push(`יציאה ${t(o.end)}→${t(e.end)}`);
+      const live = e.date === today && (!o.end || !e.end);
+      if(!live && JSON.stringify(o.breaks || []) !== JSON.stringify(e.breaks || [])) ch.push('שונו ההפסקות');
+      if(ch.length) out.push(`שונה רישום ${d(e.date)}: ${ch.join(', ')}`);
+    });
+    a.forEach((o, id) => { if(!b.has(id)) out.push(`נמחק רישום ${d(o.date)} ${t(o.start)}–${t(o.end)}`); });
+  });
+  return out;
+}
+function logHourChanges(empId, prev, next){
+  const lines = hourChangesText(prev, next);
+  if(!lines.length) return;
+  const at = new Date().toISOString(), by = state.isAdmin ? 'מנהל' : 'העובד';
+  lines.forEach(text => {
+    const id = at.replace(/\D/g, '') + '-' + uid();
+    saveDoc(() => setDoc(doc(db, 'auditLog', empId, 'items', id), { at, by, text, source: 'site' }), 'audit');
+  });
+}
+async function loadAuditFor(empId){
+  try{
+    const qs = await withTimeout(getDocs(query(collection(db, 'auditLog', empId, 'items'), orderBy('at', 'desc'), limit(100))), 30000, 'loadAudit');
+    return qs.docs.map(x => x.data());
+  }catch(e){ console.error('loadAudit error', e); return null; }
 }
 async function loadAnnouncement(){
   try{
@@ -2274,6 +2340,22 @@ async function renderEmployeeReminders(emp){
     if(state._settingsCache && state._settingsCache.empId === emp.id) state._settingsCache = null;
     showToast('הגדרות הצינתוק נשמרו');
   };
+}
+
+
+// ---------- יום הולדת עברי ----------
+function hebDayMonth(dateStr){
+  try{
+    const o = {}; new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'long', timeZone: 'UTC' }).formatToParts(new Date(dateStr + 'T12:00:00Z')).forEach(p => { o[p.type] = p.value; });
+    return o.day + ' ' + o.month.replace('Adar II', 'Adar').replace('Adar I', 'Adar');
+  }catch(e){ return ''; }
+}
+function isHebrewBirthday(birthDate){ return !!birthDate && hebDayMonth(birthDate) === hebDayMonth(todayStr()); }
+function maybeBirthdayGreeting(emp){
+  if(!isHebrewBirthday(emp.birthDate)) return;
+  const key = 'bday_' + emp.id + '_' + todayStr();
+  try{ if(localStorage.getItem(key)) return; localStorage.setItem(key, '1'); }catch(e){}
+  showConfirmModal(`🎉 מזל טוב, ${emp.name}! יום הולדת שמח ושנה טובה ומבורכת.`);
 }
 
 async function renderEmployeeGoal(emp){
@@ -3816,6 +3898,7 @@ async function renderAdminSummary(){
     <div class="top-actions">
       <input type="month" class="month-picker" id="monthPicker" value="${month}" />
       <span class="subtitle">${monthLabel(month)}</span>
+      <button type="button" class="btn ghost small" id="monthLockBtn">…</button>
       ${activeEmployees().length ? '<button type="button" class="btn brass small" id="payrollExportBtn">📥 דוח שכר לאקסל</button>' : ''}
     </div>
     ${activeEmployees().length === 0 ? '<div class="card"><div class="empty-state">אין עדיין עובדים במערכת. עברו לטאב "ניהול עובדים" כדי להוסיף.</div></div>' : `
@@ -3857,6 +3940,19 @@ async function renderAdminSummary(){
     state._adminMonth = e.target.value;
     renderAdminSummary();
   };
+  const lockBtn = document.getElementById('monthLockBtn');
+  loadLocks(true).then(list => {
+    const isL = list.includes(month);
+    lockBtn.textContent = isL ? '🔒 החודש נעול · פתיחה' : '🔓 נעילת החודש';
+    lockBtn.onclick = async () => {
+      const msg = isL ? `לפתוח את ${monthLabel(month)}? העובדים יוכלו שוב לשנות בו שעות.` : `לנעול את ${monthLabel(month)}? העובדים לא יוכלו לשנות בו שעות. אתה תוכל לשנות ולפתוח אותו בכל רגע.`;
+      if(!(await showConfirmModal(msg))) return;
+      const ok = await setMonthLocked(month, !isL);
+      if(ok !== true){ showToast('שגיאה בשמירה: ' + ok); return; }
+      showToast(isL ? 'החודש נפתח' : 'החודש ננעל');
+      renderAdminSummary();
+    };
+  });
   const exportBtn = document.getElementById('payrollExportBtn');
   if(exportBtn) exportBtn.onclick = async () => {
     exportBtn.disabled = true; exportBtn.textContent = 'מכין דוח...';
@@ -4055,9 +4151,13 @@ function renderAdminEmployees(){
         <span><span style="display:block; font-weight:700;">אשפה</span><span class="hint" style="display:block; font-size:13px; margin-top:2px;" id="trashCount">עובדים שנמחקו ב-30 הימים האחרונים</span></span>
         <span style="font-size:18px;">‹</span>
       </button>
+      <button type="button" class="emp-choice" data-emp-view="audit">
+        <span><span style="display:block; font-weight:700;">יומן שינויים</span><span class="hint" style="display:block; font-size:13px; margin-top:2px;">תיקונים ומחיקות של שעות: מי, מתי ומה</span></span>
+        <span style="font-size:18px;">‹</span>
+      </button>
     </div>` : `
     <div style="margin-bottom:12px;"><button type="button" class="btn ghost small" id="empViewBack">‹ חזרה</button></div>`}
-    ${!state._empView ? '' : state._empView === 'trash' ? '<div id="trashCard"><div class="card"><div class="empty-state">טוען...</div></div></div>' : `
+    ${!state._empView ? '' : state._empView === 'audit' ? '<div id="auditCard"><div class="card"><div class="empty-state">טוען...</div></div></div>' : state._empView === 'trash' ? '<div id="trashCard"><div class="card"><div class="empty-state">טוען...</div></div></div>' : `
     <div class="card">
       <h3>רשימת עובדים</h3>
       <div id="empList">
@@ -4070,7 +4170,19 @@ function renderAdminEmployees(){
   if(!state._empView) loadTrash().then(tr => { const tc = document.getElementById('trashCount'); if(tc && tr) tc.textContent = tr.length ? `${tr.length} עובדים שנמחקו · אפשר לשחזר במשך 30 יום` : 'ריקה'; });
   document.getElementById('goToAddEmp').onclick = renderAddEmployeePage;
   document.getElementById('goToHealth').onclick = renderAdminHealthCheck;
-  if(state._empView === 'trash') renderTrashCard(); else if(state._empView === 'list') renderEmpList();
+  if(state._empView === 'trash') renderTrashCard(); else if(state._empView === 'audit') renderAuditCard(); else if(state._empView === 'list') renderEmpList();
+}
+async function renderAuditCard(){
+  const box = document.getElementById('auditCard'); if(!box) return;
+  const emps = state.employees || [];
+  const all = [];
+  for(const e of emps){ const items = await loadAuditFor(e.id); (items || []).forEach(x => all.push({ ...x, name: e.name })); }
+  all.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  box.innerHTML = `<div class="card"><h3>יומן שינויים</h3>
+    <div class="hint" style="font-size:13px; margin:-6px 0 10px;">נרשמים כאן תיקונים בשעות: הוספה ידנית, שינוי שעות ומחיקה. כניסה ויציאה רגילות לא נרשמות.</div>
+    ${all.length ? `<div class="table-scroll"><table><thead><tr><th>מתי</th><th>עובד</th><th>מי שינה</th><th>מה השתנה</th></tr></thead><tbody>
+      ${all.slice(0, 200).map(x => `<tr><td style="white-space:nowrap;">${new Date(x.at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td><td>${escapeHtml(x.name || '')}</td><td>${escapeHtml(x.by || '')}</td><td>${escapeHtml(x.text || '')}</td></tr>`).join('')}
+    </tbody></table></div>` : '<div class="empty-state">עדיין אין שינויים ביומן.</div>'}</div>`;
 }
 
 // ---------- אשפה: עובד שנמחק נשמר 30 יום ב-meta/trash ואפשר לשחזר אותו (אחר כך השרת מוחק לצמיתות) ----------
@@ -4153,6 +4265,7 @@ function renderAddEmployeePage(){
           <div class="field"><label>טלפון</label><input type="tel" id="newPhone" required /></div>
           <div class="field"><label>אימייל</label><input type="email" id="newEmail" required /></div>
           <div class="field"><label>כתובת מגורים (לא חובה)</label><input type="text" id="newAddress" /></div>
+          <div class="field"><label>תאריך לידה (לא חובה, לברכה ביום ההולדת העברי)</label><input type="date" id="newBirth" /></div>
         </div>
         <div class="emp-row-form" style="margin-top:14px;">
           <div class="field">
@@ -4210,7 +4323,7 @@ function renderAddEmployeePage(){
       try{ photo = await resizeImageFile(photoFile); }
       catch(err){ errEl.textContent = 'שגיאה בקריאת התמונה'; submitBtn.disabled=false; submitBtn.textContent='הוסף עובד'; return; }
     }
-    const newEmp = { id: uid(), name, username, pin, phone, email, address, photo, payType, rate };
+    const newEmp = { id: uid(), name, username, pin, phone, email, address, photo, payType, rate, birthDate: document.getElementById('newBirth').value || null };
     const updated = [...state.employees, newEmp];
     const ok = await saveEmployees(updated);
     submitBtn.disabled = false;
@@ -4356,6 +4469,7 @@ function renderEditEmployee(empId){
         <div class="emp-row-form" style="margin-top:14px;">
           <div class="field"><label>טלפון</label><input type="tel" id="editPhone" value="${escapeHtml(emp.phone || '')}" required /></div>
           <div class="field"><label>אימייל</label><input type="email" id="editEmail" value="${escapeHtml(emp.email || '')}" required /></div>
+          <div class="field"><label>תאריך לידה (לא חובה, לברכה ביום ההולדת העברי)</label><input type="date" id="editBirth" value="${escapeHtml(emp.birthDate || '')}" /></div>
           <div class="field"><label>כתובת מגורים (לא חובה)</label><input type="text" id="editAddress" value="${escapeHtml(emp.address || '')}" /></div>
         </div>
         <div class="emp-row-form" style="margin-top:14px;">
@@ -4444,6 +4558,7 @@ function renderEditEmployee(empId){
       phone: document.getElementById('editPhone').value.trim(),
       email: document.getElementById('editEmail').value.trim(),
       address: document.getElementById('editAddress').value.trim(),
+      birthDate: document.getElementById('editBirth').value || null,
       photo,
       payType: document.getElementById('editPayType').value,
       rate: Number(document.getElementById('editRate').value),
@@ -4462,10 +4577,74 @@ function renderEditEmployee(empId){
 
 
 
+
+// ---------- מנהלים נוספים (meta/admins.emails). המנהל הראשי קבוע בכללי האבטחה ----------
+const OWNER_ADMIN = 't0504154423@gmail.com';
+async function loadAdmins(){
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'admins')), 15000, 'loadAdmins');
+    return { emails: snap.exists() && Array.isArray(snap.data().emails) ? snap.data().emails : [] };
+  }catch(e){ console.error('loadAdmins error', e); return { error: true }; }
+}
+function adminsHtml(a){
+  if(!a || a.error) return '<div class="card"><div class="empty-state">שגיאה בטעינה. נסו לרענן.</div></div>';
+  return `
+    <div class="card">
+      <h3>מנהלים</h3>
+      <p class="hint" style="font-size:13.5px; margin-top:-6px;">למנהל יש גישה מלאה לכל הנתונים. המנהל הראשי קבוע ואי אפשר להסיר אותו.</p>
+      <div class="list-item"><div><div class="name">${escapeHtml(OWNER_ADMIN)}</div><div class="meta">מנהל ראשי</div></div></div>
+      ${a.emails.filter(e => e.toLowerCase() !== OWNER_ADMIN).map(e => `
+        <div class="list-item"><div><div class="name">${escapeHtml(e)}</div><div class="meta">מנהל נוסף</div></div>
+          <div class="row-actions"><button type="button" class="btn danger" data-rm-admin="${escapeHtml(e)}">הסרה</button></div></div>`).join('')}
+      <h4 style="margin:20px 0 8px;">הוספת מנהל</h4>
+      <form id="addAdminForm" autocomplete="off">
+        <div class="field"><label>אימייל</label><input type="email" id="newAdminEmail" required /></div>
+        <div class="field"><label>סיסמה ראשונית (לפחות 6 תווים)</label><input type="text" id="newAdminPass" minlength="6" required /></div>
+        <div class="hint" style="font-size:12.5px;">אם כבר קיים חשבון עם האימייל הזה, הוא יקבל הרשאת מנהל עם הסיסמה הקיימת שלו. המנהל יוכל לשנות סיסמה דרך "שכחת סיסמה?".</div>
+        <div class="error-msg" id="adminAddErr"></div>
+        <div class="actions" style="justify-content:flex-start;"><button type="submit" class="btn brass">הוספה</button></div>
+      </form>
+    </div>`;
+}
+async function saveAdminEmails(emails){
+  return await saveDoc(() => setDoc(doc(db, 'meta', 'admins'), { emails }), 'saveAdmins');
+}
+function bindAdmins(a){
+  if(!a || a.error) return;
+  document.querySelectorAll('[data-rm-admin]').forEach(btn => btn.onclick = async () => {
+    const em = btn.dataset.rmAdmin;
+    if(!(await showConfirmModal(`להסיר את ${em} מהמנהלים? הוא לא יוכל עוד להיכנס לפאנל הניהול.`))) return;
+    const ok = await saveAdminEmails(a.emails.filter(x => x !== em));
+    if(ok !== true){ showToast('שגיאה בשמירה: ' + ok); return; }
+    showToast('המנהל הוסר'); renderAdminSettings();
+  });
+  const f = document.getElementById('addAdminForm');
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('adminAddErr'), btn = f.querySelector('button[type=submit]');
+    const email = document.getElementById('newAdminEmail').value.trim().toLowerCase(), password = document.getElementById('newAdminPass').value;
+    errEl.textContent = '';
+    if(a.emails.includes(email) || email === OWNER_ADMIN){ errEl.textContent = 'האימייל הזה כבר מנהל.'; return; }
+    btn.disabled = true; btn.textContent = 'מוסיף...';
+    try{
+      // יצירת חשבון בלי להתנתק מהחשבון הנוכחי
+      const r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + firebaseConfig.apiKey, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, returnSecureToken: false }) });
+      const j = await r.json();
+      if(!r.ok && !(j.error && j.error.message === 'EMAIL_EXISTS')) throw new Error((j.error && j.error.message) || 'שגיאה');
+    }catch(err){ btn.disabled = false; btn.textContent = 'הוספה'; errEl.textContent = 'לא הצלחנו ליצור חשבון: ' + err.message; return; }
+    const ok = await saveAdminEmails([...a.emails, email]);
+    btn.disabled = false; btn.textContent = 'הוספה';
+    if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
+    showToast('המנהל נוסף'); renderAdminSettings();
+  };
+}
+
 const ADMIN_SETTINGS_TABS = [
   { key: 'email', label: 'כתובת אימייל / וואטסאפ' },
   { key: 'autosend', label: 'שליחה אוטומטית' },
   { key: 'announcement', label: 'הודעה לעובדים' },
+  { key: 'admins', label: 'מנהלים' },
   { key: 'security', label: 'אבטחה' },
   { key: 'info', label: 'ℹ️ מידע' }
 ];
@@ -4507,7 +4686,9 @@ async function renderAdminSettings(){
   }
   const draft = state._emailjsDraft;
 
+  const admins = activeTab === 'admins' ? await loadAdmins() : null;
   const sectionsHtml = {
+    admins: () => adminsHtml(admins),
     password: () => `
       <div class="card">
         <h3>שינוי סיסמת מנהל</h3>
@@ -4721,6 +4902,7 @@ async function renderAdminSettings(){
     ${sectionsHtml[activeTab]()}
   `;
   if(activeTab === 'info') makeInfoAccordion(content);
+  if(admins) bindAdmins(admins);
   // שומרים על מיקום שורת הלשוניות: הלשונית שנבחרה נשארת גלויה ולא קופצים לתחילת השורה
   const tabsRow = content.querySelector('.tabs'), activeTabEl = tabsRow && tabsRow.querySelector('.tab.active');
   if(tabsRow && activeTabEl){
@@ -4924,6 +5106,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   const empSettings = await getEmpSettings(emp.id);
   applyEmployeeTheme(empSettings);
   setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="btn ghost small" id="logoutBtn">יציאה</button>');
+  setTimeout(() => maybeBirthdayGreeting(emp), 600);
   const month = state._empMonth || currentMonthStr();
 
   const passedFresh = useCache && typeof useCache === 'object' ? useCache : null;
@@ -5114,6 +5297,8 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           <button type="button" class="btn ghost small" id="nextMonthBtn" title="החודש הבא">◀</button>
         </div>
         <span class="subtitle">${monthLabel(month)} · ${fmtHours(totalHours)} שעות${emp.payType !== 'fixed' ? ' · ' + fmtMoney(pay) : ''}</span>
+        <button type="button" class="btn ghost small" id="empPdfBtn">📄 דוח חודשי (PDF)</button>
+        <span id="monthLockNote" class="hint" style="font-size:13px;"></span>
       </div>
       ${compareHtml}
       ${summaryHtml}
@@ -5179,6 +5364,9 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     `;
     document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; state._entriesPage = false; clearSession(); signOut(auth).catch(e => console.error('sign-out error', e)); renderLanding(); };
     document.getElementById('settingsBtn').onclick = () => { state._entriesPage = false; renderEmployeeSettings(emp); };
+    const pdfBtn = document.getElementById('empPdfBtn');
+    if(pdfBtn) pdfBtn.onclick = () => openPayslip(emp, month).catch(e => { console.error(e); showToast('לא הצלחנו להכין את הדוח'); });
+    loadLocks().then(list => { const n = document.getElementById('monthLockNote'); if(n && list.includes(month)) n.textContent = '🔒 החודש נעול לעריכה'; });
     document.getElementById('entriesBackBtn').onclick = () => { state._entriesPage = false; renderEmployeeDashboard(emp, null, true); window.scrollTo(0, 0); };
     const picker = document.getElementById('empMonthPicker');
     if(picker) picker.onchange = (e) => { state._empMonth = e.target.value; renderEmployeeDashboard(emp, null, true); };

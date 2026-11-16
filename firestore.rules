@@ -1,45 +1,53 @@
 rules_version = '2';
 // כללי האבטחה של Firebase (Firestore) לאתר שעון הנוכחות.
-// הקובץ הזה לא מופעל אוטומטית: מעתיקים אותו ל-Firebase Console → Firestore → Rules → Publish.
-// אימייל המנהל: t0504154423@gmail.com (להוספת מנהל נוסף - מוסיפים אימייל לרשימה, מופרד בפסיק).
+// מעתיקים ל-Firebase Console → Firestore → Rules → Publish.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // מנהל: מחובר עם אימייל וסיסמה, ורק מהאימיילים שברשימה
+    // מנהל: המנהל הראשי, או אימייל שהוסף ברשימת המנהלים באתר (meta/admins)
     function isAdmin() {
-      return request.auth != null
-        && request.auth.token.email in ['t0504154423@gmail.com'];
+      return request.auth != null && request.auth.token.email != null && (
+        request.auth.token.email == 't0504154423@gmail.com' ||
+        (exists(/databases/$(database)/documents/meta/admins) &&
+         request.auth.token.email in get(/databases/$(database)/documents/meta/admins).data.emails));
     }
-    // עובד: נכנס עם קוד אישי דרך הגשר (טוקן עם role=employee)
     function isEmployee() {
       return request.auth != null && request.auth.token.role == 'employee';
     }
     function isEmployeeId(id) {
       return isEmployee() && request.auth.uid == id;
     }
+    // חודשים נעולים (meta/locks.list) – עובד לא יכול לשנות בהם
+    function lockedMonths() {
+      return exists(/databases/$(database)/documents/meta/locks)
+        ? get(/databases/$(database)/documents/meta/locks).data.list : [];
+    }
 
-    // מנהל – גישה מלאה לכל הנתונים
     match /{document=**} {
       allow read, write: if isAdmin();
     }
-
-    // עובד – רק השעות וההגדרות של עצמו
     match /hours/{empId} {
-      allow read, write: if isEmployeeId(empId);
+      allow read: if isEmployeeId(empId);
+      allow create: if isEmployeeId(empId);
+      allow update: if isEmployeeId(empId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(lockedMonths());
     }
     match /settings/{empId} {
       allow read, write: if isEmployeeId(empId);
     }
-
-    // בקשות לעובדים ולמנהל, והודעות קוליות (כמו שהאתר עובד היום)
+    // יומן שינויים: עובד יכול רק להוסיף שורות על עצמו, לא לשנות או למחוק
+    match /auditLog/{empId}/items/{item} {
+      allow create: if isEmployeeId(empId);
+    }
+    match /meta/locks {
+      allow read: if isEmployee();
+    }
     match /meta/requests {
       allow read, write: if isEmployee();
     }
     match /voiceMessages/{id} {
       allow read, write: if isEmployee();
     }
-
-    // הודעה כללית, הגדרות ופרטי קשר – עובדים רק קוראים
     match /meta/announcement {
       allow read: if isEmployee();
     }
@@ -49,8 +57,5 @@ service cloud.firestore {
     match /meta/contact {
       allow read: if isEmployee();
     }
-
-    // meta/employees (שמות, טלפונים וקודים אישיים) – למנהל בלבד.
-    // הגשר ניגש אליו עם חשבון שירות, שלא כפוף לכללים האלה.
   }
 }
