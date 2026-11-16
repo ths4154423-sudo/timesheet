@@ -2170,23 +2170,25 @@ function showDirataPopup(){
   overlay.onclick = (e) => { if(e.target === overlay) close(); };
 }
 
-function showConfirmModal(message){
+// opts: { yes: 'טקסט הכפתור', danger: true/false (אדום, למחיקות), info: true (הודעה בלבד, כפתור אחד) }
+function showConfirmModal(message, opts){
+  const o = Object.assign({ yes: 'מחיקה', danger: true }, opts || {});
   return new Promise(resolve => {
     const overlay = document.createElement('div');
     overlay.className = 'confirm-overlay';
     overlay.innerHTML = `
       <div class="confirm-box">
-        <p class="confirm-msg">${escapeHtml(message)}</p>
+        <p class="confirm-msg" style="${o.danger ? '' : 'color:var(--ink); animation:none;'}">${escapeHtml(message)}</p>
         <div class="actions">
-          <button type="button" class="btn danger" id="confirmYes" style="padding:10px 22px;">מחיקה</button>
-          <button type="button" class="btn ghost" id="confirmNo">ביטול</button>
+          <button type="button" class="btn ${o.danger ? 'danger' : 'brass'}" id="confirmYes" style="padding:10px 22px;">${escapeHtml(o.yes)}</button>
+          ${o.info ? '' : '<button type="button" class="btn ghost" id="confirmNo">ביטול</button>'}
         </div>
       </div>
     `;
     document.body.appendChild(overlay);
     const cleanup = (result) => { overlay.remove(); resolve(result); };
     overlay.querySelector('#confirmYes').onclick = () => cleanup(true);
-    overlay.querySelector('#confirmNo').onclick = () => cleanup(false);
+    const no = overlay.querySelector('#confirmNo'); if(no) no.onclick = () => cleanup(false);
     overlay.onclick = (e) => { if(e.target === overlay) cleanup(false); };
   });
 }
@@ -2355,7 +2357,7 @@ function maybeBirthdayGreeting(emp){
   if(!isHebrewBirthday(emp.birthDate)) return;
   const key = 'bday_' + emp.id + '_' + todayStr();
   try{ if(localStorage.getItem(key)) return; localStorage.setItem(key, '1'); }catch(e){}
-  showConfirmModal(`🎉 מזל טוב, ${emp.name}! יום הולדת שמח ושנה טובה ומבורכת.`);
+  showConfirmModal(`🎉 מזל טוב, ${emp.name}! יום הולדת שמח ושנה טובה ומבורכת.`, { yes: 'תודה', danger: false, info: true });
 }
 
 async function renderEmployeeGoal(emp){
@@ -3946,7 +3948,7 @@ async function renderAdminSummary(){
     lockBtn.textContent = isL ? '🔒 החודש נעול · פתיחה' : '🔓 נעילת החודש';
     lockBtn.onclick = async () => {
       const msg = isL ? `לפתוח את ${monthLabel(month)}? העובדים יוכלו שוב לשנות בו שעות.` : `לנעול את ${monthLabel(month)}? העובדים לא יוכלו לשנות בו שעות. אתה תוכל לשנות ולפתוח אותו בכל רגע.`;
-      if(!(await showConfirmModal(msg))) return;
+      if(!(await showConfirmModal(msg, { yes: isL ? 'פתיחה' : 'נעילה', danger: false }))) return;
       const ok = await setMonthLocked(month, !isL);
       if(ok !== true){ showToast('שגיאה בשמירה: ' + ok); return; }
       showToast(isL ? 'החודש נפתח' : 'החודש ננעל');
@@ -4417,7 +4419,7 @@ function renderEmpList(){
   };
   listEl.querySelectorAll('[data-freeze]').forEach(btn => btn.onclick = () => {
     const emp = state.employees.find(x => x.id === btn.dataset.freeze);
-    if(emp) showConfirmModal(`להקפיא את ${emp.name}? הוא לא יוכל להיכנס ולא יופיע בדוחות, אבל כל הנתונים שלו יישמרו ואפשר להחזיר אותו בכל רגע.`).then(ok => { if(ok) setFrozen(emp.id, true); });
+    if(emp) showConfirmModal(`להקפיא את ${emp.name}? הוא לא יוכל להיכנס ולא יופיע בדוחות, אבל כל הנתונים שלו יישמרו ואפשר להחזיר אותו בכל רגע.`, { yes: 'הקפאה', danger: false }).then(ok => { if(ok) setFrozen(emp.id, true); });
   });
   listEl.querySelectorAll('[data-unfreeze]').forEach(btn => btn.onclick = () => setFrozen(btn.dataset.unfreeze, false));
 
@@ -4431,7 +4433,7 @@ function renderEmpList(){
 
   listEl.querySelectorAll('[data-del]').forEach(btn => {
     btn.onclick = async () => {
-      if(!(await showConfirmModal('למחוק את העובד? הוא יעבור לאשפה, ואפשר יהיה לשחזר אותו במשך 30 יום.'))) return;
+      if(!(await showConfirmModal('למחוק את העובד? הוא יעבור לאשפה, ואפשר יהיה לשחזר אותו במשך 30 יום.', { yes: 'מחיקה' }))) return;
       const ok = await moveEmployeeToTrash(btn.dataset.del);
       if(ok !== true){ showToast('שגיאה במחיקה: ' + ok); return; }
       showToast('העובד הועבר לאשפה');
@@ -4613,7 +4615,7 @@ function bindAdmins(a){
   if(!a || a.error) return;
   document.querySelectorAll('[data-rm-admin]').forEach(btn => btn.onclick = async () => {
     const em = btn.dataset.rmAdmin;
-    if(!(await showConfirmModal(`להסיר את ${em} מהמנהלים? הוא לא יוכל עוד להיכנס לפאנל הניהול.`))) return;
+    if(!(await showConfirmModal(`להסיר את ${em} מהמנהלים? הוא לא יוכל עוד להיכנס לפאנל הניהול.`, { yes: 'הסרה' }))) return;
     const ok = await saveAdminEmails(a.emails.filter(x => x !== em));
     if(ok !== true){ showToast('שגיאה בשמירה: ' + ok); return; }
     showToast('המנהל הוסר'); renderAdminSettings();
@@ -4926,7 +4928,7 @@ async function renderAdminSettings(){
   if(startEmailEdit) startEmailEdit.onclick = () => { state._emailEditMode = true; renderAdminSettings(); };
   const revokeTrustedDeviceBtn = document.getElementById('revokeTrustedDeviceBtn');
   if(revokeTrustedDeviceBtn) revokeTrustedDeviceBtn.onclick = async () => {
-    const confirmed = await showConfirmModal('לנתק את המכשיר הזה? כניסה הבאה, גם עם אינטרנט, תדרוש הזנת סיסמה מחדש.');
+    const confirmed = await showConfirmModal('לנתק את המכשיר הזה? כניסה הבאה, גם עם אינטרנט, תדרוש הזנת סיסמה מחדש.', { yes: 'ניתוק' });
     if(!confirmed) return;
     try{ localStorage.removeItem('trustedAdminDevice'); }catch(e){}
     showToast('המכשיר נותק בהצלחה');
