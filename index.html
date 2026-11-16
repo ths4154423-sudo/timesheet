@@ -4071,7 +4071,7 @@ async function renderTrashCard(){
   if(!box) return;
   const trash = await loadTrash();
   if(trash === null){ box.innerHTML = '<div class="card"><div class="empty-state">שגיאה בטעינת האשפה. נסו לרענן.</div></div>'; return; }
-  if(!trash.length){ box.innerHTML = '<div class="card"><div class="empty-state">האשפה ריקה. עובד שנמחק יופיע כאן 30 יום, ואפשר יהיה לשחזר אותו.</div></div>'; return; }
+  if(!trash.length){ box.innerHTML = '<div class="card"><div class="empty-state">האשפה ריקה</div></div>'; return; }
   const daysLeft = d => Math.max(0, 30 - Math.floor((Date.now() - Date.parse(d)) / 86400000));
   box.innerHTML = `
     <div class="card">
