@@ -2203,9 +2203,15 @@ async function renderEmployeeReminders(emp){
       </p>
       <form id="remForm">
         <div class="field"><label>שעת צינתוק כניסה</label><input type="time" id="remIn" value="${inTime}" required /></div>
-        <label style="display:flex; align-items:center; gap:8px; margin:6px 0 14px;"><input type="checkbox" id="remInOff" ${st.noEntryReminder === true ? 'checked' : ''} /> השתקת צינתוק הכניסה</label>
+        <label style="display:flex; align-items:flex-start; gap:10px; margin:6px 0 16px; cursor:pointer;">
+          <input type="checkbox" class="toggle" id="remInOff" ${st.noEntryReminder === true ? 'checked' : ''} style="margin-top:3px;" />
+          <span><span style="display:block; font-weight:600;">השתקת צינתוק הכניסה</span><span class="hint" style="display:block; margin-top:2px; font-size:13px;">לא תקבל/י צינתוק אם עדיין לא רשמת כניסה</span></span>
+        </label>
         <div class="field"><label>שעת צינתוק יציאה</label><input type="time" id="remOut" value="${outTime}" required /></div>
-        <label style="display:flex; align-items:center; gap:8px; margin:6px 0 14px;"><input type="checkbox" id="remOutOff" ${st.noExitReminder === true ? 'checked' : ''} /> השתקת צינתוק היציאה</label>
+        <label style="display:flex; align-items:flex-start; gap:10px; margin:6px 0 16px; cursor:pointer;">
+          <input type="checkbox" class="toggle" id="remOutOff" ${st.noExitReminder === true ? 'checked' : ''} style="margin-top:3px;" />
+          <span><span style="display:block; font-weight:600;">השתקת צינתוק היציאה</span><span class="hint" style="display:block; margin-top:2px; font-size:13px;">לא תקבל/י צינתוק אם יום העבודה שלך עדיין פתוח</span></span>
+        </label>
         <div class="hint" style="font-size:13px; margin-bottom:6px;">ימים שבהם אקבל צינתוק</div>
         <div style="display:flex; gap:12px; flex-wrap:wrap;">
           ${REM_DAY_NAMES.map((n, i) => `<label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" data-rem-day="${i}" ${days.includes(i) ? 'checked' : ''} /> ${n}</label>`).join('')}
