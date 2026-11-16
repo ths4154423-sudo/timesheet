@@ -1699,6 +1699,10 @@ function renderLanding(){
           <button class="btn brass" id="btnAdmin">כניסת מנהל</button>
           <button class="btn ghost" id="btnEmp">כניסת עובד</button>
         </div>
+        <div style="margin-top:22px; padding-top:16px; border-top:1px solid var(--line);">
+          <p class="hint" style="font-size:13px; margin:0 0 8px;">אפשר לדווח שעות גם בטלפון</p>
+          <a class="btn ghost" href="tel:${PHONE_LINE}" style="text-decoration:none; display:inline-block;">📞 התקשרות לקו · 077-2290274</a>
+        </div>
       </div>
     </div>
   `;
@@ -4762,7 +4766,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   state.currentEmployee = emp;
   const empSettings = await getEmpSettings(emp.id);
   applyEmployeeTheme(empSettings);
-  setHeader('שלום, ' + emp.name, '<a class="btn ghost small" href="tel:' + PHONE_LINE + '" title="התקשרות לקו הטלפוני של שעון הנוכחות" style="text-decoration:none;">📞 התקשרות לקו</a> <button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="btn ghost small" id="logoutBtn">יציאה</button>');
+  setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="btn ghost small" id="logoutBtn">יציאה</button>');
   const month = state._empMonth || currentMonthStr();
 
   const passedFresh = useCache && typeof useCache === 'object' ? useCache : null;
