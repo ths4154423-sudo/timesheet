@@ -359,7 +359,7 @@
     text-shadow:0 2px 10px rgba(0,0,0,.7), 0 0 18px rgba(232,201,122,.35);
   }
   /* הפסוק: קשת בחלק העליון של המסך, נכנס מימין ומתבהר בעדינות */
-  .welcome-arc{ position:absolute; top:2vh; left:50%; transform:translateX(-50%); width:min(96vw, 760px); height:auto; overflow:visible; pointer-events:none; }
+  .welcome-arc{ position:absolute; top:2vh; left:50%; transform:translateX(-50%); width:min(96vw, 760px); height:auto; overflow:visible; pointer-events:none; visibility:hidden; }
   .welcome-arc-text{
     fill:#E8C97A; font-family:'Fraunces', 'Heebo', serif; font-weight:700; font-size:27px; letter-spacing:.5px;
     paint-order:stroke; stroke:rgba(0,0,0,.55); stroke-width:3px;
@@ -2908,12 +2908,27 @@ function showWelcomeSplash(emp, onDone){
       <button type="button" class="welcome-skip" id="welcomeSkip">דילוג</button>
     `;
     document.body.appendChild(overlay);
+    // מיקום הקשת בתוך גבולות התמונה המוצגת (התמונה מותאמת למסך בלי חיתוך, ולכן יש לה שוליים משתנים)
+    const img = overlay.querySelector('.welcome-bg'), arc = overlay.querySelector('.welcome-arc');
+    const placeArc = () => {
+      if(!img.naturalWidth || !arc) return;
+      const W = overlay.clientWidth, H = overlay.clientHeight, r = img.naturalWidth / img.naturalHeight;
+      const w = Math.min(W, H * r), h = w / r, left = (W - w) / 2, top = (H - h) / 2;
+      arc.style.left = (left + w * 0.04) + 'px';
+      arc.style.top = (top + h * 0.025) + 'px';
+      arc.style.width = (w * 0.92) + 'px';
+      arc.style.transform = 'none';
+      arc.style.visibility = 'visible';
+    };
+    if(img.complete) placeArc(); else img.addEventListener('load', placeArc);
+    window.addEventListener('resize', placeArc);
     let finished = false;
     const timer = setTimeout(finish, 6000);
     function finish(){
       if(finished) return;
       finished = true;
       clearTimeout(timer);
+      window.removeEventListener('resize', placeArc);
       overlay.remove();
       onDone();
     }
