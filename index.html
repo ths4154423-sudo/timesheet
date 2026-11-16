@@ -585,6 +585,8 @@ const auth = getAuth(fbApp);
 // הקודים האישיים של העובדים נבדקים בגשר ולא בדפדפן, כך שהם לא נשלחים לאף אחד.
 // אחרי קוד נכון הגשר מחזיר "טוקן" שבעזרתו העובד מתחבר ל-Firebase.
 const BRIDGE_URL = 'https://my-gesher.onrender.com';
+// מספר הקו הטלפוני (ימות המשיח) – לכפתור 'התקשרות לקו' בדף העובד
+const PHONE_LINE = '0772290274';
 async function bridge(name, data){
   try{
     const r = await withTimeout(fetch(BRIDGE_URL + '/api/' + name, {
@@ -4760,7 +4762,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   state.currentEmployee = emp;
   const empSettings = await getEmpSettings(emp.id);
   applyEmployeeTheme(empSettings);
-  setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="btn ghost small" id="logoutBtn">יציאה</button>');
+  setHeader('שלום, ' + emp.name, '<a class="btn ghost small" href="tel:' + PHONE_LINE + '" title="התקשרות לקו הטלפוני של שעון הנוכחות" style="text-decoration:none;">📞 התקשרות לקו</a> <button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="btn ghost small" id="logoutBtn">יציאה</button>');
   const month = state._empMonth || currentMonthStr();
 
   const passedFresh = useCache && typeof useCache === 'object' ? useCache : null;
