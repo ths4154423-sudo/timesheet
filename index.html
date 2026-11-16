@@ -4687,6 +4687,12 @@ async function renderAdminSettings(){
     ${sectionsHtml[activeTab]()}
   `;
   if(activeTab === 'info') makeInfoAccordion(content);
+  // שומרים על מיקום שורת הלשוניות: הלשונית שנבחרה נשארת גלויה ולא קופצים לתחילת השורה
+  const tabsRow = content.querySelector('.tabs'), activeTabEl = tabsRow && tabsRow.querySelector('.tab.active');
+  if(tabsRow && activeTabEl){
+    const r = tabsRow.getBoundingClientRect(), a = activeTabEl.getBoundingClientRect();
+    tabsRow.scrollLeft += (a.left + a.width / 2) - (r.left + r.width / 2);
+  }
   content.querySelectorAll('[data-sec-item]').forEach(btn => {
     btn.onclick = () => { state._adminSecOpen = state._adminSecOpen === btn.dataset.secItem ? null : btn.dataset.secItem; renderAdminSettings(); };
   });
