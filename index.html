@@ -283,6 +283,11 @@
   .list-item .meta{ color:var(--muted); font-size:13px; margin-top:2px; }
 
   .row-actions{ display:flex; gap:8px; }
+  .info-acc > summary{ list-style:none; cursor:pointer; padding:16px 20px; font-weight:700; font-size:15.5px; display:flex; justify-content:space-between; align-items:center; }
+  .info-acc > summary::-webkit-details-marker{ display:none; }
+  .info-acc > summary::after{ content:'‹'; font-size:18px; color:var(--muted); transition:transform .2s; }
+  .info-acc[open] > summary::after{ transform:rotate(-90deg); }
+  .info-acc-body{ padding:0 20px 18px; }
   .emp-choice{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 16px; margin:4px 0; border:none; border-radius:8px; background:var(--paper-alt); color:var(--ink); font:inherit; text-align:right; cursor:pointer; }
   .emp-choice:hover{ filter:brightness(.97); }
   @media (max-width:600px){
@@ -3010,7 +3015,7 @@ function renderAdminDashboard(tab){
         ${ADMIN_TABS.map(t => `<button type="button" class="admin-nav-item${t.key === tab ? ' active' : ''}" data-tab="${t.key}"><span class="ico">${adminIcon(t.key)}</span><span class="lbl">${t.label}</span><span class="badge" data-badge="${t.key}"></span></button>`).join('')}
       </nav>
       <section class="admin-main">
-        <div class="kpi-strip">
+        <div class="kpi-strip" ${tab === 'dashboard' ? '' : 'style="display:none;"'}>
           ${kpi('hours', 'hours', 'שעות החודש')}
           ${kpi('pay', 'pay', 'שכר החודש')}
           ${kpi('now', 'employees', 'בעבודה עכשיו')}
@@ -3046,7 +3051,8 @@ function renderAdminDashboard(tab){
   else renderAdminSettings();
 
 
-  fillAdminKpis();
+  if(tab === 'dashboard') fillAdminKpis();
+  else { const b = document.querySelector('[data-badge="requests"]'); if(b) loadRequests().then(l => { if(l){ const n = l.filter(r => r.status === 'pending').length; b.textContent = n ? String(n) : ''; } }); }
 }
 
 // ריבועי הסיכום בראש פאנל הניהול – נטענים ברקע, ונשמרים לדקה כדי לא לטעון שוב בכל מעבר לשונית
@@ -4430,6 +4436,25 @@ const ADMIN_SETTINGS_TABS = [
   { key: 'info', label: 'ℹ️ מידע' }
 ];
 
+// לשונית "מידע": כל כרטיס מוצג מקופל, רק עם הכותרת, ונפתח בנגיעה
+function makeInfoAccordion(root){
+  root.querySelectorAll(':scope > .card').forEach(card => {
+    const h = card.querySelector('h3');
+    if(!h) return;
+    const det = document.createElement('details');
+    det.className = 'info-acc';
+    const sum = document.createElement('summary');
+    sum.textContent = h.textContent;
+    h.remove();
+    const body = document.createElement('div');
+    body.className = 'info-acc-body';
+    while(card.firstChild) body.appendChild(card.firstChild);
+    det.appendChild(sum); det.appendChild(body);
+    card.appendChild(det);
+    card.style.padding = '0';
+  });
+}
+
 async function renderAdminSettings(){
   const content = document.getElementById('tabContent');
   content.innerHTML = `<div class="empty-state">טוען...</div>`;
@@ -4661,6 +4686,7 @@ async function renderAdminSettings(){
     </div>
     ${sectionsHtml[activeTab]()}
   `;
+  if(activeTab === 'info') makeInfoAccordion(content);
   content.querySelectorAll('[data-sec-item]').forEach(btn => {
     btn.onclick = () => { state._adminSecOpen = state._adminSecOpen === btn.dataset.secItem ? null : btn.dataset.secItem; renderAdminSettings(); };
   });
