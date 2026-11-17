@@ -5449,8 +5449,8 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
           <h3 style="margin:0;">שעות עבודה לפי יום</h3>
           <div style="display:flex; gap:6px;">
-            ${chartTypeBtn('daily', 'bar', '📊 עמודות', dailyType)}
-            ${chartTypeBtn('daily', 'line', '📈 קו', dailyType)}
+            ${chartTypeBtn('daily', 'bar', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-left:4px;"><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="5"/><line x1="18" y1="20" x2="18" y2="10"/><line x1="3" y1="20" x2="21" y2="20"/></svg>עמודות', dailyType)}
+            ${chartTypeBtn('daily', 'line', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-left:4px;"><polyline points="3 17 9 11 13 15 21 7"/><line x1="3" y1="20" x2="21" y2="20"/></svg>קו', dailyType)}
           </div>
         </div>
         ${entries.length === 0 ? '<div class="empty-state">אין נתונים להצגה בגרף.</div>' : `
@@ -5470,9 +5470,9 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
           <h3 style="margin:0;">סיכום לפי חודשים (12 החודשים האחרונים)</h3>
           <div style="display:flex; gap:6px;">
-            ${chartTypeBtn('monthly', 'pie', '🥧 עוגה', monthlyType)}
-            ${chartTypeBtn('monthly', 'bar', '📊 עמודות', monthlyType)}
-            ${chartTypeBtn('monthly', 'line', '📈 קו', monthlyType)}
+            ${chartTypeBtn('monthly', 'pie', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-left:4px;"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>עוגה', monthlyType)}
+            ${chartTypeBtn('monthly', 'bar', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-left:4px;"><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="5"/><line x1="18" y1="20" x2="18" y2="10"/><line x1="3" y1="20" x2="21" y2="20"/></svg>עמודות', monthlyType)}
+            ${chartTypeBtn('monthly', 'line', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-left:4px;"><polyline points="3 17 9 11 13 15 21 7"/><line x1="3" y1="20" x2="21" y2="20"/></svg>קו', monthlyType)}
           </div>
         </div>
         <div style="position:relative; height:${monthlyType === 'pie' ? 280 : 200}px; margin-top:12px;"><canvas id="monthlyChart"></canvas></div>
