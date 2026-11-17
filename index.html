@@ -559,6 +559,15 @@
     .card, .list-item, .pill, #clockInForm button[type="submit"], .toast, .toast.out{ animation:none !important; }
     .salute-overlay, .salute-overlay .salute-emoji, .salute-sunset, .salute-rays, .salute-stars, .salute-stars .star{ animation:none !important; }
   }
+.set-menu-wrap{ position:relative; display:inline-block; margin-bottom:18px; }
+.set-menu-btn{ font:inherit; font-size:15px; background:#fff; border:1px solid #e3e3e0; border-radius:12px; padding:9px 16px; cursor:pointer; color:inherit; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+.set-menu-btn:hover{ background:#f4f4f2; }
+.set-menu-caret{ font-size:11px; opacity:.6; margin-right:6px; }
+.set-menu{ position:absolute; top:calc(100% + 6px); right:0; z-index:50; min-width:220px; background:#fff; border:1px solid #e6e6e3; border-radius:14px; padding:6px; box-shadow:0 8px 28px rgba(0,0,0,.12); }
+.set-menu[hidden]{ display:none; }
+.set-menu-item{ padding:9px 12px; border-radius:9px; cursor:pointer; font-size:15px; white-space:nowrap; }
+.set-menu-item:hover{ background:#efefec; }
+.set-menu-item.active{ background:#e8e8e5; font-weight:600; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -4704,7 +4713,8 @@ function bindAdmins(a){
 }
 
 const ADMIN_SETTINGS_TABS = [
-  { key: 'email', label: 'כתובת אימייל / וואטסאפ' },
+  { key: 'email', label: 'אימייל לדוחות' },
+  { key: 'whatsapp', label: 'וואטסאפ לדוחות' },
   { key: 'autosend', label: 'שליחה אוטומטית' },
   { key: 'announcement', label: 'הודעה לעובדים' },
   { key: 'admins', label: 'מנהלים' },
@@ -4738,7 +4748,7 @@ async function renderAdminSettings(){
   const activeTab = state._adminSettingsTab || 'email';
   const announcement = activeTab === 'announcement' ? await loadAnnouncement() : null;
   const managerEmail = activeTab === 'email' ? await loadManagerEmail() : null;
-  const managerWhatsapp = activeTab === 'email' ? await loadManagerWhatsapp() : null;
+  const managerWhatsapp = activeTab === 'whatsapp' ? await loadManagerWhatsapp() : null;
   const emailjsConfig = activeTab === 'autosend' ? await loadEmailjsConfig() : null;
   if(activeTab === 'autosend' && !state._emailjsDraft){
     state._emailjsDraft = {
@@ -4785,6 +4795,8 @@ async function renderAdminSettings(){
           </div>
         `}
       </div>
+    `,
+    whatsapp: () => `
       <div class="card">
         <h3>מספר וואטסאפ לקבלת דוחות שעות</h3>
         ${state._whatsappEditMode ? `
@@ -4966,13 +4978,24 @@ async function renderAdminSettings(){
   };
 
   content.innerHTML = `
-    <div class="tabs" style="margin-bottom:18px;">
-      ${ADMIN_SETTINGS_TABS.map(t => `<div class="tab${t.key === activeTab ? ' active' : ''}" data-settings-tab="${t.key}">${t.label}</div>`).join('')}
+    <div class="set-menu-wrap">
+      <button type="button" class="set-menu-btn" id="setMenuBtn" aria-haspopup="true">${(ADMIN_SETTINGS_TABS.find(t => t.key === activeTab) || {}).label || ''} <span class="set-menu-caret">▾</span></button>
+      <div class="set-menu" id="setMenu" hidden>
+        ${ADMIN_SETTINGS_TABS.map(t => `<div class="set-menu-item${t.key === activeTab ? ' active' : ''}" data-settings-tab="${t.key}">${t.label}</div>`).join('')}
+      </div>
     </div>
     ${sectionsHtml[activeTab]()}
   `;
   if(activeTab === 'info') makeInfoAccordion(content);
   if(admins) bindAdmins(admins);
+  const setMenuBtn = document.getElementById('setMenuBtn'), setMenu = document.getElementById('setMenu');
+  if(setMenuBtn){
+    setMenuBtn.onclick = (ev) => { ev.stopPropagation(); setMenu.hidden = !setMenu.hidden; };
+    document.addEventListener('click', function closeSetMenu(ev){
+      if(!document.body.contains(setMenu)){ document.removeEventListener('click', closeSetMenu); return; }
+      if(!setMenu.contains(ev.target)) setMenu.hidden = true;
+    });
+  }
   // שומרים על מיקום שורת הלשוניות: הלשונית שנבחרה נשארת גלויה ולא קופצים לתחילת השורה
   const tabsRow = content.querySelector('.tabs'), activeTabEl = tabsRow && tabsRow.querySelector('.tab.active');
   if(tabsRow && activeTabEl){
