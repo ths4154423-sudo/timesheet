@@ -755,7 +755,13 @@ function todayStr(){
 function fmtMoney(n){
   return '₪' + n.toLocaleString('he-IL', {minimumFractionDigits:0, maximumFractionDigits:2});
 }
+// שעות מוצגות כשעות:דקות (7.72 → 7:43)
 function fmtHours(n){
+  n = Number(n) || 0;
+  const neg = n < 0, totalMin = Math.round(Math.abs(n) * 60);
+  return (neg ? '-' : '') + Math.floor(totalMin / 60) + ':' + String(totalMin % 60).padStart(2, '0');
+}
+function fmtNum(n){
   return n.toLocaleString('he-IL', {minimumFractionDigits:0, maximumFractionDigits:2});
 }
 function uid(){ return Math.random().toString(36).slice(2,10); }
@@ -3285,8 +3291,8 @@ function timeOffBalanceHtml(emp, daysOff){
   const part = (icon, label, used, quota) => quota === null ? '' : `
     <div style="flex:1 1 140px; padding:10px 12px; background:var(--paper-alt); border-radius:10px;">
       <div class="hint" style="font-size:13px;">${icon} ${label} ${year}</div>
-      <div style="font-size:18px; font-weight:700; margin-top:2px;">נשארו ${fmtHours(Math.max(0, quota - used))}</div>
-      <div class="hint" style="font-size:12.5px;">נוצלו ${used} מתוך ${fmtHours(quota)}</div>
+      <div style="font-size:18px; font-weight:700; margin-top:2px;">נשארו ${fmtNum(Math.max(0, quota - used))}</div>
+      <div class="hint" style="font-size:12.5px;">נוצלו ${used} מתוך ${fmtNum(quota)}</div>
     </div>`;
   return `<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">${part('🏖️', 'ימי חופשה', u.vacation, vq)}${part('🤒', 'ימי מחלה', u.sick, sq)}</div>`;
 }
@@ -3303,7 +3309,7 @@ async function renderAdminTimeOff(){
     return { emp, settings, daysOff, u: dayOffUsage(daysOff, year) };
   }));
   const cell = (used, quota) => quota === null ? `<span class="mono">${used}</span>`
-    : `<span class="mono">${used} / ${fmtHours(quota)}</span> <span class="hint" style="font-size:12.5px;">(נשארו ${fmtHours(Math.max(0, quota - used))})</span>`;
+    : `<span class="mono">${used} / ${fmtNum(quota)}</span> <span class="hint" style="font-size:12.5px;">(נשארו ${fmtNum(Math.max(0, quota - used))})</span>`;
   content.innerHTML = `
     <div class="top-actions">
       <button type="button" class="btn ghost small" id="toPrev">‹ ${year - 1}</button>
