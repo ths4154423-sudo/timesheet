@@ -5218,7 +5218,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   state.currentEmployee = emp;
   const empSettings = await getEmpSettings(emp.id);
   applyEmployeeTheme(empSettings);
-  setHeader('שלום, ' + emp.name, '<button class="btn ghost small" id="mirrorBtn" title="מראה">🪞 מראה</button> <button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="btn ghost small" id="logoutBtn">יציאה</button>');
+  setHeader('שלום, ' + emp.name, (empSettings.hideMirror ? '' : '<span class="mirror-grp" style="display:inline-flex; gap:2px;"><button class="btn ghost small" id="mirrorBtn" title="מראה">🪞 מראה</button><button class="btn ghost small" id="hideMirrorBtn" title="הסתרת המראה" style="padding-inline:8px;">✕</button></span> ') + '<button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="btn ghost small" id="logoutBtn">יציאה</button>');
   setTimeout(() => maybeBirthdayGreeting(emp), 600);
   const month = state._empMonth || currentMonthStr();
 
@@ -6570,6 +6570,14 @@ const EMPLOYEE_SETTINGS_DEFS = [
     default: null
   },
   {
+    key: 'hideMirror',
+    category: 'appearance',
+    type: 'checkbox',
+    label: 'הסתרת כפתור המראה',
+    hint: 'כפתור "🪞 מראה" לא יוצג במסך הראשי. כדי להחזיר אותו, מבטלים את הסימון כאן.',
+    default: false
+  },
+  {
     key: 'darkMode',
     category: 'appearance',
     type: 'checkbox',
@@ -6826,7 +6834,20 @@ async function openMirror(){
   document.addEventListener('keydown', onKey);
   document.body.appendChild(ov);
 }
-document.addEventListener('click', e => { if(e.target.closest && e.target.closest('#mirrorBtn')) openMirror(); });
+document.addEventListener('click', async e => {
+  if(!e.target.closest) return;
+  if(e.target.closest('#mirrorBtn')) openMirror();
+  if(e.target.closest('#hideMirrorBtn')){
+    const emp = state.currentEmployee; if(!emp) return;
+    const ok = await showConfirmModal('להסתיר את כפתור המראה? אפשר להחזיר אותו בהגדרות ← עיצוב ותצוגה.', { yes: 'הסתרה' });
+    if(!ok) return;
+    const st = await getEmpSettings(emp.id);
+    st.hideMirror = true;
+    const r = await saveSettings(emp.id, st); if(r !== true){ st.hideMirror = false; showToast('שגיאה בשמירה'); return; }
+    const g = document.querySelector('.mirror-grp'); if(g) g.remove();
+    showToast('כפתור המראה הוסתר');
+  }
+});
 </script>
 </body>
 </html>
