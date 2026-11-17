@@ -6091,11 +6091,20 @@ function bindEntryRowButtons(emp, entries, month){
       if(entry) showDaySummaryModal(entry, emp);
     };
   });
+  // חודש נעול: עובד לא נכנס בכלל לעריכה או מחיקה, אלא מקבל הודעה
+  const lockedNotice = async () => {
+    if(state.isAdmin) return false;
+    const entryMonth = month;
+    if(!(await loadLocks()).includes(entryMonth)) return false;
+    showConfirmModal('⚠️ החודש הזה נעול לעריכה', { yes: 'הבנתי', danger: false, info: true });
+    return true;
+  };
   document.querySelectorAll('[data-edit-entry]').forEach(btn => {
-    btn.onclick = () => renderEmployeeDashboard(emp, btn.dataset.editEntry, true);
+    btn.onclick = async () => { if(await lockedNotice()) return; renderEmployeeDashboard(emp, btn.dataset.editEntry, true); };
   });
   document.querySelectorAll('[data-del-entry]').forEach(btn => {
     btn.onclick = async () => {
+      if(await lockedNotice()) return;
       const confirmed = await showConfirmModal('האם אתה בטוח שברצונך למחוק?');
       if(!confirmed) return;
       const fresh = await loadHours(emp.id);
