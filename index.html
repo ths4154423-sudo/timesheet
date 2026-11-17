@@ -718,8 +718,30 @@ let state = {
 
 const monthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 
+// ---------- שעה אמיתית לפי שעון ישראל, גם כשהשעון או אזור הזמן במכשיר לא נכונים ----------
+// לוקחים את השעה מהשרת של האתר (הכותרת Date בתשובה), ומחשבים כמה השעון של המכשיר טועה.
+let clockOffsetMs = 0;
+function trueNow(){ return new Date(Date.now() + clockOffsetMs); }
+// מחזיר תאריך שהשעה "המקומית" שלו היא השעה בישראל עכשיו
+function ilNow(){
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(trueNow()).map(x => [x.type, x.value]));
+  return new Date(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour) % 24, Number(p.minute), Number(p.second));
+}
+async function syncClock(){
+  try{
+    const t0 = Date.now();
+    const r = await fetch(location.pathname + '?t=' + t0, { method: 'HEAD', cache: 'no-store' });
+    const t1 = Date.now(), hd = r.headers.get('Date');
+    if(!hd) return;
+    const server = Date.parse(hd) + 500;   // הכותרת מעוגלת לשנייה
+    const off = server - (t0 + t1) / 2;
+    clockOffsetMs = Math.abs(off) > 3000 ? off : 0;
+    if(Math.abs(off) > 120000) console.warn('device clock is off by ' + Math.round(off / 60000) + ' minutes; using server time');
+  }catch(e){}
+}
+const clockReady = syncClock(); setInterval(syncClock, 30 * 60 * 1000);
 function currentMonthStr(){
-  const d = new Date();
+  const d = ilNow();
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
 }
 function monthLabel(ym){
@@ -727,7 +749,7 @@ function monthLabel(ym){
   return monthNames[parseInt(m,10)-1] + ' ' + y;
 }
 function todayStr(){
-  const d = new Date();
+  const d = ilNow();
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 function fmtMoney(n){
@@ -1098,7 +1120,7 @@ function issurDayName(y, m, d){
 function addDays(y, m, d, k){ const dt = new Date(y, m - 1, d + k, 12); return [dt.getFullYear(), dt.getMonth() + 1, dt.getDate()]; }
 // האם עכשיו שבת או יום טוב (מהדלקת נרות ועד צאת הכוכבים), ומתי זה נגמר
 function shabbatStatus(now){
-  now = now || new Date();
+  now = now || trueNow();
   const t = israelNowParts(now);
   const today = [t.y, t.m, t.d], tomorrow = addDays(t.y, t.m, t.d, 1);
   let start = null;
@@ -1151,7 +1173,7 @@ function goalAchievements(emp, goal, hoursData, daysOff){
   function ymd(dt){ return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); }
   // רצף נוכחי: סופרים אחורה מהיום (היום נספר רק אם היעד כבר הושג)
   let streak = 0;
-  const today = new Date(); today.setHours(12, 0, 0, 0);
+  const today = ilNow(); today.setHours(12, 0, 0, 0);
   for(let i = 0; i < 400; i++){
     const dt = new Date(today); dt.setDate(today.getDate() - i);
     if(!isWorkday(dt)) continue;
@@ -1337,7 +1359,7 @@ function computeHoursFromRange(start, end){
   return Math.round(diffHours * 1e6) / 1e6;
 }
 function nowTimeStr(){
-  const d = new Date();
+  const d = ilNow();
   return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
 }
 // Net worked hours for an entry, subtracting any completed breaks. Returns null if the entry is still open (no end time yet).
@@ -1534,7 +1556,7 @@ function startLiveTimer(sinceTimeStr){
   function update(){
     const target = document.getElementById('liveTimer');
     if(!target){ stopLiveTimer(); return; }
-    const now = new Date();
+    const now = ilNow();
     const [h, m, s] = sinceTimeStr.split(':').map(Number);
     const since = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, s || 0);
     let diffMs = now - since;
@@ -1574,7 +1596,7 @@ function startLiveMoneyTimer(emp, openEntry, onBreak, lastBreak){
   function update(){
     const target = document.getElementById('liveMoney');
     if(!target){ stopLiveMoneyTimer(); return; }
-    const now = new Date();
+    const now = ilNow();
     const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
     let totalElapsed = nowSec - startSec;
     if(totalElapsed < 0) totalElapsed += 24*3600;
@@ -1602,7 +1624,7 @@ function stopBreakWatchdog(){
 function startBreakWatchdog(emp){
   stopBreakWatchdog();
   breakWatchdogInterval = setInterval(() => {
-    if(new Date().getHours() >= 20){
+    if(ilNow().getHours() >= 20){
       stopBreakWatchdog();
       renderEmployeeDashboard(emp, null, true); // הבדיקה עצמה (כולל "התחילה לפני 20:00") נעשית בדשבורד
     }
@@ -1682,6 +1704,7 @@ async function handleEmailRequestAction(reqId, action){
 }
 
 async function init(){
+  await Promise.race([clockReady, new Promise(r => setTimeout(r, 2500))]);
   app.innerHTML = '<div class="empty-state">טוען...</div>';
 
   // טיפול בלחיצה על קישור "אישור"/"דחייה" ישירות מתוך מייל ההתראה, בלי צורך בהתחברות
@@ -3257,7 +3280,7 @@ function quotaNum(v){ const n = Number(v); return (v === null || v === undefined
 function timeOffBalanceHtml(emp, daysOff){
   const vq = quotaNum(emp.vacationDays), sq = quotaNum(emp.sickDays);
   if(vq === null && sq === null) return '';
-  const year = new Date().getFullYear();
+  const year = ilNow().getFullYear();
   const u = dayOffUsage(daysOff, year);
   const part = (icon, label, used, quota) => quota === null ? '' : `
     <div style="flex:1 1 140px; padding:10px 12px; background:var(--paper-alt); border-radius:10px;">
@@ -3271,7 +3294,7 @@ function timeOffBalanceHtml(emp, daysOff){
 // ---------- מנהל: לשונית חופשות – מכסות, ניצול ויתרה לכל עובד ----------
 async function renderAdminTimeOff(){
   const content = document.getElementById('tabContent');
-  const year = state._toYear || new Date().getFullYear();
+  const year = state._toYear || ilNow().getFullYear();
   content.innerHTML = `<div class="empty-state">טוען נתונים...</div>`;
   const emps = activeEmployees();
   const rows = await Promise.all(emps.map(async emp => {
@@ -3404,7 +3427,7 @@ async function renderAdminTimeOff(){
 // ---------- מנהל: דשבורד שבועי – שעות לפי ימים ועובדים ----------
 const DASH_COLORS = ['#1F4E79', '#2E8B8B', '#B7862F', '#5B4B8A', '#A4505A', '#4F7A4A', '#5B7186', '#8C6D46', '#3E7CB1', '#7A7A7A'];
 function weekStart(offset){
-  const d = new Date(); d.setHours(12, 0, 0, 0);
+  const d = ilNow(); d.setHours(12, 0, 0, 0);
   d.setDate(d.getDate() - d.getDay() + (offset || 0) * 7); // יום ראשון
   return d;
 }
@@ -5289,7 +5312,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   // The day is ended at the moment the break started, and the break itself is dropped from the record entirely.
   let autoCloseNotice = null;
   // רק הפסקה שהתחילה לפני 20:00 (הפסקה שהתחילה אחרי 20:00 לא נסגרת אוטומטית)
-  if(openEntry && onBreak && lastBreak && !editingEntry && new Date().getHours() >= 20 && hhmm(lastBreak.start) < '20:00'){
+  if(openEntry && onBreak && lastBreak && !editingEntry && ilNow().getHours() >= 20 && hhmm(lastBreak.start) < '20:00'){
     autoCloseNotice = `יום העבודה נסגר אוטומטית בשעה ${hhmm(lastBreak.start)}, מכיוון שלא חזרת מההפסקה עד השעה 20:00. אם חזרת לעבוד, אפשר לתקן את שעת הסיום ברישומי החודש.`;
     openEntry.end = lastBreak.start;
     openEntry.breaks = openEntry.breaks.slice(0, -1); // מוחקים רק את ההפסקה הפתוחה; הפסקות קודמות נשמרות
@@ -6444,7 +6467,7 @@ function renderMonthlyChart(emp, hoursData){
   const canvas = document.getElementById('monthlyChart');
   if(!canvas || typeof Chart === 'undefined') return;
   if(state._monthlyChart){ try{ state._monthlyChart.destroy(); }catch(e){} }
-  const now = new Date();
+  const now = ilNow();
   const keys = [];
   for(let i = 11; i >= 0; i--){
     const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
