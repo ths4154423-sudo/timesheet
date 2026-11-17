@@ -3374,6 +3374,27 @@ function weekStart(offset){
   return d;
 }
 function ymdLocal(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+// כרטיס בלוח הבקרה: אילו חודשים נעולים לעריכה (נועלים ופותחים בסיכום החודשי)
+async function renderDashLocks(){
+  const box = document.getElementById('dashLocks'); if(!box) return;
+  const list = (await loadLocks(true)).slice().sort().reverse();
+  box.innerHTML = `<h3 style="margin-top:0;">חודשים נעולים לעריכה</h3>
+    ${list.length ? `<div style="display:flex; flex-direction:column; gap:6px;">
+      ${list.map(m => `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; background:var(--paper-alt); border-radius:8px;">
+        <span>🔒 <b>${monthLabel(m)}</b></span>
+        <button type="button" class="btn ghost small" data-unlock="${m}">פתיחה</button></div>`).join('')}
+    </div>` : '<div class="hint">אין חודשים נעולים.</div>'}
+    <p class="hint" style="font-size:12.5px; margin:10px 0 0;">נועלים חודש בסיכום החודשי, בכפתור "נעילת החודש".</p>`;
+  box.querySelectorAll('[data-unlock]').forEach(btn => btn.onclick = async () => {
+    const m = btn.dataset.unlock;
+    if(!(await showConfirmModal(`לפתוח את ${monthLabel(m)}? העובדים יוכלו שוב לשנות בו שעות.`, { yes: 'פתיחה', danger: false }))) return;
+    const ok = await setMonthLocked(m, false);
+    if(ok !== true){ showToast('שגיאה בשמירה: ' + ok); return; }
+    showToast('החודש נפתח'); renderDashLocks();
+  });
+}
+
 async function renderAdminWeekDashboard(){
   const content = document.getElementById('tabContent');
   const offset = state._dashWeek || 0;
@@ -3445,7 +3466,9 @@ async function renderAdminWeekDashboard(){
       </div>
       <p class="hint" style="font-size:12.5px; margin-bottom:0;">יום עבודה שעדיין פתוח נספר עד השעה הנוכחית.</p>
     </div>`}
+    <div class="card" id="dashLocks"><h3 style="margin-top:0;">חודשים נעולים לעריכה</h3><div class="hint">טוען...</div></div>
   `;
+  renderDashLocks();
   document.getElementById('dashPrev').onclick = () => { state._dashWeek = offset - 1; renderAdminWeekDashboard(); };
   const nx = document.getElementById('dashNext'); if(nx && offset < 0) nx.onclick = () => { state._dashWeek = offset + 1; renderAdminWeekDashboard(); };
   const td = document.getElementById('dashToday'); if(td) td.onclick = () => { state._dashWeek = 0; renderAdminWeekDashboard(); };
