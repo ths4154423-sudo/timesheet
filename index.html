@@ -6693,10 +6693,10 @@ async function renderEmployeeSettingsCategory(emp, categoryKey){
       <h3>${category ? category.icon + ' ' + escapeHtml(category.label) : 'הגדרות'}</h3>
       ${defs.map((def, i) => renderSettingField(def, i === 0)).join('')}
       ${categoryKey === 'sound' ? `
-        <button type="button" id="openRemindersBtn" style="display:flex; align-items:center; gap:10px; width:100%; margin-top:22px; padding:14px 16px; border:1px solid var(--line, #dfe3e8); border-radius:12px; background:var(--paper-alt); color:inherit; font:inherit; cursor:pointer; text-align:right;">
-          <span style="font-size:18px;">⏰</span>
-          <span style="flex:1;"><span style="display:block; font-weight:600;">צינתוק תזכורת</span><span class="hint" style="display:block; font-size:13px;">שעות הצינתוק לכניסה וליציאה, ימים והשתקה</span></span>
-          <span style="opacity:.6;">‹</span>
+        <button type="button" id="openRemindersBtn" style="display:flex; align-items:flex-start; gap:10px; width:100%; margin-top:18px; padding:0; border:none; background:none; color:inherit; font:inherit; cursor:pointer; text-align:right;">
+          <span style="width:44px; flex:0 0 44px; text-align:center; font-size:18px; line-height:24px;">⏰</span>
+          <span style="flex:1;"><span style="display:block; font-weight:600;">צינתוק תזכורת</span><span class="hint" style="display:block; margin-top:2px; font-size:13px;">שעות הצינתוק לכניסה וליציאה, ימים והשתקה</span></span>
+          <span style="opacity:.55; font-size:20px; line-height:24px;">‹</span>
         </button>` : ''}
       <div class="error-msg" id="settingsErr" style="margin-top:16px;"></div>
       <p class="hint" id="settingsSavedMsg" style="margin-top:12px; font-size:13px; display:none; color:var(--brass-dark);">✓ נשמר</p>
