@@ -563,7 +563,7 @@
 .set-menu-btn{ font:inherit; font-size:15px; background:#fff; border:1px solid #e3e3e0; border-radius:12px; padding:9px 16px; cursor:pointer; color:inherit; box-shadow:0 1px 2px rgba(0,0,0,.04); }
 .set-menu-btn:hover{ background:#f4f4f2; }
 .set-menu-caret{ font-size:11px; opacity:.6; margin-right:6px; }
-.set-menu{ position:absolute; top:calc(100% + 6px); right:0; z-index:50; min-width:220px; background:#fff; border:1px solid #e6e6e3; border-radius:14px; padding:6px; box-shadow:0 8px 28px rgba(0,0,0,.12); }
+.set-menu{ z-index:200; text-align:right; direction:rtl; min-width:220px; background:#fff; border:1px solid #e6e6e3; border-radius:14px; padding:6px; box-shadow:0 8px 28px rgba(0,0,0,.12); }
 .set-menu[hidden]{ display:none; }
 .set-menu-item{ padding:9px 12px; border-radius:9px; cursor:pointer; font-size:15px; white-space:nowrap; }
 .set-menu-item:hover{ background:#efefec; }
@@ -2355,7 +2355,7 @@ async function renderEmployeeReminders(emp){
         <div class="actions" style="justify-content:flex-start;"><button type="submit" class="btn brass">שמירה</button></div>
       </form>
     </div>`;
-  document.getElementById('remBackBtn').onclick = () => renderEmployeeSettings(emp);
+  document.getElementById('remBackBtn').onclick = () => renderEmployeeSettingsCategory(emp, 'sound');
   document.getElementById('remForm').onsubmit = async (e) => {
     e.preventDefault();
     const errEl = document.getElementById('remErr'), btn = e.target.querySelector('button[type=submit]');
@@ -3176,7 +3176,10 @@ function renderAdminDashboard(tab){
     </div>
   `;
   document.querySelectorAll('.admin-nav-item').forEach(t => {
-    t.onclick = () => { if(t.dataset.tab === 'employees') state._empView = null; renderAdminDashboard(t.dataset.tab); };
+    t.onclick = (ev) => {
+      if(t.dataset.tab === 'settings'){ ev.stopPropagation(); toggleSettingsFlyout(t); return; }
+      if(t.dataset.tab === 'employees') state._empView = null; renderAdminDashboard(t.dataset.tab);
+    };
   });
   const activeNav = document.querySelector('.admin-nav-item.active');
   if(activeNav && activeNav.scrollIntoView && window.innerWidth <= 860) activeNav.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -4712,6 +4715,36 @@ function bindAdmins(a){
   };
 }
 
+// לחיצה על "הגדרות" בתפריט פותחת לידו תפריט צף עם כל חלקי ההגדרות
+function toggleSettingsFlyout(btn){
+  const old = document.getElementById('setFlyout');
+  if(old){ old.remove(); return; }
+  const cur = state._adminSettingsTab || 'email';
+  const onSettings = btn.classList.contains('active');
+  const m = document.createElement('div');
+  m.id = 'setFlyout'; m.className = 'set-menu';
+  m.innerHTML = ADMIN_SETTINGS_TABS.map(t => `<div class="set-menu-item${onSettings && t.key === cur ? ' active' : ''}" data-fly="${t.key}">${t.label}</div>`).join('');
+  document.body.appendChild(m);
+  const r = btn.getBoundingClientRect();
+  m.style.position = 'fixed';
+  if(window.innerWidth <= 860){
+    m.style.top = (r.bottom + 6) + 'px';
+    m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - m.offsetWidth - 8)) + 'px';
+  } else {
+    m.style.top = Math.max(8, Math.min(r.top - 6, window.innerHeight - m.offsetHeight - 8)) + 'px';
+    m.style.left = Math.max(8, r.left - m.offsetWidth - 10) + 'px';
+  }
+  const done = () => { m.remove(); document.removeEventListener('click', close); window.removeEventListener('scroll', done, true); };
+  const close = ev => { if(!m.contains(ev.target)) done(); };
+  m.querySelectorAll('[data-fly]').forEach(it => it.onclick = () => {
+    done();
+    state._adminSettingsTab = it.dataset.fly;
+    state._emailjsDraft = null; state._emailEditMode = false; state._whatsappEditMode = false; state._autosendEditMode = false;
+    renderAdminDashboard('settings');
+  });
+  setTimeout(() => { document.addEventListener('click', close); window.addEventListener('scroll', done, true); }, 0);
+}
+
 const ADMIN_SETTINGS_TABS = [
   { key: 'email', label: 'אימייל לדוחות' },
   { key: 'whatsapp', label: 'וואטסאפ לדוחות' },
@@ -4978,24 +5011,11 @@ async function renderAdminSettings(){
   };
 
   content.innerHTML = `
-    <div class="set-menu-wrap">
-      <button type="button" class="set-menu-btn" id="setMenuBtn" aria-haspopup="true">${(ADMIN_SETTINGS_TABS.find(t => t.key === activeTab) || {}).label || ''} <span class="set-menu-caret">▾</span></button>
-      <div class="set-menu" id="setMenu" hidden>
-        ${ADMIN_SETTINGS_TABS.map(t => `<div class="set-menu-item${t.key === activeTab ? ' active' : ''}" data-settings-tab="${t.key}">${t.label}</div>`).join('')}
-      </div>
-    </div>
+
     ${sectionsHtml[activeTab]()}
   `;
   if(activeTab === 'info') makeInfoAccordion(content);
   if(admins) bindAdmins(admins);
-  const setMenuBtn = document.getElementById('setMenuBtn'), setMenu = document.getElementById('setMenu');
-  if(setMenuBtn){
-    setMenuBtn.onclick = (ev) => { ev.stopPropagation(); setMenu.hidden = !setMenu.hidden; };
-    document.addEventListener('click', function closeSetMenu(ev){
-      if(!document.body.contains(setMenu)){ document.removeEventListener('click', closeSetMenu); return; }
-      if(!setMenu.contains(ev.target)) setMenu.hidden = true;
-    });
-  }
   // שומרים על מיקום שורת הלשוניות: הלשונית שנבחרה נשארת גלויה ולא קופצים לתחילת השורה
   const tabsRow = content.querySelector('.tabs'), activeTabEl = tabsRow && tabsRow.querySelector('.tab.active');
   if(tabsRow && activeTabEl){
@@ -6485,7 +6505,6 @@ const SETTINGS_CATEGORIES = [
   { key: 'sound', icon: '🔔', label: 'התראות ותזכורות', hint: 'הודעות קוליות, צלילים וצלצולי תזכורת בטלפון' },
   { key: 'appearance', icon: '🎨', label: 'עיצוב ותצוגה', hint: 'צבעים, מצב כהה ואפשרויות תצוגה' },
   { key: 'goal', icon: '🎯', label: 'יעד יומי', hint: 'קביעת יעד יומי בשקלים או בשעות', action: true },
-  { key: 'reminders', icon: '⏰', label: 'צינתוק תזכורת', hint: 'שעות הצינתוק לכניסה וליציאה, ימים והשתקה', action: true },
   { key: 'security', icon: '🔒', label: 'אבטחה', hint: 'שינוי קוד הכניסה למערכת', action: true },
   { key: 'requests', icon: '📨', label: 'בקשה למנהל', hint: 'שליחת הודעה חופשית וצפייה בסטטוס בקשות קודמות', action: true },
   { key: 'guide', icon: '📖', label: 'מדריך שימוש', hint: 'איך מדווחים באתר ובטלפון, ומה עושים כשמשהו לא בסדר', action: true }
@@ -6673,12 +6692,20 @@ async function renderEmployeeSettingsCategory(emp, categoryKey){
     <div class="card">
       <h3>${category ? category.icon + ' ' + escapeHtml(category.label) : 'הגדרות'}</h3>
       ${defs.map((def, i) => renderSettingField(def, i === 0)).join('')}
+      ${categoryKey === 'sound' ? `
+        <button type="button" id="openRemindersBtn" style="display:flex; align-items:center; gap:10px; width:100%; margin-top:22px; padding:14px 16px; border:1px solid var(--line, #dfe3e8); border-radius:12px; background:var(--paper-alt); color:inherit; font:inherit; cursor:pointer; text-align:right;">
+          <span style="font-size:18px;">⏰</span>
+          <span style="flex:1;"><span style="display:block; font-weight:600;">צינתוק תזכורת</span><span class="hint" style="display:block; font-size:13px;">שעות הצינתוק לכניסה וליציאה, ימים והשתקה</span></span>
+          <span style="opacity:.6;">‹</span>
+        </button>` : ''}
       <div class="error-msg" id="settingsErr" style="margin-top:16px;"></div>
       <p class="hint" id="settingsSavedMsg" style="margin-top:12px; font-size:13px; display:none; color:var(--brass-dark);">✓ נשמר</p>
     </div>
   `;
 
   document.getElementById('settingsBackBtn').onclick = () => renderEmployeeSettings(emp);
+  const openRemBtn = document.getElementById('openRemindersBtn');
+  if(openRemBtn) openRemBtn.onclick = () => renderEmployeeReminders(emp);
 
   async function persistSetting(key, value){
     const errEl = document.getElementById('settingsErr');
