@@ -1,15 +1,18 @@
 rules_version = '2';
-// כללי האבטחה של Firebase (Firestore) לאתר שעון הנוכחות.
-// מעתיקים ל-Firebase Console → Firestore → Rules → Publish.
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // מנהל: המנהל הראשי, או אימייל שהוסף ברשימת המנהלים באתר (meta/admins)
+    function myEmail() { return request.auth.token.email; }
+    function isOwner() {
+      return request.auth != null && request.auth.token.email == 't0504154423@gmail.com';
+    }
+    function adminsDoc() { return get(/databases/$(database)/documents/meta/admins).data; }
+    // כל מנהל (ראשי או משני) – קריאה בלבד, אלא אם יש לו הרשאה
     function isAdmin() {
-      return request.auth != null && request.auth.token.email != null && (
-        request.auth.token.email == 't0504154423@gmail.com' ||
-        (exists(/databases/$(database)/documents/meta/admins) &&
-         request.auth.token.email in get(/databases/$(database)/documents/meta/admins).data.emails));
+      return isOwner() || (request.auth != null && request.auth.token.email != null &&
+        exists(/databases/$(database)/documents/meta/admins) && myEmail() in adminsDoc().emails);
+    }
+    function can(p) {
+      return isOwner() || (isAdmin() && p in adminsDoc().get('perms', {}).get(myEmail(), []));
     }
     function isEmployee() {
       return request.auth != null && request.auth.token.role == 'employee';
@@ -17,35 +20,47 @@ service cloud.firestore {
     function isEmployeeId(id) {
       return isEmployee() && request.auth.uid == id;
     }
-    // חודשים נעולים (meta/locks.list) – עובד לא יכול לשנות בהם
     function lockedMonths() {
       return exists(/databases/$(database)/documents/meta/locks)
         ? get(/databases/$(database)/documents/meta/locks).data.list : [];
     }
 
+    // כל מנהל קורא הכול; כתיבה כללית – רק המנהל הראשי
     match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if isOwner();
     }
+    // הרשאות של מנהל משני
     match /hours/{empId} {
+      allow write: if can('hours');
       allow read: if isEmployeeId(empId);
       allow create: if isEmployeeId(empId);
       allow update: if isEmployeeId(empId)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(lockedMonths());
     }
-    match /settings/{empId} {
-      allow read, write: if isEmployeeId(empId);
-    }
-    // יומן שינויים: עובד יכול רק להוסיף שורות על עצמו, לא לשנות או למחוק
-    match /auditLog/{empId}/items/{item} {
-      allow create: if isEmployeeId(empId);
-    }
     match /meta/locks {
+      allow write: if can('hours');
       allow read: if isEmployee();
     }
+    match /settings/{empId} {
+      allow write: if can('timeoff');
+      allow read, write: if isEmployeeId(empId);
+    }
+    match /meta/employees {
+      allow write: if can('employees') || can('timeoff') || can('pay');
+    }
+    match /meta/trash {
+      allow write: if can('employees');
+    }
+    match /auditLog/{empId}/items/{item} {
+      allow create: if isAdmin() || isEmployeeId(empId);
+    }
     match /meta/requests {
+      allow write: if can('requests');
       allow read, write: if isEmployee();
     }
     match /voiceMessages/{id} {
+      allow write: if can('requests');
       allow read, write: if isEmployee();
     }
     match /meta/announcement {

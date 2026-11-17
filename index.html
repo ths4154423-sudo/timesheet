@@ -1744,8 +1744,30 @@ async function ensureEmployeesLoaded(){
     return false;
   }
   state.employees = list;
+  await loadMyAdminPerms();
   return true;
 }
+// הרשאות המנהל המחובר: המנהל הראשי – הכול; מנהל משני – לפי meta/admins.perms[אימייל]
+const ADMIN_PERMS = [
+  { key: 'requests', label: 'בקשות', hint: 'אישור ודחייה של בקשות עובדים' },
+  { key: 'hours', label: 'עריכת שעות', hint: 'תיקון רישומים, ונעילה ופתיחה של חודשים' },
+  { key: 'timeoff', label: 'חופשות', hint: 'ימי חופשה ומחלה ומכסות' },
+  { key: 'employees', label: 'ניהול עובדים', hint: 'הוספה, עריכה, הקפאה, מחיקה ושחזור' },
+  { key: 'pay', label: 'שכר', hint: 'תעריפים, דוח שכר, תלושים ומחשבון נטו' },
+];
+async function loadMyAdminPerms(){
+  const email = String((auth.currentUser && auth.currentUser.email) || state.adminEmail || '').toLowerCase();
+  if(email === 't0504154423@gmail.com'){ state.adminPerms = 'all'; return; }
+  try{
+    const snap = await withTimeout(getDoc(doc(db, 'meta', 'admins')), 15000, 'loadPerms');
+    const d = snap.exists() ? snap.data() : {};
+    state.adminPerms = (d.perms && Array.isArray(d.perms[email])) ? d.perms[email] : [];
+  }catch(e){ state.adminPerms = state.adminPerms || []; }
+}
+function canDo(p){ return state.adminPerms === 'all' || (Array.isArray(state.adminPerms) && state.adminPerms.includes(p)); }
+function isOwnerAdmin(){ return state.adminPerms === 'all'; }
+const TAB_PERM = { requests: 'requests', timeoff: 'timeoff', employees: 'employees', netcalc: 'pay', settings: 'owner' };
+function canSeeTab(k){ const p = TAB_PERM[k]; return !p || (p === 'owner' ? isOwnerAdmin() : canDo(p)); }
 
 // בודק אם המכשיר הזה סומן כ"מהימן" מכניסת מנהל קודמת, ואם כן ומצליח - נכנס ישירות לפאנל
 // הניהול בלי צורך בסיסמה. משמש גם ב-init() (טעינת דף) וגם בלחיצה על "כניסת מנהל" עצמה,
@@ -3122,6 +3144,7 @@ const ADMIN_TABS = [
 ];
 function renderAdminDashboard(tab){
   if(shabbatGuard()) return;
+  if(!canSeeTab(tab)) tab = 'dashboard';
   resetTheme();
   setHeader('פאנל ניהול', '<button class="btn ghost small" id="logoutBtn">יציאה</button>');
   document.body.classList.add('admin-mode');
@@ -3130,12 +3153,12 @@ function renderAdminDashboard(tab){
     <div class="admin-layout">
       <nav class="admin-nav">
         <div class="admin-nav-title">תפריט ניהול</div>
-        ${ADMIN_TABS.map(t => `<button type="button" class="admin-nav-item${t.key === tab ? ' active' : ''}" data-tab="${t.key}"><span class="ico">${adminIcon(t.key)}</span><span class="lbl">${t.label}</span><span class="badge" data-badge="${t.key}"></span></button>`).join('')}
+        ${ADMIN_TABS.filter(t => canSeeTab(t.key)).map(t => `<button type="button" class="admin-nav-item${t.key === tab ? ' active' : ''}" data-tab="${t.key}"><span class="ico">${adminIcon(t.key)}</span><span class="lbl">${t.label}</span><span class="badge" data-badge="${t.key}"></span></button>`).join('')}
       </nav>
       <section class="admin-main">
         <div class="kpi-strip" ${tab === 'dashboard' ? '' : 'style="display:none;"'}>
           ${kpi('hours', 'hours', 'שעות החודש')}
-          ${kpi('pay', 'pay', 'שכר החודש')}
+          ${canDo('pay') ? kpi('pay', 'pay', 'שכר החודש') : ''}
           ${kpi('now', 'employees', 'בעבודה עכשיו')}
           ${kpi('req', 'requests', 'בקשות ממתינות')}
         </div>
@@ -3383,7 +3406,7 @@ async function renderDashLocks(){
     ${list.length ? `<div style="display:flex; flex-direction:column; gap:6px;">
       ${list.map(m => `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; background:var(--paper-alt); border-radius:8px;">
         <span>🔒 <b>${monthLabel(m)}</b></span>
-        <button type="button" class="btn ghost small" data-unlock="${m}">פתיחה</button></div>`).join('')}
+        ${canDo('hours') ? `<button type="button" class="btn ghost small" data-unlock="${m}">פתיחה</button>` : ''}</div>`).join('')}
     </div>` : '<div class="hint">אין חודשים נעולים.</div>'}`;
   box.querySelectorAll('[data-unlock]').forEach(btn => btn.onclick = async () => {
     const m = btn.dataset.unlock;
@@ -3440,7 +3463,7 @@ async function renderAdminWeekDashboard(){
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         ${tile('סה"כ שעות בשבוע', fmtHours(Math.round(grand * 100) / 100), `${rows.filter(r => r.total > 0).length} עובדים עבדו`)}
         ${tile('עובד מוביל', top && top.total > 0 ? escapeHtml(top.emp.name) : '—', top && top.total > 0 ? fmtHours(Math.round(top.total * 100) / 100) + ' שעות' : '')}
-        ${tile('עלות שעתית משוערת', fmtMoney(Math.round(hourlyCost)), 'לפני מסים · בלי עובדים בשכר קבוע')}
+        ${canDo('pay') ? tile('עלות שעתית משוערת', fmtMoney(Math.round(hourlyCost)), 'לפני מסים · בלי עובדים בשכר קבוע') : ''}
         ${offset === 0 ? tile('בעבודה עכשיו', String(workingNow), workingNow ? rows.filter(r => r.working).map(r => escapeHtml(r.emp.name)).join(', ') : 'אף אחד') : ''}
       </div>
     </div>
@@ -3922,28 +3945,28 @@ async function renderAdminSummary(){
     <div class="top-actions">
       <input type="month" class="month-picker" id="monthPicker" value="${month}" />
       <span class="subtitle">${monthLabel(month)}</span>
-      <button type="button" class="btn ghost small" id="monthLockBtn">…</button>
-      ${activeEmployees().length ? '<button type="button" class="btn brass small" id="payrollExportBtn">📥 דוח שכר לאקסל</button>' : ''}
+      ${canDo('hours') ? '<button type="button" class="btn ghost small" id="monthLockBtn">…</button>' : ''}
+      ${activeEmployees().length && canDo('pay') ? '<button type="button" class="btn brass small" id="payrollExportBtn">📥 דוח שכר לאקסל</button>' : ''}
     </div>
     ${activeEmployees().length === 0 ? '<div class="card"><div class="empty-state">אין עדיין עובדים במערכת. עברו לטאב "ניהול עובדים" כדי להוסיף.</div></div>' : `
     <div class="card">
       <div class="table-scroll">
         <table>
-          <thead><tr><th>עובד</th><th>סוג שכר</th><th>סה"כ שעות</th><th>סה"כ לתשלום</th><th></th></tr></thead>
+          <thead><tr><th>עובד</th>${canDo('pay') ? '<th>סוג שכר</th>' : ''}<th>סה"כ שעות</th>${canDo('pay') ? '<th>סה"כ לתשלום</th>' : ''}<th></th></tr></thead>
           <tbody>
             ${rows.map(r => `
               <tr>
                 <td>${escapeHtml(r.emp.name)}</td>
-                <td>${r.emp.payType === 'hourly' ? `<span class="pill hourly">שעתי · ${fmtMoney(r.emp.rate)}/שעה</span>` : `<span class="pill fixed">חודשי קבוע</span>`}</td>
+                ${canDo('pay') ? `<td>${r.emp.payType === 'hourly' ? `<span class="pill hourly">שעתי · ${fmtMoney(r.emp.rate)}/שעה</span>` : `<span class="pill fixed">חודשי קבוע</span>`}</td>` : ''}
                 <td class="mono">${fmtHours(r.totalHours)}</td>
-                <td class="mono">${fmtMoney(r.pay)}</td>
-                <td><button type="button" class="btn ghost small" data-payslip="${r.emp.id}">תלוש</button></td>
+                ${canDo('pay') ? `<td class="mono">${fmtMoney(r.pay)}</td>` : ''}
+                <td>${canDo('pay') ? `<button type="button" class="btn ghost small" data-payslip="${r.emp.id}">תלוש</button>` : ''}</td>
               </tr>
             `).join('')}
             <tr class="total-row">
-              <td colspan="2">סה"כ לכל העובדים</td>
+              <td colspan="${canDo('pay') ? 2 : 1}">סה"כ לכל העובדים</td>
               <td class="mono" id="grandHoursCell">0</td>
-              <td class="mono" id="grandPayCell">${fmtMoney(0)}</td>
+              ${canDo('pay') ? `<td class="mono" id="grandPayCell">${fmtMoney(0)}</td>` : ''}
               <td></td>
             </tr>
           </tbody>
@@ -3954,10 +3977,10 @@ async function renderAdminSummary(){
       <h3 style="margin-top:0;">שעות עבודה לפי עובד</h3>
       <div style="position:relative; height:260px;"><canvas id="hoursChart"></canvas></div>
     </div>
-    <div class="card">
+    ${canDo('pay') ? `<div class="card">
       <h3 style="margin-top:0;">עלות שכר לפי עובד</h3>
       <div style="position:relative; height:260px;"><canvas id="payChart"></canvas></div>
-    </div>
+    </div>` : ''}
     `}
   `;
   document.getElementById('monthPicker').onchange = (e) => {
@@ -3965,7 +3988,7 @@ async function renderAdminSummary(){
     renderAdminSummary();
   };
   const lockBtn = document.getElementById('monthLockBtn');
-  loadLocks(true).then(list => {
+  if(lockBtn) loadLocks(true).then(list => {
     const isL = list.includes(month);
     lockBtn.textContent = isL ? '🔒 החודש נעול · פתיחה' : '🔓 נעילת החודש';
     lockBtn.onclick = async () => {
@@ -3994,7 +4017,7 @@ async function renderAdminSummary(){
     };
   });
   document.getElementById('grandHoursCell').textContent = fmtHours(grandHours);
-  document.getElementById('grandPayCell').textContent = fmtMoney(grandPay);
+  const gpc = document.getElementById('grandPayCell'); if(gpc) gpc.textContent = fmtMoney(grandPay);
 
   if(rows.length && window.Chart){
     renderAdminCharts(rows);
@@ -4607,7 +4630,8 @@ const OWNER_ADMIN = 't0504154423@gmail.com';
 async function loadAdmins(){
   try{
     const snap = await withTimeout(getDoc(doc(db, 'meta', 'admins')), 15000, 'loadAdmins');
-    return { emails: snap.exists() && Array.isArray(snap.data().emails) ? snap.data().emails : [] };
+    const d = snap.exists() ? snap.data() : {};
+    return { emails: Array.isArray(d.emails) ? d.emails : [], perms: d.perms || {} };
   }catch(e){ console.error('loadAdmins error', e); return { error: true }; }
 }
 function adminsHtml(a){
@@ -4615,10 +4639,13 @@ function adminsHtml(a){
   return `
     <div class="card">
       <h3>מנהלים</h3>
-      <p class="hint" style="font-size:13.5px; margin-top:-6px;">למנהל יש גישה מלאה לכל הנתונים. המנהל הראשי קבוע ואי אפשר להסיר אותו.</p>
+      <p class="hint" style="font-size:13.5px; margin-top:-6px;">לכל מנהל משני בוחרים מה מותר לו. ההגדרות שמורות רק למנהל הראשי, שקבוע ואי אפשר להסיר אותו.</p>
       <div class="list-item"><div><div class="name">${escapeHtml(OWNER_ADMIN)}</div><div class="meta">מנהל ראשי</div></div></div>
       ${a.emails.filter(e => e.toLowerCase() !== OWNER_ADMIN).map(e => `
-        <div class="list-item"><div><div class="name">${escapeHtml(e)}</div><div class="meta">מנהל נוסף</div></div>
+        <div class="list-item" style="flex-wrap:wrap; gap:10px;"><div style="flex:1 1 100%;"><div class="name">${escapeHtml(e)}</div><div class="meta">מנהל משני · רואה את לוח הבקרה, מי בעבודה והסיכום החודשי. בנוסף:</div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:8px;">
+              ${ADMIN_PERMS.map(pm => `<label title="${escapeHtml(pm.hint)}" style="display:flex; align-items:center; gap:6px; font-size:14px;"><input type="checkbox" data-perm-email="${escapeHtml(e)}" data-perm="${pm.key}" ${((a.perms || {})[e] || []).includes(pm.key) ? 'checked' : ''} /> ${pm.label}</label>`).join('')}
+            </div></div>
           <div class="row-actions"><button type="button" class="btn danger" data-rm-admin="${escapeHtml(e)}">הסרה</button></div></div>`).join('')}
       <h4 style="margin:20px 0 8px;">הוספת מנהל</h4>
       <form id="addAdminForm" autocomplete="off">
@@ -4630,17 +4657,29 @@ function adminsHtml(a){
       </form>
     </div>`;
 }
-async function saveAdminEmails(emails){
-  return await saveDoc(() => setDoc(doc(db, 'meta', 'admins'), { emails }), 'saveAdmins');
+async function saveAdminEmails(emails, perms){
+  const clean = {}; Object.entries(perms || {}).forEach(([k, v]) => { if(emails.includes(k)) clean[k] = v; });
+  return await saveDoc(() => setDoc(doc(db, 'meta', 'admins'), { emails, perms: clean }), 'saveAdmins');
 }
 function bindAdmins(a){
   if(!a || a.error) return;
   document.querySelectorAll('[data-rm-admin]').forEach(btn => btn.onclick = async () => {
     const em = btn.dataset.rmAdmin;
     if(!(await showConfirmModal(`להסיר את ${em} מהמנהלים? הוא לא יוכל עוד להיכנס לפאנל הניהול.`, { yes: 'הסרה' }))) return;
-    const ok = await saveAdminEmails(a.emails.filter(x => x !== em));
+    const ok = await saveAdminEmails(a.emails.filter(x => x !== em), a.perms);
     if(ok !== true){ showToast('שגיאה בשמירה: ' + ok); return; }
     showToast('המנהל הוסר'); renderAdminSettings();
+  });
+  document.querySelectorAll('[data-perm-email]').forEach(cb => cb.onchange = async () => {
+    const em = cb.dataset.permEmail;
+    const perms = { ...(a.perms || {}) };
+    const set = new Set(perms[em] || []); cb.checked ? set.add(cb.dataset.perm) : set.delete(cb.dataset.perm);
+    perms[em] = [...set];
+    cb.disabled = true;
+    const ok = await saveAdminEmails(a.emails, perms);
+    cb.disabled = false;
+    if(ok !== true){ cb.checked = !cb.checked; showToast('שגיאה בשמירה: ' + ok); return; }
+    a.perms = perms; showToast('ההרשאות עודכנו');
   });
   const f = document.getElementById('addAdminForm');
   f.onsubmit = async (e) => {
@@ -4657,7 +4696,7 @@ function bindAdmins(a){
       const j = await r.json();
       if(!r.ok && !(j.error && j.error.message === 'EMAIL_EXISTS')) throw new Error((j.error && j.error.message) || 'שגיאה');
     }catch(err){ btn.disabled = false; btn.textContent = 'הוספה'; errEl.textContent = 'לא הצלחנו ליצור חשבון: ' + err.message; return; }
-    const ok = await saveAdminEmails([...a.emails, email]);
+    const ok = await saveAdminEmails([...a.emails, email], a.perms);
     btn.disabled = false; btn.textContent = 'הוספה';
     if(ok !== true){ errEl.textContent = 'שגיאה בשמירה: ' + ok; return; }
     showToast('המנהל נוסף'); renderAdminSettings();
