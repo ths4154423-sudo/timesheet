@@ -6096,7 +6096,7 @@ function bindEntryRowButtons(emp, entries, month){
     if(state.isAdmin) return false;
     const entryMonth = month;
     if(!(await loadLocks()).includes(entryMonth)) return false;
-    showConfirmModal('⚠️ החודש הזה נעול לעריכה', { yes: 'הבנתי', danger: false, info: true });
+    showConfirmModal('החודש הזה נעול לעריכה ⚠️', { yes: 'הבנתי', danger: false, info: true });
     return true;
   };
   document.querySelectorAll('[data-edit-entry]').forEach(btn => {
