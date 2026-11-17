@@ -3384,8 +3384,7 @@ async function renderDashLocks(){
       ${list.map(m => `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; background:var(--paper-alt); border-radius:8px;">
         <span>🔒 <b>${monthLabel(m)}</b></span>
         <button type="button" class="btn ghost small" data-unlock="${m}">פתיחה</button></div>`).join('')}
-    </div>` : '<div class="hint">אין חודשים נעולים.</div>'}
-    <p class="hint" style="font-size:12.5px; margin:10px 0 0;">נועלים חודש בסיכום החודשי, בכפתור "נעילת החודש".</p>`;
+    </div>` : '<div class="hint">אין חודשים נעולים.</div>'}`;
   box.querySelectorAll('[data-unlock]').forEach(btn => btn.onclick = async () => {
     const m = btn.dataset.unlock;
     if(!(await showConfirmModal(`לפתוח את ${monthLabel(m)}? העובדים יוכלו שוב לשנות בו שעות.`, { yes: 'פתיחה', danger: false }))) return;
@@ -4848,6 +4847,13 @@ async function renderAdminSettings(){
       </div>`;
     },
     info: () => `
+      <div class="card">
+        <h3>נעילת חודש</h3>
+        <p style="font-size:14.5px; line-height:1.8; margin:0;">
+          אחרי ששולמה משכורת, אפשר לנעול את החודש בסיכום החודשי, בכפתור "נעילת החודש". בחודש נעול עובדים לא יכולים להוסיף, לערוך או למחוק שעות, ומי שמנסה מקבל הודעה שהחודש נעול. המנהל עדיין יכול לערוך.<br />
+          רשימת החודשים הנעולים מופיעה בלוח הבקרה, ושם אפשר גם לפתוח חודש בלחיצה.
+        </p>
+      </div>
       <div class="card">
         <h3>הקפאה, מחיקה ושחזור עובדים</h3>
         <p style="font-size:14.5px; line-height:1.8; margin:0;">
