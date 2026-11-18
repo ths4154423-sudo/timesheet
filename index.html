@@ -8316,8 +8316,7 @@ async function renderChatRoom(role, otherId){
   const tray = document.getElementById('chatTray');
   const paintTray = () => {
     tray.hidden = !pending.length;
-    tray.innerHTML = pending.map((f, i) => `<div class="wa-tray-item">${/^image\//.test(f.type) ? `<img src="${f._url}" alt="" />` : `<span class="wa-tray-file">📄<small>${escapeHtml(f.name.slice(0, 18))}</small></span>`}<button type="button" data-tray-x="${i}" aria-label="הסרה">✕</button></div>`).join('')
-      + (pending.length ? `<span class="hint wa-tray-hint">Enter לשליחה${pending.length > 1 ? ' · ' + pending.length + ' קבצים' : ''}</span>` : '');
+    tray.innerHTML = pending.map((f, i) => `<div class="wa-tray-item">${/^image\//.test(f.type) ? `<img src="${f._url}" alt="" />` : `<span class="wa-tray-file">📄<small>${escapeHtml(f.name.slice(0, 18))}</small></span>`}<button type="button" data-tray-x="${i}" aria-label="הסרה">✕</button></div>`).join('');
     tray.querySelectorAll('[data-tray-x]').forEach(b => b.onclick = () => { const f = pending.splice(+b.dataset.trayX, 1)[0]; if(f && f._url) URL.revokeObjectURL(f._url); paintTray(); input.focus(); });
   };
   const addPending = files => {
