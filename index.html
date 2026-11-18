@@ -634,6 +634,23 @@
 .wa-row.pending .wa-ticks::before{ content:'🕓'; letter-spacing:0; margin-left:3px; }
 .wa-row.pending .wa-ticks{ color:transparent; }
 .wa-row.failed .wa-time::after{ content:' ⚠ לא נשלחה'; color:#d93025; }
+.wa-list{ padding:6px 0; }
+.wa-contact{ display:flex; align-items:center; gap:12px; width:100%; padding:10px 16px; border:none; background:none; cursor:pointer; text-align:right; font:inherit; color:inherit; border-bottom:1px solid #F0F2F5; }
+.wa-contact:hover{ background:#F5F6F6; }
+.wa-avatar{ width:46px; height:46px; flex:0 0 46px; border-radius:50%; background:#DFE5E7; color:#54656F; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; }
+.wa-avatar.group{ background:#D9FDD3; }
+.wa-c-main{ flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.wa-c-top, .wa-c-bottom{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.wa-c-time{ font-size:12px; color:#667781; }
+.wa-c-prev{ font-size:13.5px; color:#667781; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wa-c-unread{ background:#25D366; color:#fff; font-size:12px; font-weight:700; min-width:20px; height:20px; border-radius:10px; padding:0 6px; display:flex; align-items:center; justify-content:center; }
+.wa-room{ padding:0; overflow:hidden; }
+.wa-room-head{ display:flex; align-items:center; gap:10px; padding:10px 14px; background:#F0F2F5; border-bottom:1px solid #E9EDEF; }
+.wa-room-head b{ display:block; }
+.wa-room-sub{ display:block; font-size:12.5px; color:#667781; min-height:16px; }
+.wa-back{ border:none; background:none; font-size:20px; cursor:pointer; color:#54656F; padding:4px 6px; }
+.wa-room-chat{ border-radius:0; max-height:none; height:60vh; padding:12px 16px; }
+.wa-room .wa-compose{ border-radius:0; margin:0; padding:8px 10px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -3251,6 +3268,7 @@ function resizeImageFile(file, maxSize, quality){
 
 // ---------- ADMIN DASHBOARD ----------
 const ADMIN_ICONS = {
+  chat: '<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.9-.9L3 20l1.1-4.6A8.4 8.4 0 1 1 21 11.5z"/>',
   tasks: '<polyline points="9 11 12 14 20 6"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   now: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
   dashboard: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
@@ -3273,6 +3291,7 @@ const ADMIN_TABS = [
   { key: 'now', icon: '🟢', label: 'מי בעבודה' },
   { key: 'requests', icon: '📨', label: 'בקשות' },
   { key: 'tasks', icon: '✔', label: 'משימות' },
+  { key: 'chat', icon: '💬', label: 'צ׳אט' },
   { key: 'summary', icon: '📅', label: 'סיכום חודשי' },
   { key: 'timeoff', icon: '🏖️', label: 'חופשות' },
   { key: 'employees', icon: '👥', label: 'ניהול עובדים' },
@@ -3334,10 +3353,12 @@ function renderAdminDashboard(tab){
   else if(tab === 'netcalc') renderAdminNetCalc();
   else if(tab === 'requests') renderAdminRequests();
   else if(tab === 'tasks') renderAdminTasks();
+  else if(tab === 'chat') renderChatHome('mgr');
   else renderAdminSettings();
 
 
   if(canSeeTab('tasks') && tab !== 'tasks') refreshTasksNavBadge();
+  if(tab !== 'chat') refreshChatBadge('mgr');
   if(tab === 'dashboard') fillAdminKpis();
   else { const b = document.querySelector('[data-badge="requests"]'); if(b) loadRequests().then(l => { if(l){ const n = l.filter(r => r.status === 'pending').length; b.textContent = n ? String(n) : ''; } }); }
 }
@@ -5352,7 +5373,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   state.currentEmployee = emp;
   const empSettings = await getEmpSettings(emp.id);
   applyEmployeeTheme(empSettings);
-  setHeader('שלום, ' + emp.name, (empSettings.hideMirror ? '' : '<span class="mirror-grp" style="display:inline-flex; gap:2px;"><button class="btn ghost small" id="mirrorBtn" title="מראה">🪞 מראה</button><button class="btn ghost small" id="hideMirrorBtn" title="הסתרת המראה" style="padding-inline:8px;">✕</button></span> ') + '<button class="btn ghost small" id="tasksBtn">✔ משימות<span id="tasksBadge" class="tasks-badge"></span></button> <button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="btn ghost small" id="logoutBtn">יציאה</button>');
+  setHeader('שלום, ' + emp.name, (empSettings.hideMirror ? '' : '<span class="mirror-grp" style="display:inline-flex; gap:2px;"><button class="btn ghost small" id="mirrorBtn" title="מראה">🪞 מראה</button><button class="btn ghost small" id="hideMirrorBtn" title="הסתרת המראה" style="padding-inline:8px;">✕</button></span> ') + '<button class="btn ghost small" id="chatBtn">💬 צ׳אט<span id="chatBadge" class="tasks-badge"></span></button> <button class="btn ghost small" id="tasksBtn">✔ משימות<span id="tasksBadge" class="tasks-badge"></span></button> <button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="btn ghost small" id="logoutBtn">יציאה</button>');
   setTimeout(() => maybeBirthdayGreeting(emp), 600);
   const month = state._empMonth || currentMonthStr();
 
@@ -5904,6 +5925,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   // במצב עריכה אזור הסיכום לא מוצג, ולכן הרכיבים האלה לא קיימים. בלי הבדיקה הזו נזרקה כאן שגיאה,
   // שעצרה את המשך הפונקציה - ולכן כפתור "עדכון שינויים" בעריכה לא עשה כלום.
   checkEmpTasks(emp);
+  refreshChatBadge('emp');
   const readoutHoursEl = document.getElementById('readoutHours');
   if(readoutHoursEl) readoutHoursEl.textContent = fmtHours(totalHours);
   const readoutPayEl = document.getElementById('readoutPay');
@@ -7421,6 +7443,186 @@ async function playTaskAudio(btn){
   taskAudioEl.play().catch(() => { btn.textContent = idle; showToast('לא הצלחנו להשמיע'); });
 }
 
+// ================= צ'אט צוות: שיחה אישית בין כל שניים, וקבוצה "כל הצוות" =================
+// chats/<id>: id של שיחה אישית = שני המזהים ממוינים ומחוברים ב-"__"; הקבוצה = "team"; המנהל = "mgr"
+const CHAT_MAX = 300;
+function chatMe(role){ return role === 'mgr' ? 'mgr' : (state.currentEmployee && state.currentEmployee.id); }
+function chatIdWith(me, other){ return other === 'team' ? 'team' : [me, other].sort().join('__'); }
+async function chatContacts(role){
+  let list;
+  if(role === 'mgr') list = activeEmployees().map(e => ({ id: e.id, name: e.name }));
+  else { const r = await bridge('emp-list'); list = (r.list || []).filter(e => e.id !== chatMe(role)); }
+  if(role !== 'mgr') list.unshift({ id: 'mgr', name: 'המנהל' });
+  list.unshift({ id: 'team', name: 'כל הצוות', group: true });
+  state._chatNames = Object.fromEntries([['mgr', 'המנהל'], ...list.map(c => [c.id, c.name])]);
+  if(role !== 'mgr' && state.currentEmployee) state._chatNames[state.currentEmployee.id] = state.currentEmployee.name;
+  return list;
+}
+async function loadChat(id){
+  try{ const snap = await withTimeout(getDoc(doc(db, 'chats', id)), 20000, 'loadChat'); return snap.exists() ? snap.data() : { msgs: [] }; }
+  catch(e){ console.error('loadChat', e); return null; }
+}
+function chatUnread(c, me){ return ((c && c.msgs) || []).filter(m => m.from !== me && !(m.seenBy || []).includes(me)).length; }
+async function refreshChatBadge(role){
+  const me = chatMe(role); if(!me) return;
+  try{
+    const contacts = await chatContacts(role);
+    const all = await Promise.all(contacts.map(c => loadChat(chatIdWith(me, c.id))));
+    const n = all.reduce((s, c) => s + chatUnread(c, me), 0);
+    const b = role === 'mgr' ? document.querySelector('[data-badge="chat"]') : document.getElementById('chatBadge');
+    if(b) b.textContent = n ? String(n) : '';
+  }catch(e){}
+}
+function chatTime(at){
+  const d = String(at || '').slice(0, 10), tm = String(at || '').slice(11, 16);
+  return (d === todayStr() ? '' : d.split('-').reverse().slice(0, 2).join('/') + ' ') + tm;
+}
+async function renderChatHome(role){
+  if(state._chatWatch){ try{ state._chatWatch(); }catch(e){} state._chatWatch = null; }
+  const me = chatMe(role);
+  const target = role === 'mgr' ? document.getElementById('tabContent') : app;
+  if(role !== 'mgr'){ stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog();
+    setHeader('צ׳אט', '<button class="btn ghost small" id="chatBackBtn">חזרה</button>');
+    document.getElementById('chatBackBtn').onclick = () => renderEmployeeDashboard(state.currentEmployee); }
+  target.innerHTML = '<div class="empty-state">טוען...</div>';
+  const contacts = await chatContacts(role);
+  const chats = await Promise.all(contacts.map(c => loadChat(chatIdWith(me, c.id))));
+  const rows = contacts.map((c, i) => {
+    const ch = chats[i] || { msgs: [] }, last = (ch.msgs || []).slice(-1)[0], un = chatUnread(ch, me);
+    const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.text || (last.fileId ? '📎 קובץ' : last.audioId ? '🎙 הודעה קולית' : '')) : 'אין הודעות עדיין';
+    return { c, last, un, prev };
+  }).sort((a, b) => (a.c.group ? -1 : b.c.group ? 1 : String(b.last ? b.last.at : '').localeCompare(String(a.last ? a.last.at : ''))));
+  target.innerHTML = `
+    <div class="card wa-list">
+      ${rows.map(r => `
+        <button type="button" class="wa-contact" data-chat-open="${r.c.id}">
+          <span class="wa-avatar${r.c.group ? ' group' : ''}">${r.c.group ? '👥' : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
+          <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(r.c.name)}</b><span class="wa-c-time">${r.last ? chatTime(r.last.at) : ''}</span></span>
+            <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml(r.prev)}</span>${r.un ? `<span class="wa-c-unread">${r.un}</span>` : ''}</span></span>
+        </button>`).join('')}
+    </div>`;
+  target.querySelectorAll('[data-chat-open]').forEach(b => b.onclick = () => renderChatRoom(role, b.dataset.chatOpen));
+}
+function chatBubblesHtml(ch, me, isGroup, members){
+  return (ch.msgs || []).map(m => {
+    const mine = m.from === me;
+    const others = members.filter(x => x !== m.from);
+    const seenAll = others.length && others.every(x => (m.seenBy || []).includes(x));
+    return `<div class="wa-row ${mine ? 'out' : 'in'}"><div class="wa-bubble">
+      ${!mine && isGroup ? `<div class="wa-name">${escapeHtml(state._chatNames[m.from] || '')}</div>` : ''}
+      ${m.fileId ? (/^image\//.test(m.fileType || '') ? `<img class="wa-img" data-file-img="${m.fileId}" alt="" />` : `<button type="button" class="wa-file" data-file-open="${m.fileId}" data-file-name="${escapeHtml(m.fileName || 'קובץ')}">📄 ${escapeHtml(m.fileName || 'קובץ')}</button>`) : ''}
+      ${m.audioId ? `<button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button>` : ''}
+      ${m.text ? `<div class="wa-text">${escapeHtml(m.text)}</div>` : ''}
+      <span class="wa-time">${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">✓✓</span>` : ''}</span>
+    </div></div>`;
+  }).join('');
+}
+async function renderChatRoom(role, otherId){
+  if(state._chatWatch){ try{ state._chatWatch(); }catch(e){} state._chatWatch = null; }
+  const me = chatMe(role), id = chatIdWith(me, otherId), isGroup = otherId === 'team';
+  if(!state._chatNames) await chatContacts(role);
+  const target = role === 'mgr' ? document.getElementById('tabContent') : app;
+  const name = state._chatNames[otherId] || '';
+  const members = isGroup ? Object.keys(state._chatNames) : [me, otherId];
+  target.innerHTML = `
+    <div class="card wa-room">
+      <div class="wa-room-head"><button type="button" class="wa-back" id="chatRoomBack" aria-label="חזרה">→</button>
+        <span class="wa-avatar${isGroup ? ' group' : ''}">${isGroup ? '👥' : escapeHtml(name.charAt(0) || '?')}</span>
+        <span><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span></div>
+      <div class="wa-chat wa-room-chat" id="chatBody"></div>
+      <div class="wa-compose">
+        <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
+        <label class="wa-btn attach" title="צירוף קובץ">📎<input type="file" id="chatFile" hidden /></label>
+        <button type="button" class="wa-btn send" id="chatSend" title="שליחה">➤</button>
+        <button type="button" class="wa-btn mic" id="chatMic" title="הקלטה">🎙</button>
+        <span class="hint wa-status" id="chatStatus"></span>
+      </div>
+    </div>`;
+  document.getElementById('chatRoomBack').onclick = () => renderChatHome(role);
+  const body = document.getElementById('chatBody'), input = document.getElementById('chatInput'), stEl = document.getElementById('chatStatus');
+  let cur = { msgs: [] }, typing = null;
+  const paint = () => {
+    const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+    body.innerHTML = chatBubblesHtml(cur, me, isGroup, members) + `<div class="wa-row in wa-typing" id="chatTyping" hidden><div class="wa-bubble"><span class="wa-dots"><i></i><i></i><i></i></span> <span class="wa-typing-txt"></span></div></div>`;
+    body.querySelectorAll('[data-file-img]').forEach(async img => { const f = await loadTaskFile(img.dataset.fileImg); if(f){ img.src = f.data; img.onclick = () => openLightbox(f.data, f.name); } });
+    body.querySelectorAll('[data-file-open]').forEach(b => b.onclick = async () => { const f = await loadTaskFile(b.dataset.fileOpen); if(!f) return showToast('לא הצלחנו לטעון את הקובץ'); const a = document.createElement('a'); a.href = f.data; a.download = b.dataset.fileName || 'file'; document.body.appendChild(a); a.click(); a.remove(); });
+    paintTyping();
+    if(atBottom || !paint.done) body.scrollTop = body.scrollHeight;
+    paint.done = true;
+  };
+  const paintTyping = () => {
+    const el = document.getElementById('chatTyping'); if(!el) return;
+    const on = typing && typing.who !== me && trueNow().getTime() - (typing.at || 0) < 7000;
+    el.hidden = !on;
+    const txt = on ? (isGroup ? (state._chatNames[typing.who] || '') + ' ' : '') + (typing.kind === 'recording' ? 'מקליט הודעה...' : 'מקליד...') : '';
+    if(on) el.querySelector('.wa-typing-txt').textContent = txt;
+    const sub = document.getElementById('chatSub'); if(sub) sub.textContent = on ? txt : (isGroup ? members.length + ' משתתפים' : '');
+  };
+  const markSeen = async () => {
+    if(!chatUnread(cur, me)) return;
+    const fresh = await loadChat(id); if(!fresh) return;
+    let ch = false; (fresh.msgs || []).forEach(m => { if(m.from !== me && !(m.seenBy || []).includes(me)){ m.seenBy = [...(m.seenBy || []), me]; ch = true; } });
+    if(ch) await saveDoc(() => setDoc(doc(db, 'chats', id), { msgs: fresh.msgs }, { merge: true }), 'chatSeen');
+  };
+  let lastT = 0;
+  const sigTyping = kind => { const now = Date.now(); if(kind && now - lastT < 2500) return; lastT = kind ? now : 0;
+    setDoc(doc(db, 'chats', id), { typing: kind ? { who: me, kind, at: trueNow().getTime() } : null }, { merge: true }).catch(() => {}); };
+  const send = async extra => {
+    sigTyping(null);
+    const m = Object.assign({ id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [] }, extra);
+    cur = { ...cur, msgs: [...(cur.msgs || []), m] }; paint();
+    const fresh = await loadChat(id); if(!fresh){ showToast('ההודעה לא נשלחה'); return; }
+    const msgs = [...(fresh.msgs || []), m].slice(-CHAT_MAX);
+    const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), { msgs, members }, { merge: true }), 'chatSend');
+    if(ok !== true) showToast('ההודעה לא נשלחה');
+  };
+  input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; if(input.value.trim()) sigTyping('typing'); });
+  input.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); document.getElementById('chatSend').click(); } });
+  document.getElementById('chatSend').onclick = () => { const t = input.value.trim(); if(!t) return input.focus(); input.value = ''; input.style.height = ''; input.focus(); send({ text: t }); };
+  document.getElementById('chatFile').onchange = async e => {
+    const file = e.target.files && e.target.files[0]; e.target.value = ''; if(!file) return;
+    stEl.textContent = 'מעלה...';
+    let data; try{ data = /^image\//.test(file.type) ? await shrinkImage(file) : await new Promise((r, j) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = j; fr.readAsDataURL(file); }); }catch(err){ stEl.textContent = 'לא הצלחנו לקרוא את הקובץ'; return; }
+    if(data.length > 950000){ stEl.textContent = 'הקובץ גדול מדי (עד כ-700KB)'; return; }
+    const fileId = uid() + uid();
+    const ok = await saveDoc(() => setDoc(doc(db, 'voiceMessages', fileId), { file: data, name: file.name, type: file.type || '', createdAt: new Date().toISOString() }), 'chatFile');
+    stEl.textContent = ok === true ? '' : 'שגיאה בהעלאה'; if(ok !== true) return;
+    send({ fileId, fileName: file.name, fileType: /^image\//.test(file.type) ? 'image/jpeg' : (file.type || '') });
+  };
+  const mic = document.getElementById('chatMic'); let rec = null;
+  mic.onclick = async () => {
+    if(rec && rec.state === 'recording'){ rec.stop(); return; }
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true }), chunks = [];
+      rec = new MediaRecorder(stream, { audioBitsPerSecond: 24000 });
+      let secs = 0; const tm = setInterval(() => { secs++; stEl.textContent = 'מקליט... ' + secs + ' שניות · לחצו ⏹ לשליחה'; sigTyping('recording'); if(secs >= 120) rec.stop(); }, 1000);
+      rec.ondataavailable = ev => { if(ev.data.size) chunks.push(ev.data); };
+      rec.onstop = async () => {
+        clearInterval(tm); stream.getTracks().forEach(t => t.stop()); mic.textContent = '🎙'; mic.classList.remove('rec'); stEl.textContent = 'שומר...';
+        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+        const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+        const audioId = uid() + uid();
+        const ok = await saveVoiceMessage(audioId, dataUrl);
+        stEl.textContent = ok === true ? '' : 'שגיאה בשמירת ההקלטה'; if(ok === true) send({ audioId });
+      };
+      rec.start(); mic.textContent = '⏹'; mic.classList.add('rec'); sigTyping('recording');
+    }catch(err){ stEl.textContent = 'אין גישה למיקרופון. יש לאשר הרשאה בדפדפן.'; }
+  };
+  let unsub = () => {};
+  try{
+    unsub = onSnapshot(doc(db, 'chats', id), snap => {
+      if(!document.getElementById('chatBody')){ unsub(); return; }
+      const d = snap.exists() ? snap.data() : { msgs: [] };
+      typing = d.typing || null;
+      const sig = JSON.stringify((d.msgs || []).map(m => [m.id, (m.seenBy || []).length]));
+      if(sig !== paint.sig){ paint.sig = sig; cur = d; paint(); markSeen(); } else paintTyping();
+    }, () => {});
+  }catch(e){ cur = (await loadChat(id)) || { msgs: [] }; paint(); markSeen(); }
+  const tick = setInterval(() => { if(!document.getElementById('chatBody')){ clearInterval(tick); return; } paintTyping(); }, 1500);
+  state._chatWatch = () => { unsub(); clearInterval(tick); };
+  input.focus();
+}
+
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
 async function openMirror(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ showToast('המכשיר הזה לא תומך במצלמה'); return; }
@@ -7444,6 +7646,7 @@ document.addEventListener('click', async e => {
   const pb = e.target.closest('[data-play]');
   if(pb){ e.preventDefault(); playTaskAudio(pb); }
   if(e.target.closest('#tasksBtn') && state.currentEmployee) renderEmployeeTasks(state.currentEmployee);
+  if(e.target.closest('#chatBtn') && state.currentEmployee) renderChatHome('emp');
   if(e.target.closest('#hideMirrorBtn')){
     const emp = state.currentEmployee; if(!emp) return;
     const ok = await showConfirmModal('להסתיר את כפתור המראה? אפשר להחזיר אותו בהגדרות ← עיצוב ותצוגה.', { yes: 'הסתרה' });
