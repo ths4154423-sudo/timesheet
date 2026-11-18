@@ -771,6 +771,17 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .wa-doc-page.sheet .wa-doc-inner{ padding:12px; }
 .wa-doc-page.sheet tr:first-child td{ background:#F3F6F9; font-weight:600; }
 @media (max-width:600px){ .wa-doc-inner{ padding:18px 16px; } }
+.wa-album{ display:grid; gap:3px; margin-bottom:4px; width:min(280px, 62vw); }
+.wa-album.n2{ grid-template-columns:1fr 1fr; } .wa-album.n3{ grid-template-columns:1fr 1fr; } .wa-album.n4{ grid-template-columns:1fr 1fr; }
+.wa-album.n3 .wa-album-cell:first-child{ grid-column:1 / -1; }
+.wa-album-cell{ position:relative; aspect-ratio:1/1; overflow:hidden; border-radius:6px; background:#ddd; }
+.wa-album-cell .wa-img{ width:100%; height:100%; max-width:none; max-height:none; object-fit:cover; margin:0; }
+.wa-album.n3 .wa-album-cell:first-child{ aspect-ratio:2/1; }
+.wa-album-more{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.45); color:#fff; font-size:26px; font-weight:600; cursor:pointer; }
+.wa-lb-nav{ position:absolute; top:50%; transform:translateY(-50%); z-index:3; width:48px; height:48px; border-radius:50%; border:none; background:rgba(255,255,255,.15); color:#fff; font-size:30px; cursor:pointer; }
+.wa-lb-nav:hover{ background:rgba(255,255,255,.28); }
+.wa-lb-nav.prev{ right:16px; } .wa-lb-nav.next{ left:16px; }
+.wa-lb-count{ position:absolute; bottom:16px; left:0; right:0; text-align:center; color:#E9EDEF; font-size:14px; z-index:3; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7408,13 +7419,14 @@ function shrinkImage(file){
 
 // תמונה בגדול באותו חלון (כמו בוואטסאפ); סוגרים בלחיצה, ב-✕ או ב-Esc
 // תצוגת תמונה בגדול, עם זום: גלגלת עכבר, צביטה בטלפון, לחיצה כפולה, גרירה, וכפתורי + / −
-function openLightbox(src, name){
+function openLightbox(src, name, gallery){
   const ov = document.createElement('div');
   ov.className = 'wa-lightbox';
   ov.innerHTML = `<div class="wa-lb-bar"><button type="button" class="wa-lb-btn" data-lb-close aria-label="סגירה">✕</button><span class="wa-lb-name"></span>
       <button type="button" class="wa-lb-btn" data-z="out" aria-label="הקטנה">−</button><span class="wa-lb-pct">100%</span><button type="button" class="wa-lb-btn" data-z="in" aria-label="הגדלה">+</button>
       <a class="wa-lb-btn" download aria-label="הורדה">⬇</a></div>
-    <div class="wa-lb-stage"><img alt="" draggable="false" /></div>`;
+    <div class="wa-lb-stage"><img alt="" draggable="false" /></div>
+    ${gallery && gallery.ids.length > 1 ? '<button type="button" class="wa-lb-nav prev" aria-label="הקודמת">‹</button><button type="button" class="wa-lb-nav next" aria-label="הבאה">›</button><div class="wa-lb-count" dir="ltr"></div>' : ''}`;
   const img = ov.querySelector('img'), stage = ov.querySelector('.wa-lb-stage'), pct = ov.querySelector('.wa-lb-pct');
   img.src = src;
   ov.querySelector('.wa-lb-name').textContent = name || '';
@@ -7454,6 +7466,23 @@ function openLightbox(src, name){
   document.addEventListener('keydown', onKey);
   document.body.appendChild(ov);
   apply();
+  if(gallery && gallery.ids.length > 1){
+    let idx = gallery.idx || 0;
+    const cnt = ov.querySelector('.wa-lb-count');
+    const go = async d => {
+      idx = (idx + d + gallery.ids.length) % gallery.ids.length;
+      cnt.textContent = (idx + 1) + ' / ' + gallery.ids.length;
+      const f = await loadTaskFile(gallery.ids[idx]); if(!f) return;
+      img.src = f.data; ov.querySelector('.wa-lb-name').textContent = f.name || ''; a.href = f.data; a.download = f.name || 'image.jpg'; z = 1; apply();
+    };
+    cnt.textContent = (idx + 1) + ' / ' + gallery.ids.length;
+    // ימינה = הבאה בעברית (כמו בוואטסאפ בעברית): החץ השמאלי מקדם
+    ov.querySelector('.wa-lb-nav.next').onclick = e => { e.stopPropagation(); go(1); };
+    ov.querySelector('.wa-lb-nav.prev').onclick = e => { e.stopPropagation(); go(-1); };
+    document.addEventListener('keydown', function nav(e){ if(!document.body.contains(ov)){ document.removeEventListener('keydown', nav); return; } if(e.key === 'ArrowLeft') go(1); if(e.key === 'ArrowRight') go(-1); });
+    let sx = null; stage.addEventListener('touchstart', e => { if(e.touches.length === 1 && z === 1) sx = e.touches[0].clientX; }, { passive: true });
+    stage.addEventListener('touchend', e => { if(sx === null) return; const dx = (e.changedTouches[0] || {}).clientX - sx; sx = null; if(Math.abs(dx) > 50) go(dx > 0 ? 1 : -1); });
+  }
 }
 
 // Word ו-Excel בתוך האתר, בלי הורדה. הספריות נטענות רק כשצריך, והקובץ לא נשלח לשום שירות חיצוני
@@ -7816,7 +7845,7 @@ async function renderChatHome(role){
   const chats = await Promise.all(contacts.map((c, i) => c.custom ? Promise.resolve(groups.find(g => g.id === c.id)) : loadChat(chatIdWith(me, c.id))));
   const rows = contacts.map((c, i) => {
     const ch = chats[i] || { msgs: [] }, last = visibleMsgs(ch, me).slice(-1)[0], un = chatUnread(ch, me);
-    const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.audioId ? '🎙 הודעה קולית' : ''))) : 'אין הודעות עדיין';
+    const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : ''))) : 'אין הודעות עדיין';
     return { c, last, un, prev };
   }).sort((a, b) => (a.c.id === 'team' ? -1 : b.c.id === 'team' ? 1 : String(b.last ? b.last.at : '').localeCompare(String(a.last ? a.last.at : ''))));
   const coUser = role !== 'mgr' && state.currentEmployee && state.currentEmployee.chatOnly;
@@ -7904,6 +7933,9 @@ function chatBubblesHtml(ch, me, isGroup, members){
       ${m.fwd ? '<div class="wa-fwd">↪ הועברה</div>' : ''}
       ${m.reply ? `<div class="wa-quote" data-jump="${m.reply.id}"><b>${m.reply.from === me ? 'אתה' : escapeHtml(state._chatNames[m.reply.from] || '')}</b><span>${escapeHtml(m.reply.snip || '')}</span></div>` : ''}
       ${m.fileId ? (/^image\//.test(m.fileType || '') ? `<img class="wa-img" data-file-img="${m.fileId}" alt="" />` : `<button type="button" class="wa-file" data-file-open="${m.fileId}" data-file-name="${escapeHtml(m.fileName || 'קובץ')}">${/^video\//.test(m.fileType || '') ? '🎬' : /^audio\//.test(m.fileType || '') ? '🎵' : '📄'} ${escapeHtml(m.fileName || 'קובץ')}</button>`) : ''}
+      ${Array.isArray(m.files) ? (() => { const imgs = m.files.filter(x => /^image\//.test(x.fileType || '')), docs = m.files.filter(x => !/^image\//.test(x.fileType || ''));
+        return (imgs.length ? `<div class="wa-album n${Math.min(imgs.length, 4)}">${imgs.slice(0, 4).map((x, k) => `<div class="wa-album-cell"><img class="wa-img" data-file-img="${x.fileId}" alt="" />${k === 3 && imgs.length > 4 ? `<span class="wa-album-more" data-album-more="${m.id}">+${imgs.length - 4}</span>` : ''}</div>`).join('')}</div>` : '')
+          + docs.map(x => `<button type="button" class="wa-file" data-file-open="${x.fileId}" data-file-name="${escapeHtml(x.fileName || 'קובץ')}">📄 ${escapeHtml(x.fileName || 'קובץ')}</button>`).join(''); })() : ''}
       ${m.audioId ? `<button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button>` : ''}
       ${m.text ? `<div class="wa-text">${escapeHtml(m.text)}</div>` : ''}
       <span class="wa-time">${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
@@ -7931,7 +7963,7 @@ async function renderChatRoom(role, otherId){
       <div class="wa-replybar" id="chatReplyBar" hidden><div class="wa-quote"><b id="chatReplyWho"></b><span id="chatReplySnip"></span></div><button type="button" class="wa-back" id="chatReplyX" aria-label="ביטול">✕</button></div>
       <div class="wa-compose">
         <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
-        <label class="wa-btn attach" title="צירוף קובץ">${WAI.attach}<input type="file" id="chatFile" hidden /></label>
+        <label class="wa-btn attach" title="צירוף קובץ">${WAI.attach}<input type="file" id="chatFile" multiple hidden /></label>
         <button type="button" class="wa-btn send" id="chatSend" title="שליחה">${WAI.send}</button>
         <button type="button" class="wa-btn mic" id="chatMic" title="הקלטה">${WAI.mic}</button>
         <span class="hint wa-status" id="chatStatus"></span>
@@ -7970,7 +8002,19 @@ async function renderChatRoom(role, otherId){
   const paint = () => {
     const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
     body.innerHTML = chatBubblesHtml(cur, me, isGroup, members) + `<div class="wa-row in wa-typing" id="chatTyping" hidden><div class="wa-bubble"><span class="wa-dots"><i></i><i></i><i></i></span> <span class="wa-typing-txt"></span></div></div>`;
-    body.querySelectorAll('[data-file-img]').forEach(async img => { const f = await loadTaskFile(img.dataset.fileImg); if(f){ img.src = f.data; img.onclick = () => openLightbox(f.data, f.name); } });
+    body.querySelectorAll('[data-file-img]').forEach(async img => {
+      const f = await loadTaskFile(img.dataset.fileImg); if(!f) return;
+      img.src = f.data;
+      const row = img.closest('[data-row]'), m = row && (cur.msgs || []).find(x => x.id === row.dataset.row);
+      const ids = m && Array.isArray(m.files) ? m.files.filter(x => /^image\//.test(x.fileType || '')).map(x => x.fileId) : null;
+      img.onclick = () => ids ? openLightbox(f.data, f.name, { ids, idx: ids.indexOf(img.dataset.fileImg) }) : openLightbox(f.data, f.name);
+    });
+    body.querySelectorAll('[data-album-more]').forEach(el => el.onclick = async ev => {
+      ev.stopPropagation();
+      const m = (cur.msgs || []).find(x => x.id === el.dataset.albumMore); if(!m) return;
+      const ids = m.files.filter(x => /^image\//.test(x.fileType || '')).map(x => x.fileId);
+      const f = await loadTaskFile(ids[3]); if(f) openLightbox(f.data, f.name, { ids, idx: 3 });
+    });
     body.querySelectorAll('[data-file-open]').forEach(b => b.onclick = async () => { const f = await loadTaskFile(b.dataset.fileOpen); if(!f) return showToast('לא הצלחנו לטעון את הקובץ'); openChatFile(f, b.dataset.fileName); });
     body.querySelectorAll('[data-react-open], [data-msg-menu]').forEach(b => b.onclick = ev => { ev.stopPropagation(); openMsgMenu(b, b.dataset.reactOpen || b.dataset.msgMenu, !!b.dataset.reactOpen); });
     body.querySelectorAll('[data-mid]').forEach(el => {
@@ -8003,7 +8047,7 @@ async function renderChatRoom(role, otherId){
     setDoc(doc(db, 'chats', id), { typing: kind ? { who: me, kind, at: trueNow().getTime() } : null }, { merge: true }).catch(() => {}); };
 
   // תפריט הודעה כמו בוואטסאפ: תגובה באימוג'י, השב, העתקה, העברה, מחיקה
-  const snipOf = m => m.text ? m.text.slice(0, 90) : m.fileId ? '📎 ' + (m.fileName || 'קובץ') : m.audioId ? '🎙 הודעה קולית' : '';
+  const snipOf = m => m.text ? m.text.slice(0, 90) : m.fileId ? '📎 ' + (m.fileName || 'קובץ') : m.files ? '📷 ' + m.files.length + ' קבצים' : m.audioId ? '🎙 הודעה קולית' : '';
   let replyTo = null;
   const setReply = m => {
     replyTo = m ? { id: m.id, from: m.from, snip: snipOf(m) } : null;
@@ -8044,7 +8088,7 @@ async function renderChatRoom(role, otherId){
       else if(act === 'fwd') forwardMsg(m);
       else if(act === 'del'){
         if(!(await showConfirmModal('למחוק את ההודעה? היא תימחק אצל כולם.', { yes: 'מחיקה', danger: true }))) return;
-        saveMsgs(msgs => { const t = msgs.find(y => y.id === mid); if(!t || (t.from !== me && me !== 'mgr')) return false; ['text', 'fileId', 'fileName', 'fileType', 'audioId', 'reply', 'reactions'].forEach(k => delete t[k]); t.deleted = true; }, 'chatDelete');
+        saveMsgs(msgs => { const t = msgs.find(y => y.id === mid); if(!t || (t.from !== me && me !== 'mgr')) return false; ['text', 'fileId', 'fileName', 'fileType', 'files', 'audioId', 'reply', 'reactions'].forEach(k => delete t[k]); t.deleted = true; }, 'chatDelete');
       }
     });
   };
@@ -8054,7 +8098,7 @@ async function renderChatRoom(role, otherId){
     const opts = [...list.map(c => ({ id: c.id, name: c.name })), ...groups.filter(g => g.id !== id).map(g => ({ id: g.id, name: '👥 ' + (g.name || 'קבוצה') }))];
     const pick = await chatPickMembers(opts, [], false, 'העברה אל...');
     if(!pick) return;
-    const copy = { text: m.text, fileId: m.fileId, fileName: m.fileName, fileType: m.fileType, audioId: m.audioId };
+    const copy = { text: m.text, fileId: m.fileId, fileName: m.fileName, fileType: m.fileType, files: m.files, audioId: m.audioId };
     Object.keys(copy).forEach(k => copy[k] === undefined && delete copy[k]);
     for(const target of pick.ids){
       const cid = chatIdWith(me, target);
@@ -8078,15 +8122,25 @@ async function renderChatRoom(role, otherId){
   input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; if(input.value.trim()) sigTyping('typing'); });
   input.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); document.getElementById('chatSend').click(); } });
   document.getElementById('chatSend').onclick = () => { const t = input.value.trim(); if(!t) return input.focus(); input.value = ''; input.style.height = ''; input.focus(); send({ text: t }); };
+  // כמה קבצים ביחד (עד 10) נשלחים בהודעה אחת, כמו אלבום בוואטסאפ. טקסט שבשדה נשלח ככיתוב
   document.getElementById('chatFile').onchange = async e => {
-    const file = e.target.files && e.target.files[0]; e.target.value = ''; if(!file) return;
-    stEl.textContent = 'מעלה...';
-    let data; try{ data = /^image\//.test(file.type) ? await shrinkImage(file) : await new Promise((r, j) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = j; fr.readAsDataURL(file); }); }catch(err){ stEl.textContent = 'לא הצלחנו לקרוא את הקובץ'; return; }
-    if(data.length > 950000){ stEl.textContent = 'הקובץ גדול מדי (עד כ-700KB)'; return; }
-    const fileId = uid() + uid();
-    const ok = await saveDoc(() => setDoc(doc(db, 'voiceMessages', fileId), { file: data, name: file.name, type: file.type || '', createdAt: new Date().toISOString() }), 'chatFile');
-    stEl.textContent = ok === true ? '' : 'שגיאה בהעלאה'; if(ok !== true) return;
-    send({ fileId, fileName: file.name, fileType: /^image\//.test(file.type) ? 'image/jpeg' : (file.type || '') });
+    const picked = [...(e.target.files || [])].slice(0, 10); e.target.value = ''; if(!picked.length) return;
+    const files = [];
+    for(let i = 0; i < picked.length; i++){
+      const file = picked[i];
+      stEl.textContent = picked.length > 1 ? `מעלה ${i + 1} מתוך ${picked.length}...` : 'מעלה...';
+      let data; try{ data = /^image\//.test(file.type) ? await shrinkImage(file) : await new Promise((r, j) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = j; fr.readAsDataURL(file); }); }catch(err){ showToast('לא הצלחנו לקרוא את ' + file.name); continue; }
+      if(data.length > 950000){ showToast(file.name + ' גדול מדי (עד כ-700KB)'); continue; }
+      const fileId = uid() + uid();
+      const ok = await saveDoc(() => setDoc(doc(db, 'voiceMessages', fileId), { file: data, name: file.name, type: file.type || '', createdAt: new Date().toISOString() }), 'chatFile');
+      if(ok !== true){ showToast('שגיאה בהעלאת ' + file.name); continue; }
+      files.push({ fileId, fileName: file.name, fileType: /^image\//.test(file.type) ? 'image/jpeg' : (file.type || '') });
+    }
+    stEl.textContent = '';
+    if(!files.length) return;
+    const caption = input.value.trim(); if(caption){ input.value = ''; input.style.height = ''; }
+    if(files.length === 1) send({ ...files[0], ...(caption ? { text: caption } : {}) });
+    else send({ files, ...(caption ? { text: caption } : {}) });
   };
   const mic = document.getElementById('chatMic'); let rec = null;
   mic.onclick = async () => {
@@ -8205,7 +8259,7 @@ async function startChatNotifier(role){
 function notifyChat(role, id, d, m){
   const who = state._chatNames[m.from] || 'הודעה חדשה';
   const where = id === 'team' ? 'כל הצוות' : /^g_/.test(id) ? (d.name || 'קבוצה') : '';
-  const body = m.text ? m.text.slice(0, 140) : m.fileId ? '📎 קובץ' : m.audioId ? '🎙 הודעה קולית' : '';
+  const body = m.text ? m.text.slice(0, 140) : m.files ? '📷 ' + m.files.length + ' קבצים' : m.fileId ? '📎 קובץ' : m.audioId ? '🎙 הודעה קולית' : '';
   chatPing(); flashTitle(who);
   if(document.visibilityState === 'visible') showToast('💬 ' + who + ': ' + body);
   showDesktopNote(where ? where + ' · ' + who : who, body, () => {
@@ -8402,7 +8456,7 @@ async function renderChatMonitor(target, myGroupIds){
     return `<button type="button" class="wa-contact" data-mon-open="${c.id}">
       <span class="wa-avatar group">${WAI.eye}</span>
       <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(label(c))}</b><span class="wa-c-time">${chatTime(last.at)}</span></span>
-      <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml((state._chatNames[last.from] || '') + ': ' + (last.deleted ? '🚫 נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.audioId ? '🎙 הודעה קולית' : ''))))}</span></span></span></button>`;
+      <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml((state._chatNames[last.from] || '') + ': ' + (last.deleted ? '🚫 נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : ''))))}</span></span></span></button>`;
   }).join('');
   target.appendChild(box);
   box.querySelectorAll('[data-mon-open]').forEach(b => b.onclick = () => renderChatMonitorRoom(others.find(c => c.id === b.dataset.monOpen), label));
