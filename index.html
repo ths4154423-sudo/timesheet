@@ -797,6 +797,8 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .task-report th{ font-size:13px; color:#54656F; font-weight:600; padding:6px; }
 .task-report td{ padding:6px; border-top:1px solid #F0F2F5; }
 .task-pc{ display:inline-block; min-width:48px; padding:2px 8px; border-radius:10px; font-size:13px; background:linear-gradient(90deg, #D9FDD3 var(--p), #F0F2F5 var(--p)); }
+.install-app[hidden]{ display:none; }
+.clock-warn{ background:#FFF4E5; border:1px solid #F5C77E; color:#7A4B00; border-radius:10px; padding:10px 14px; font-size:14px; margin-bottom:14px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -985,6 +987,7 @@ async function syncClock(){
     const server = Date.parse(hd) + 500;   // הכותרת מעוגלת לשנייה
     const off = server - (t0 + t1) / 2;
     clockOffsetMs = Math.abs(off) > 3000 ? off : 0;
+    state._clockOffMin = Math.abs(off) > 120000 ? Math.round(off / 60000) : 0;
     if(Math.abs(off) > 120000) console.warn('device clock is off by ' + Math.round(off / 60000) + ' minutes; using server time');
   }catch(e){}
 }
@@ -2112,9 +2115,11 @@ function renderLanding(){
           <p class="hint" style="font-size:13px; margin:0 0 8px;">אפשר לדווח שעות גם בטלפון</p>
           <a class="btn ghost" href="tel:${PHONE_LINE}" style="text-decoration:none; display:inline-block;">📞 התקשרות לקו · 077-2290274</a>
         </div>
+        ${installAppHtml()}
       </div>
     </div>
   `;
+  bindInstallApp();
   document.getElementById('btnAdmin').onclick = async () => {
     // הניהול עדיין מחובר (חזרו לדף הראשי בלי להתנתק) – נכנסים ישר
     const u = authAdmin.currentUser;
@@ -5910,6 +5915,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       <input type="month" class="month-picker" id="empMonthPicker" value="${month}" />
       <span class="subtitle">${monthLabel(month)} · ${emp.payType === 'hourly' ? 'שכר שעתי · ' + fmtMoney(emp.rate) + ' לשעה' : 'שכר חודשי קבוע'}</span>
     </div>
+    ${state._clockOffMin ? `<div class="clock-warn">⏰ השעון במכשיר הזה ${state._clockOffMin < 0 ? 'מקדים' : 'מאחר'} ב-${clockWarnTxt(Math.abs(state._clockOffMin))}. אין בעיה – האתר רושם לפי השעה הנכונה (${nowTimeStr().slice(0, 5)}). כדאי לתקן את השעון בהגדרות המכשיר.</div>` : ''}
     <div class="readout">
       <div class="digit-block"><div class="num mono" id="readoutHours">0</div><div class="lbl">סה"כ שעות החודש</div></div>
       <div class="digit-block"><div class="num mono" id="readoutPay">${fmtMoney(0)}</div><div class="lbl">סה"כ לתשלום</div></div>
@@ -7000,7 +7006,9 @@ async function renderEmployeeSettings(emp){
         </button>
       `).join('')}
     </div>
+    <div style="text-align:center;">${installAppHtml()}</div>
   `;
+  bindInstallApp();
 
   document.getElementById('settingsBackBtn').onclick = () => renderEmployeeDashboard(emp, null, true);
   loadRequests().then(list => {
@@ -8661,6 +8669,28 @@ async function chatPhoneOf(role, otherId){
   }
   return state._chatPhones[otherId] || null;
 }
+
+// ---------- התקנה כאפליקציה (מסך הבית / שולחן העבודה) ----------
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; document.querySelectorAll('.install-app').forEach(el => el.hidden = false); });
+window.addEventListener('appinstalled', () => { deferredInstall = null; document.querySelectorAll('.install-app').forEach(el => el.hidden = true); showToast('האפליקציה הותקנה ✓'); });
+function isStandalone(){ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+function installAppHtml(){
+  if(isStandalone()) return '';
+  return `<div class="install-app" ${deferredInstall || isIOS() ? '' : 'hidden'} style="margin-top:14px;">
+    <button type="button" class="btn ghost" id="installAppBtn">📲 התקנה כאפליקציה</button>
+    <p class="hint" style="font-size:12.5px; margin:6px 0 0;">סמל במסך הבית, נפתח בחלון משלו כמו אפליקציה</p></div>`;
+}
+function bindInstallApp(){
+  const b = document.getElementById('installAppBtn'); if(!b) return;
+  b.onclick = async () => {
+    if(deferredInstall){ deferredInstall.prompt(); const r = await deferredInstall.userChoice.catch(() => null); if(r && r.outcome === 'accepted') deferredInstall = null; return; }
+    if(isIOS()) return showConfirmModal('באייפון: לוחצים על כפתור השיתוף (ריבוע עם חץ למעלה) בתחתית המסך, ובוחרים "הוספה למסך הבית".', { yes: 'הבנתי', info: true, danger: false });
+    showConfirmModal('בתפריט הדפדפן (שלוש הנקודות למעלה) בוחרים "התקנת האפליקציה" או "הוספה למסך הבית".', { yes: 'הבנתי', info: true, danger: false });
+  };
+}
+function clockWarnTxt(min){ if(min < 60) return min + ' דקות'; const h = Math.floor(min / 60), m = min % 60; return (h === 1 ? 'שעה' : h + ' שעות') + (m ? ' ו-' + m + ' דקות' : ''); }
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
 async function openMirror(){
