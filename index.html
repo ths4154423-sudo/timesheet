@@ -750,7 +750,7 @@ a.wa-back{ text-decoration:none; }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, persistentSingleTabManager, doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, initializeAuth, browserSessionPersistence, signInWithEmailAndPassword, signInWithCustomToken, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
@@ -781,7 +781,13 @@ const authEmp = initializeAuth(fbAppEmp, { persistence: browserSessionPersistenc
 // החיבור של העובד נפתח רק בכרטיסייה שבה עובד באמת נכנס. אחרת כרטיסיית מנהל (בלי עובד מחובר)
 // עלולה להיות "הכרטיסייה הראשית" של המטמון המשותף, והשרת דוחה את הקריאות של העובד (permission-denied)
 let dbEmpInst = null;
-const dbEmpGet = () => dbEmpInst || (dbEmpInst = mkDb(fbAppEmp));
+// מטמון של כרטיסייה אחת בלבד: כל כרטיסיית עובד מדברת עם השרת בעצמה, עם ההרשאה של העובד שלה.
+// כרטיסייה שנייה של עובד (גם עובד אחר) עובדת בלי מטמון מקומי במקום לחלוק אותו.
+const dbEmpGet = () => dbEmpInst || (dbEmpInst = initializeFirestore(fbAppEmp, {
+  experimentalForceLongPolling: true,
+  useFetchStreams: false,
+  localCache: persistentLocalCache({ tabManager: persistentSingleTabManager({ forceOwnership: false }) }),
+}));
 let db = dbAdmin, auth = authAdmin;
 function useConn(role){
   if(role === 'employee'){ db = dbEmpGet(); auth = authEmp; } else { db = dbAdmin; auth = authAdmin; }
