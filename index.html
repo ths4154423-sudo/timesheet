@@ -782,6 +782,16 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .wa-lb-nav:hover{ background:rgba(255,255,255,.28); }
 .wa-lb-nav.prev{ right:16px; } .wa-lb-nav.next{ left:16px; }
 .wa-lb-count{ position:absolute; bottom:16px; left:0; right:0; text-align:center; color:#E9EDEF; font-size:14px; z-index:3; }
+.wa-edited{ font-style:italic; margin-left:4px; }
+.wa-pinbar{ display:flex; align-items:center; gap:8px; padding:6px 14px; background:#F0F2F5; border-bottom:1px solid #E9EDEF; font-size:14px; flex:0 0 auto; }
+.wa-pinbar[hidden], .wa-searchbar[hidden]{ display:none; }
+.wa-pin-txt{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; color:#3B4A54; }
+.wa-searchbar{ display:flex; align-items:center; gap:6px; padding:6px 10px; background:#fff; border-bottom:1px solid #E9EDEF; flex:0 0 auto; }
+.wa-searchbar input{ flex:1; border:none !important; background:#F0F2F5 !important; border-radius:18px; padding:7px 12px; font:inherit; font-size:14px; outline:none; box-shadow:none !important; }
+.wa-row.wa-hit .wa-bubble{ box-shadow:0 0 0 2px rgba(255,200,0,.6); }
+.wa-row.wa-hit-cur .wa-bubble{ box-shadow:0 0 0 3px #FFB300; }
+.wa-home-search{ padding:4px 6px 10px; }
+.wa-home-search input{ width:100%; border:none !important; background:#F0F2F5 !important; border-radius:20px; padding:9px 14px; font:inherit; font-size:14.5px; outline:none; box-shadow:none !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7790,7 +7800,7 @@ async function playTaskAudio(btn){
   taskAudioEl.play().catch(() => { btn.textContent = idle; showToast('לא הצלחנו להשמיע'); });
 }
 
-const WAI = {dial:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>',attach:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>',send:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.6 20.4 3 12l17.6-8.4V10L8 12l12.6 2z"/></svg>',mic:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V5a3.5 3.5 0 1 0-7 0v6a3.5 3.5 0 0 0 3.5 3.5zm6.3-3.6a.9.9 0 0 0-1.8 0 4.5 4.5 0 0 1-9 0 .9.9 0 0 0-1.8 0 6.3 6.3 0 0 0 5.4 6.2V20H9a.9.9 0 0 0 0 1.8h6a.9.9 0 0 0 0-1.8h-2.1v-2.9a6.3 6.3 0 0 0 5.4-6.2z"/></svg>',stop:'<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',phone:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19.4 15.6l-2.6-.3a2 2 0 0 0-1.7.6l-1.9 1.9a15.1 15.1 0 0 1-6.6-6.6l1.9-1.9a2 2 0 0 0 .6-1.7l-.3-2.6A2 2 0 0 0 6.8 3.2H5A2 2 0 0 0 3 5.3 17.9 17.9 0 0 0 18.7 21a2 2 0 0 0 2.1-2v-1.7a2 2 0 0 0-1.4-1.7z"/></svg>',video:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M15.5 8.6V7a2 2 0 0 0-2-2h-9a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1.6l4.3 3a.8.8 0 0 0 1.2-.7V6.3a.8.8 0 0 0-1.2-.7z"/></svg>',trash:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',adduser:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>',back:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 4l-1.4 1.4 5.6 5.6H4v2h12.2l-5.6 5.6L12 20l8-8z"/></svg>',group:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1a4.2 4.2 0 0 1 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>',newgroup:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4z"/></svg>',chev:'<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.4 9.3 12 13.9l4.6-4.6L18 10.7l-6 6-6-6z"/></svg>',smile:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/></svg>',eye:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 5C7 5 2.7 8.1 1 12.5 2.7 16.9 7 20 12 20s9.3-3.1 11-7.5C21.3 8.1 17 5 12 5zm0 12.5a5 5 0 1 1 5-5 5 5 0 0 1-5 5zm0-8a3 3 0 1 0 3 3 3 3 0 0 0-3-3z"/></svg>',ticks:'<svg viewBox="0 0 18 12" width="16" height="11" fill="currentColor"><path d="M17.4.6a.7.7 0 0 0-1 0L9.6 7.4 8.6 6.4l-1 1 1.5 1.5a.7.7 0 0 0 1 0L17.4 1.6a.7.7 0 0 0 0-1zM12.6.6a.7.7 0 0 0-1 0L4.8 7.4 1.6 4.2a.7.7 0 0 0-1 1l3.7 3.7a.7.7 0 0 0 1 0L12.6 1.6a.7.7 0 0 0 0-1z"/></svg>'};
+const WAI = {search:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>',dial:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>',attach:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>',send:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.6 20.4 3 12l17.6-8.4V10L8 12l12.6 2z"/></svg>',mic:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V5a3.5 3.5 0 1 0-7 0v6a3.5 3.5 0 0 0 3.5 3.5zm6.3-3.6a.9.9 0 0 0-1.8 0 4.5 4.5 0 0 1-9 0 .9.9 0 0 0-1.8 0 6.3 6.3 0 0 0 5.4 6.2V20H9a.9.9 0 0 0 0 1.8h6a.9.9 0 0 0 0-1.8h-2.1v-2.9a6.3 6.3 0 0 0 5.4-6.2z"/></svg>',stop:'<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',phone:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19.4 15.6l-2.6-.3a2 2 0 0 0-1.7.6l-1.9 1.9a15.1 15.1 0 0 1-6.6-6.6l1.9-1.9a2 2 0 0 0 .6-1.7l-.3-2.6A2 2 0 0 0 6.8 3.2H5A2 2 0 0 0 3 5.3 17.9 17.9 0 0 0 18.7 21a2 2 0 0 0 2.1-2v-1.7a2 2 0 0 0-1.4-1.7z"/></svg>',video:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M15.5 8.6V7a2 2 0 0 0-2-2h-9a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1.6l4.3 3a.8.8 0 0 0 1.2-.7V6.3a.8.8 0 0 0-1.2-.7z"/></svg>',trash:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',adduser:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>',back:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 4l-1.4 1.4 5.6 5.6H4v2h12.2l-5.6 5.6L12 20l8-8z"/></svg>',group:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1a4.2 4.2 0 0 1 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>',newgroup:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4z"/></svg>',chev:'<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.4 9.3 12 13.9l4.6-4.6L18 10.7l-6 6-6-6z"/></svg>',smile:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/></svg>',eye:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 5C7 5 2.7 8.1 1 12.5 2.7 16.9 7 20 12 20s9.3-3.1 11-7.5C21.3 8.1 17 5 12 5zm0 12.5a5 5 0 1 1 5-5 5 5 0 0 1-5 5zm0-8a3 3 0 1 0 3 3 3 3 0 0 0-3-3z"/></svg>',ticks:'<svg viewBox="0 0 18 12" width="16" height="11" fill="currentColor"><path d="M17.4.6a.7.7 0 0 0-1 0L9.6 7.4 8.6 6.4l-1 1 1.5 1.5a.7.7 0 0 0 1 0L17.4 1.6a.7.7 0 0 0 0-1zM12.6.6a.7.7 0 0 0-1 0L4.8 7.4 1.6 4.2a.7.7 0 0 0-1 1l3.7 3.7a.7.7 0 0 0 1 0L12.6 1.6a.7.7 0 0 0 0-1z"/></svg>'};
 // ================= צ'אט צוות: שיחה אישית בין כל שניים, וקבוצה "כל הצוות" =================
 // chats/<id>: id של שיחה אישית = שני המזהים ממוינים ומחוברים ב-"__"; הקבוצה = "team"; המנהל = "mgr"
 const CHAT_MAX = 300;
@@ -7869,7 +7879,9 @@ async function renderChatHome(role){
     <div class="wa-full-body">
     ${!('Notification' in window) ? '' : Notification.permission !== 'granted' ? `<div class="card wa-notif"><span>🔔 רוצים הודעה קופצת בשולחן העבודה כשמגיעה הודעה?</span><button type="button" class="btn brass small" id="chatNotifOn">${Notification.permission === 'denied' ? 'ההתראות חסומות בדפדפן' : 'הפעלת התראות'}</button></div>` : `<div class="wa-notif-ok">🔔 ההתראות פעילות · <button type="button" class="linklike" id="chatNotifTest">שליחת התראת ניסיון</button></div>`}
     ${role === 'mgr' ? '' : '<div class="wa-notice">💼 הצ׳אט הוא כלי עבודה. השיחות והקבוצות גלויות גם למנהל.</div>'}
-    <div class="card wa-list">
+    <div class="wa-home-search"><input type="search" id="chatHomeSearch" placeholder="🔍 חיפוש שיחה או הודעה..." /></div>
+    <div id="chatSearchResults"></div>
+    <div class="card wa-list" id="chatListCard">
       <button type="button" class="wa-contact wa-newgroup" id="chatNewGroup"><span class="wa-avatar group">${WAI.newgroup}</span><span class="wa-c-main"><b>קבוצה חדשה</b><span class="wa-c-prev">בוחרים משתתפים ונותנים שם</span></span></button>
       ${rows.map(r => `
         <button type="button" class="wa-contact" data-chat-open="${r.c.id}">
@@ -7885,6 +7897,19 @@ async function renderChatHome(role){
   const fl = document.getElementById('waFullLogout');
   if(fl) fl.onclick = () => { state.currentEmployee = null; clearSession(); signOut(auth).catch(() => {}); renderLanding(); };
   target.querySelectorAll('[data-chat-open]').forEach(b => b.onclick = () => renderChatRoom(role, b.dataset.chatOpen));
+  // חיפוש בכל השיחות: מסנן את רשימת השיחות לפי שם, ומציג הודעות שמכילות את הטקסט
+  const hs = document.getElementById('chatHomeSearch'), hres = document.getElementById('chatSearchResults');
+  hs.addEventListener('input', () => {
+    const q = hs.value.trim().toLowerCase();
+    target.querySelectorAll('#chatListCard [data-chat-open]').forEach(b => { b.style.display = !q || b.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+    document.getElementById('chatNewGroup').style.display = q ? 'none' : '';
+    if(!q){ hres.innerHTML = ''; return; }
+    const found = [];
+    contacts.forEach((c, i) => visibleMsgs(chats[i] || {}, me).forEach(m => { if(!m.deleted && m.text && m.text.toLowerCase().includes(q)) found.push({ c, m }); }));
+    found.sort((a, b) => String(b.m.at).localeCompare(String(a.m.at)));
+    hres.innerHTML = found.length ? `<div class="card wa-list"><div class="wa-mon-title">הודעות (${found.length})</div>${found.slice(0, 40).map(f => `<button type="button" class="wa-contact" data-hit-chat="${f.c.id}" data-hit-msg="${f.m.id}"><span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(f.c.name)}</b><span class="wa-c-time">${chatTime(f.m.at)}</span></span><span class="wa-c-prev">${f.m.from === me ? 'אתה: ' : ''}${escapeHtml(f.m.text.slice(0, 120))}</span></span></button>`).join('')}</div>` : '';
+    hres.querySelectorAll('[data-hit-chat]').forEach(b => b.onclick = () => { state._chatJumpTo = b.dataset.hitMsg; renderChatRoom(role, b.dataset.hitChat); });
+  });
   if(role === 'mgr') renderChatMonitor(document.getElementById('waMonitorSlot'), groups.map(g => g.id));
   const nt = document.getElementById('chatNotifTest');
   if(nt) nt.onclick = () => { setTimeout(() => showDesktopNote('דירתא – התראת ניסיון', 'אם רואים את זה, ההתראות עובדות ✓', null), 2500); showToast('ההתראה תקפוץ בעוד 2 שניות – אפשר לעבור לחלון אחר'); };
@@ -7949,7 +7974,7 @@ function chatBubblesHtml(ch, me, isGroup, members){
           + docs.map(x => `<button type="button" class="wa-file" data-file-open="${x.fileId}" data-file-name="${escapeHtml(x.fileName || 'קובץ')}">📄 ${escapeHtml(x.fileName || 'קובץ')}</button>`).join(''); })() : ''}
       ${m.audioId ? `<button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button>` : ''}
       ${m.text ? `<div class="wa-text">${escapeHtml(m.text)}</div>` : ''}
-      <span class="wa-time">${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
+      <span class="wa-time">${m.edited ? '<i class="wa-edited">נערכה</i>' : ''}${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
     </div>${reactHtml}</div>`;
   }).join('');
 }
@@ -7969,7 +7994,10 @@ async function renderChatRoom(role, otherId){
         <span style="flex:1;"><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span>
         ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">' + WAI.adduser + '</button>' : ''}
         ${isGroup ? '' : '<a class="wa-back" id="chatTel" title="התקשרות לטלפון" aria-label="התקשרות לטלפון" hidden>' + WAI.dial + '</a><button type="button" class="wa-back" id="chatVideo" title="שיחת וידאו" aria-label="שיחת וידאו">' + WAI.video + '</button><button type="button" class="wa-back" id="chatCall" title="שיחה קולית" aria-label="שיחה קולית">' + WAI.phone + '</button>'}
+        <button type="button" class="wa-back" id="chatSearchBtn" title="חיפוש בשיחה" aria-label="חיפוש בשיחה">${WAI.search}</button>
         <button type="button" class="wa-back" id="chatClear" title="ניקוי הצ׳אט" aria-label="ניקוי הצ׳אט">${WAI.trash}</button></div>
+      <div class="wa-searchbar" id="chatSearchBar" hidden><input type="search" id="chatSearchIn" placeholder="חיפוש בשיחה..." /><span id="chatSearchCnt" class="hint"></span><button type="button" class="wa-back" id="chatSearchUp" aria-label="הקודמת">▲</button><button type="button" class="wa-back" id="chatSearchDown" aria-label="הבאה">▼</button><button type="button" class="wa-back" id="chatSearchX" aria-label="סגירה">✕</button></div>
+      <div class="wa-pinbar" id="chatPinBar" hidden><span>📌</span><span class="wa-pin-txt" id="chatPinTxt"></span><button type="button" class="wa-back" id="chatPinX" title="ביטול ההצמדה" aria-label="ביטול ההצמדה">✕</button></div>
       <div class="wa-chat wa-room-chat" id="chatBody"></div>
       <div class="wa-replybar" id="chatReplyBar" hidden><div class="wa-quote"><b id="chatReplyWho"></b><span id="chatReplySnip"></span></div><button type="button" class="wa-back" id="chatReplyX" aria-label="ביטול">✕</button></div>
       <div class="wa-compose">
@@ -8087,6 +8115,8 @@ async function renderChatRoom(role, otherId){
     pop.innerHTML = `<div class="wa-menu-rx">${['👍', '❤️', '😂', '😮', '🙏', '👏'].map(e => `<button type="button" data-rx="${e}"${(m.reactions || {})[me] === e ? ' class="on"' : ''}>${e}</button>`).join('')}</div>`
       + (onlyReacts ? '' : `<div class="wa-menu-list">
         <button type="button" data-act="reply">↩&nbsp; השב</button>
+        ${m.from === me && m.text && !m.call ? '<button type="button" data-act="edit">✏️&nbsp; עריכה</button>' : ''}
+        <button type="button" data-act="pin">📌&nbsp; ${(cur.pinned && cur.pinned.id === m.id) ? 'ביטול הצמדה' : 'הצמדה'}</button>
         ${m.text ? '<button type="button" data-act="copy">📋&nbsp; העתקה</button>' : ''}
         <button type="button" data-act="fwd">↪&nbsp; העברה</button>
         ${canDel ? '<button type="button" data-act="del" class="danger">🗑&nbsp; מחיקה</button>' : ''}</div>`);
@@ -8101,6 +8131,11 @@ async function renderChatRoom(role, otherId){
       pop.remove();
       const act = x.dataset.act;
       if(act === 'reply') setReply(m);
+      else if(act === 'edit'){ setReply(null); editing = m.id; input.value = m.text; input.focus(); input.dispatchEvent(new Event('input')); stEl.textContent = '✏️ עורכים הודעה · Esc לביטול'; }
+      else if(act === 'pin'){
+        const unpin = cur.pinned && cur.pinned.id === m.id;
+        await saveDoc(() => setDoc(doc(db, 'chats', id), { pinned: unpin ? null : { id: m.id, snip: snipOf(m), by: me } }, { merge: true }), 'chatPin');
+      }
       else if(act === 'copy'){ try{ await navigator.clipboard.writeText(m.text); showToast('הועתק'); }catch(e){ showToast('לא הצלחנו להעתיק'); } }
       else if(act === 'fwd') forwardMsg(m);
       else if(act === 'del'){
@@ -8126,7 +8161,39 @@ async function renderChatRoom(role, otherId){
     }
     showToast(pick.ids.length > 1 ? 'ההודעה הועברה ל-' + pick.ids.length + ' שיחות' : 'ההודעה הועברה');
   };
+  // הודעה מוצמדת
+  const paintPin = () => {
+    const bar = document.getElementById('chatPinBar'); if(!bar) return;
+    const pn = cur.pinned; bar.hidden = !pn;
+    if(pn) document.getElementById('chatPinTxt').textContent = pn.snip || 'הודעה מוצמדת';
+  };
+  document.getElementById('chatPinTxt').onclick = () => { const pn = cur.pinned; if(!pn) return; const t = body.querySelector(`[data-row="${pn.id}"]`); if(t){ pinned = false; t.scrollIntoView({ block: 'center', behavior: 'smooth' }); t.classList.add('wa-flash'); setTimeout(() => t.classList.remove('wa-flash'), 1200); } else showToast('ההודעה כבר לא בשיחה'); };
+  document.getElementById('chatPinX').onclick = () => saveDoc(() => setDoc(doc(db, 'chats', id), { pinned: null }, { merge: true }), 'chatUnpin');
+  // חיפוש בשיחה
+  let hits = [], hitIdx = -1;
+  const sBar = document.getElementById('chatSearchBar'), sIn = document.getElementById('chatSearchIn'), sCnt = document.getElementById('chatSearchCnt');
+  const runSearch = () => {
+    body.querySelectorAll('.wa-hit, .wa-hit-cur').forEach(x => x.classList.remove('wa-hit', 'wa-hit-cur'));
+    const q = sIn.value.trim().toLowerCase(); hits = [];
+    if(q){ body.querySelectorAll('[data-row]').forEach(r => { const tx = (r.querySelector('.wa-text') || {}).textContent || ''; if(tx.toLowerCase().includes(q)){ r.classList.add('wa-hit'); hits.push(r); } }); }
+    hitIdx = hits.length - 1; sCnt.textContent = q ? (hits.length ? hits.length + ' תוצאות' : 'אין תוצאות') : ''; goHit(0);
+  };
+  const goHit = d => { if(!hits.length) return; hitIdx = (hitIdx + d + hits.length) % hits.length; hits.forEach(h => h.classList.remove('wa-hit-cur')); const h = hits[hitIdx]; h.classList.add('wa-hit-cur'); pinned = false; h.scrollIntoView({ block: 'center' }); sCnt.textContent = (hitIdx + 1) + ' / ' + hits.length; };
+  document.getElementById('chatSearchBtn').onclick = () => { sBar.hidden = !sBar.hidden; if(!sBar.hidden) sIn.focus(); else { sIn.value = ''; runSearch(); } };
+  document.getElementById('chatSearchX').onclick = () => { sBar.hidden = true; sIn.value = ''; runSearch(); };
+  sIn.addEventListener('input', runSearch);
+  sIn.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); goHit(e.shiftKey ? 1 : -1); } if(e.key === 'Escape') document.getElementById('chatSearchX').click(); });
+  document.getElementById('chatSearchUp').onclick = () => goHit(-1);
+  document.getElementById('chatSearchDown').onclick = () => goHit(1);
+  if(state._chatJumpTo){ const jt = state._chatJumpTo; state._chatJumpTo = null; setTimeout(() => { const t = body.querySelector(`[data-row="${jt}"]`); if(t){ pinned = false; t.scrollIntoView({ block: 'center' }); t.classList.add('wa-flash'); setTimeout(() => t.classList.remove('wa-flash'), 1500); } }, 700); }
+  let editing = null;
+  input.addEventListener('keydown', e => { if(e.key === 'Escape' && editing){ editing = null; input.value = ''; stEl.textContent = ''; } });
   const send = async extra => {
+    if(editing && extra.text !== undefined && !extra.fileId && !extra.files && !extra.audioId){
+      const eid = editing; editing = null; stEl.textContent = '';
+      const loc = (cur.msgs || []).find(x => x.id === eid); if(loc){ loc.text = extra.text; loc.edited = true; paint(); }
+      return saveMsgs(msgs => { const t = msgs.find(y => y.id === eid); if(!t || t.from !== me) return false; t.text = extra.text; t.edited = true; }, 'chatEdit');
+    }
     sigTyping(null);
     const m = Object.assign({ id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [] }, extra);
     if(replyTo){ m.reply = replyTo; setReply(null); }
@@ -8185,8 +8252,9 @@ async function renderChatRoom(role, otherId){
       const d = snap.exists() ? snap.data() : { msgs: [] };
       typing = d.typing || null;
       if(custom && Array.isArray(d.members)) members = d.members;
-      const sig = JSON.stringify([(d.cleared || {})[me] || '', (d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted, m.reactions || null])]);
-      if(sig !== paint.sig){ paint.sig = sig; cur = d; paint(); markSeen(); } else paintTyping();
+      const sig = JSON.stringify([(d.cleared || {})[me] || '', (d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted, m.reactions || null, m.edited ? m.text : 0])]);
+      if(sig !== paint.sig){ paint.sig = sig; cur = d; paint(); markSeen(); } else { cur = { ...cur, pinned: d.pinned }; paintTyping(); }
+      paintPin();
     }, () => {});
   }catch(e){ cur = (await loadChat(id)) || { msgs: [] }; paint(); markSeen(); }
   const tick = setInterval(() => { if(!document.getElementById('chatBody')){ clearInterval(tick); return; } paintTyping(); }, 1500);
