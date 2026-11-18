@@ -1016,7 +1016,7 @@ async function loadHours(empId){
   try{
     const snap = await withTimeout(getDoc(doc(db, 'hours', empId)), 30000, 'loadHours');
     return snap.exists() ? snap.data() : {};
-  }catch(e){ console.error('loadHours error', e); return null; }
+  }catch(e){ console.error('loadHours error', e); state._lastLoadErr = (e && (e.code || e.message)) || 'unknown'; return null; }
 }
 async function saveHours(empId, data){
   // החודש נעול? (רק המנהל יכול לשנות בחודש נעול) + רישום ביומן השינויים
@@ -5404,6 +5404,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         <div class="card" style="text-align:center;">
           <h3 style="color:var(--danger); margin-top:0;">שגיאה בטעינת הנתונים</h3>
           <p class="hint">לא הצלחנו לטעון את נתוני השעות שלך מהשרת (בעיית תקשורת זמנית). כדי להימנע מאובדן מידע, לא ממשיכים עד שהטעינה תצליח.</p>
+          <p class="hint mono" style="font-size:11.5px; opacity:.6; direction:ltr;">${escapeHtml(String(state._lastLoadErr || ''))} · ${auth === authEmp ? 'E' : 'A'}${auth.currentUser ? (auth.currentUser.email ? ':admin' : ':emp') : ':none'}</p>
           <button type="button" class="btn brass" id="retryLoadBtn">ניסיון נוסף</button>
         </div>
       `;
