@@ -745,6 +745,11 @@ a.wa-back{ text-decoration:none; }
 .wa-room .wa-compose, .wa-room .wa-replybar{ flex:0 0 auto; }
 @media (min-width:900px){ .wa-room .wa-room-chat{ padding:16px 8%; } .wa-full-body{ padding:10px 8%; } }
 body.wa-open{ overflow:hidden; }
+.wa-chat .wa-bubble{ padding:6px 9px 6px; }
+.wa-chat .wa-text{ display:inline; }
+.wa-chat .wa-time{ position:static; float:left; display:inline-flex; align-items:center; gap:3px; margin:7px 10px -3px 0; line-height:1; }
+.wa-chat .wa-bubble::after{ content:''; display:block; clear:both; }
+.wa-chat .wa-del{ z-index:1; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
