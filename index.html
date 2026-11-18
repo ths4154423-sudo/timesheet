@@ -7430,7 +7430,7 @@ async function renderAdminTasks(soft){
       : { id: uid(), text, date, done: false, ...extra });
     const r = await saveTasks(empId, fresh);
     if(r !== true){ showToast('שגיאה בשמירה: ' + r); return; }
-    showToast('המשימה נוספה'); renderAdminTasks();
+    showToast('המשימה נוספה'); pushNotify({ kind: 'task', empId, text }); renderAdminTasks();
   };
 }
 
@@ -8047,7 +8047,7 @@ async function renderChatHome(role){
   if(nb) nb.onclick = async () => {
     if(Notification.permission === 'denied'){ showToast('צריך לאפשר התראות בהגדרות האתר בדפדפן (סמל המנעול ליד הכתובת)'); return; }
     const r = await Notification.requestPermission();
-    if(r === 'granted'){ showToast('ההתראות הופעלו'); new Notification('דירתא – צ׳אט', { body: 'מעכשיו תקבלו כאן הודעה כשמגיעה הודעה חדשה', icon: 'logo.jpg' }); renderChatHome(role); }
+    if(r === 'granted'){ registerPush(); showToast('ההתראות הופעלו'); new Notification('דירתא – צ׳אט', { body: 'מעכשיו תקבלו כאן הודעה כשמגיעה הודעה חדשה', icon: 'logo.jpg' }); renderChatHome(role); }
   };
   document.getElementById('chatNewGroup').onclick = async () => {
     const pick = await chatPickMembers(contacts0.filter(c => !c.group), [], true);
@@ -8333,6 +8333,7 @@ async function renderChatRoom(role, otherId){
     const fresh = await loadChat(id); if(!fresh){ showToast('ההודעה לא נשלחה'); return; }
     const msgs = [...(fresh.msgs || []), m].slice(-CHAT_MAX);
     const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), custom ? { msgs } : { msgs, members }, { merge: true }), 'chatSend');
+    if(ok === true) pushNotify({ kind: 'chat', chatId: id, msgId: m.id });
     if(ok !== true) showToast('ההודעה לא נשלחה');
   };
   input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; if(input.value.trim()) sigTyping('typing'); });
@@ -8475,6 +8476,8 @@ function renderChatOnlyForm(id){
 async function startChatNotifier(role){
   const me = chatMe(role); if(!me) return;
   startCallListener(role);
+  registerPush();
+  { const lp = new URLSearchParams(location.search); if(lp.get('chat') || lp.get('tasks')){ const l = location.href; history.replaceState(null, '', location.pathname); setTimeout(() => openFromLink(l), 800); } }
   if(state._chatNotif && state._chatNotif.me === me) return;
   if(state._chatNotif){ state._chatNotif.unsubs.forEach(u => { try{ u(); }catch(e){} }); }
   const unsubs = []; state._chatNotif = { me, unsubs };
@@ -8625,6 +8628,7 @@ async function startCall(role, otherId, chatId, video){
   const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
   const ok = await saveDoc(() => setDoc(callRef, { from: me, to: otherId, chatId, status: 'ringing', video: !!video, offer: { type: offer.type, sdp: offer.sdp }, at: trueNow().getTime(), fromName: state._chatNames[me] || (me === 'mgr' ? 'המנהל' : '') }), 'callCreate');
   if(ok !== true){ showToast('לא הצלחנו להתקשר'); endCall(null); return; }
+  pushNotify({ kind: 'call', callId });
   activeCall.unsub = onSnapshot(callRef, async snap => {
     if(!activeCall || activeCall.id !== callId) return;
     const d = snap.data() || {};
@@ -8788,6 +8792,37 @@ function confirmPaste(files){
     ov.onclick = e => { if(e.target === ov) done(false); };
     setTimeout(() => ov.querySelector('#pasteOk').focus(), 30);
   });
+}
+
+// ================= התראות דחיפה – מגיעות גם כשהאתר סגור (Firebase Cloud Messaging) =================
+const FCM_VAPID = 'BP3NDh_ikQrKh_6OR1u0RBL45GSGzrpO8kJoW2bnQZul_y0xIfFxznVhhEplj2LHdLiLBxsBtAmLex6XrPgrOyU';
+async function registerPush(){
+  try{
+    if(!('Notification' in window) || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return false;
+    const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js');
+    if(!(await m.isSupported())) return false;
+    const reg = await navigator.serviceWorker.register('sw.js');
+    await navigator.serviceWorker.ready;
+    const token = await m.getToken(m.getMessaging(fbApp), { vapidKey: FCM_VAPID, serviceWorkerRegistration: reg });
+    if(!token) return false;
+    const key = 'pushTok:' + (state.isAdmin ? 'mgr' : (state.currentEmployee && state.currentEmployee.id));
+    let last = null; try{ last = localStorage.getItem(key); }catch(e){}
+    if(last === token) return true;
+    const r = await bridge('push-register', { idToken: await empIdToken(), token, ua: navigator.userAgent });
+    if(r && r.ok){ try{ localStorage.setItem(key, token); }catch(e){} return true; }
+    console.warn('push-register failed', r); return false;
+  }catch(e){ console.warn('push setup failed', e); return false; }
+}
+// שליחת התראה לנמענים דרך הגשר (לא מעכב את המשתמש, ושגיאה לא מפריעה)
+function pushNotify(payload){ empIdToken().then(t => bridge('push-notify', { idToken: t, ...payload })).catch(() => {}); }
+// לחיצה על התראה כשהאתר כבר פתוח: מעבר לשיחה / למשימות
+if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if(e.data && e.data.type === 'open-link') openFromLink(e.data.link); });
+function openFromLink(link){
+  try{
+    const u = new URL(link, location.href), chat = u.searchParams.get('chat'), role = state.isAdmin ? 'mgr' : 'emp';
+    if(chat){ const me = chatMe(role); const other = chat === 'team' || /^g_/.test(chat) ? chat : chat.split('__').find(x => x !== me); if(role === 'mgr'){ renderAdminDashboard('chat'); setTimeout(() => renderChatRoom('mgr', other), 400); } else if(state.currentEmployee) renderChatRoom('emp', other); }
+    else if(u.searchParams.get('tasks') && state.currentEmployee) renderEmployeeTasks(state.currentEmployee);
+  }catch(e){}
 }
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
