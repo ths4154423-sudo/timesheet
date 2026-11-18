@@ -662,6 +662,18 @@
 .wa-notif{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:12px 16px; font-size:14px; background:#E7F8F1; border-color:#BDE9D6; }
 .wa-notif-ok{ font-size:13px; color:#3B7A57; margin:0 4px 10px; }
 .linklike{ font:inherit; background:none; border:none; color:#00A884; text-decoration:underline; cursor:pointer; padding:0; }
+.call-ov{ position:fixed; inset:0; z-index:10001; background:linear-gradient(180deg,#0B141A,#1F2C34); display:flex; align-items:center; justify-content:center; color:#E9EDEF; }
+.call-box{ text-align:center; display:flex; flex-direction:column; align-items:center; gap:10px; }
+.call-avatar{ width:110px; height:110px; border-radius:50%; background:#2A3942; display:flex; align-items:center; justify-content:center; font-size:46px; font-weight:700; margin-bottom:8px; }
+.call-name{ font-size:24px; font-weight:600; }
+.call-status{ font-size:15px; color:#8696A0; min-height:20px; }
+.call-btns{ display:flex; gap:40px; margin-top:40px; }
+.call-btn{ width:64px; height:64px; border-radius:50%; border:none; font-size:26px; cursor:pointer; color:#fff; display:flex; align-items:center; justify-content:center; }
+.call-btn.hang{ background:#EA0038; transform:rotate(135deg); }
+.call-btn.answer{ background:#00A884; animation:callPulse 1.2s infinite; }
+.call-btn.mute{ background:#2A3942; }
+.call-btn.mute.on{ background:#E9EDEF; color:#111; }
+@keyframes callPulse{ 0%{ box-shadow:0 0 0 0 rgba(0,168,132,.6); } 100%{ box-shadow:0 0 0 22px rgba(0,168,132,0); } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7624,6 +7636,7 @@ async function renderChatRoom(role, otherId){
         <span class="wa-avatar${isGroup ? ' group' : ''}">${isGroup ? '👥' : escapeHtml(name.charAt(0) || '?')}</span>
         <span style="flex:1;"><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span>
         ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">👤＋</button>' : ''}
+        ${isGroup ? '' : '<button type="button" class="wa-back" id="chatCall" title="שיחה קולית" aria-label="שיחה קולית">📞</button>'}
         <button type="button" class="wa-back" id="chatClear" title="ניקוי הצ׳אט" aria-label="ניקוי הצ׳אט">🗑</button></div>
       <div class="wa-chat wa-room-chat" id="chatBody"></div>
       <div class="wa-compose">
@@ -7635,6 +7648,8 @@ async function renderChatRoom(role, otherId){
       </div>
     </div>`;
   document.getElementById('chatRoomBack').onclick = () => renderChatHome(role);
+  const callBtn = document.getElementById('chatCall');
+  if(callBtn) callBtn.onclick = () => startCall(role, otherId, id);
   document.getElementById('chatClear').onclick = async () => {
     if(!(await showConfirmModal('לנקות את כל ההודעות בשיחה הזו? הן יימחקו רק אצלך – השיחה ואיש הקשר נשארים, וגם הצד השני ממשיך לראות אותן.', { yes: 'ניקוי הצ׳אט', danger: true }))) return;
     const fresh = await loadChat(id); if(!fresh) return showToast('שגיאה בטעינה');
@@ -7799,6 +7814,7 @@ function renderChatOnlyForm(id){
 // התראה קופצת בשולחן העבודה על הודעה חדשה בצ'אט – כל עוד האתר פתוח בכרטיסייה כלשהי (גם ברקע)
 async function startChatNotifier(role){
   const me = chatMe(role); if(!me) return;
+  startCallListener(role);
   if(state._chatNotif && state._chatNotif.me === me) return;
   if(state._chatNotif){ state._chatNotif.unsubs.forEach(u => { try{ u(); }catch(e){} }); }
   const unsubs = []; state._chatNotif = { me, unsubs };
@@ -7863,6 +7879,146 @@ function flashTitle(who){
   titleFlashT = setInterval(() => { on = !on; document.title = on ? '💬 הודעה מ' + who : base; }, 1000);
   const stop = () => { clearInterval(titleFlashT); document.title = base; document.removeEventListener('visibilitychange', stop); };
   document.addEventListener('visibilitychange', stop);
+}
+
+// ================= שיחות קוליות בצ'אט (WebRTC, אחד על אחד) =================
+// calls/<id>: from, to, chatId, status (ringing / active / ended / declined / missed), offer, answer, cFrom/cTo (מועמדי ICE)
+const RTC_CFG = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] };
+let activeCall = null;
+function callOverlay(html){
+  let ov = document.getElementById('callOverlay');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'callOverlay'; ov.className = 'call-ov'; document.body.appendChild(ov); }
+  ov.innerHTML = html; return ov;
+}
+function closeCallOverlay(){ const ov = document.getElementById('callOverlay'); if(ov) ov.remove(); }
+let ringT = null;
+function ringStart(incoming){
+  ringStop();
+  const beep = () => { try{ const ctx = getAudioCtx(); [0, 0.25].forEach(dt => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = incoming ? 660 : 440; g.gain.setValueAtTime(0.0001, ctx.currentTime + dt); g.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + dt + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dt + 0.2); o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + dt); o.stop(ctx.currentTime + dt + 0.22); }); }catch(e){} };
+  beep(); ringT = setInterval(beep, incoming ? 1500 : 3000);
+}
+function ringStop(){ clearInterval(ringT); ringT = null; }
+function fmtDur(sec){ return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
+async function callLogToChat(chatId, from, text){
+  try{
+    const fresh = await loadChat(chatId); if(!fresh) return;
+    const m = { id: uid(), from, at: todayStr() + 'T' + nowTimeStr(), seenBy: [], text, call: true };
+    await setDoc(doc(db, 'chats', chatId), { msgs: [...(fresh.msgs || []), m].slice(-CHAT_MAX) }, { merge: true });
+  }catch(e){}
+}
+function callScreen(name, statusTxt, inCall){
+  callOverlay(`<div class="call-box">
+    <div class="call-avatar">${escapeHtml((name || '?').charAt(0))}</div>
+    <div class="call-name">${escapeHtml(name || '')}</div>
+    <div class="call-status" id="callStatus">${escapeHtml(statusTxt)}</div>
+    <div class="call-btns">
+      ${inCall ? '<button type="button" class="call-btn mute" id="callMute" title="השתקה">🎙</button>' : ''}
+      <button type="button" class="call-btn hang" id="callHang" title="ניתוק">📞</button>
+    </div>
+    <audio id="callAudio" autoplay playsinline></audio>
+  </div>`);
+  document.getElementById('callHang').onclick = () => endCall('ended');
+  const mb = document.getElementById('callMute');
+  if(mb) mb.onclick = () => { if(!activeCall || !activeCall.stream) return; const t = activeCall.stream.getAudioTracks()[0]; t.enabled = !t.enabled; mb.classList.toggle('on', !t.enabled); mb.textContent = t.enabled ? '🎙' : '🔇'; };
+}
+function wirePeer(pc, callRef, myField, otherField){
+  const sent = [];
+  pc.onicecandidate = e => { if(!e.candidate) return; sent.push(e.candidate.toJSON()); setDoc(callRef, { [myField]: sent.slice() }, { merge: true }).catch(() => {}); };
+  pc.ontrack = e => { const a = document.getElementById('callAudio'); if(a){ a.srcObject = e.streams[0]; a.play().catch(() => {}); } };
+  pc.onconnectionstatechange = () => {
+    if(!activeCall) return;
+    if(pc.connectionState === 'connected' && !activeCall.startedAt){
+      activeCall.startedAt = Date.now(); ringStop();
+      activeCall.timer = setInterval(() => { const el = document.getElementById('callStatus'); if(el && activeCall) el.textContent = fmtDur(Math.round((Date.now() - activeCall.startedAt) / 1000)); }, 1000);
+    }
+    if(pc.connectionState === 'failed'){ const el = document.getElementById('callStatus'); if(el) el.textContent = 'החיבור נכשל (ייתכן שהרשת חוסמת שיחות)'; setTimeout(() => endCall('ended'), 2500); }
+  };
+  const added = new Set();
+  return d => { (d[otherField] || []).forEach(c => { const k = JSON.stringify(c); if(added.has(k)) return; added.add(k); pc.addIceCandidate(c).catch(() => {}); }); };
+}
+async function startCall(role, otherId, chatId){
+  if(activeCall) return showToast('כבר יש שיחה פעילה');
+  if(!navigator.mediaDevices || !window.RTCPeerConnection) return showToast('הדפדפן הזה לא תומך בשיחות');
+  let stream;
+  try{ stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }catch(e){ return showToast('צריך לאשר גישה למיקרופון כדי להתקשר'); }
+  const me = chatMe(role), name = state._chatNames[otherId] || '';
+  const callId = 'c_' + uid() + uid(), callRef = doc(db, 'calls', callId);
+  const pc = new RTCPeerConnection(RTC_CFG);
+  stream.getTracks().forEach(t => pc.addTrack(t, stream));
+  activeCall = { id: callId, ref: callRef, pc, stream, role, chatId, me, other: otherId, outgoing: true };
+  callScreen(name, 'מחייג...', true); ringStart(false);
+  const applyCands = wirePeer(pc, callRef, 'cFrom', 'cTo');
+  const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+  const ok = await saveDoc(() => setDoc(callRef, { from: me, to: otherId, chatId, status: 'ringing', offer: { type: offer.type, sdp: offer.sdp }, at: trueNow().getTime(), fromName: state._chatNames[me] || (me === 'mgr' ? 'המנהל' : '') }), 'callCreate');
+  if(ok !== true){ showToast('לא הצלחנו להתקשר'); endCall(null); return; }
+  activeCall.unsub = onSnapshot(callRef, async snap => {
+    if(!activeCall || activeCall.id !== callId) return;
+    const d = snap.data() || {};
+    if(d.answer && !pc.currentRemoteDescription){ try{ await pc.setRemoteDescription(d.answer); }catch(e){} const el = document.getElementById('callStatus'); if(el && !activeCall.startedAt) el.textContent = 'מתחבר...'; }
+    applyCands(d);
+    if(d.status === 'declined'){ const el = document.getElementById('callStatus'); if(el) el.textContent = 'השיחה נדחתה'; callLogToChat(chatId, me, '📞 שיחה שלא נענתה'); setTimeout(() => endCall(null), 1500); }
+    if(d.status === 'ended') endCall(null);
+  });
+  activeCall.noAnswer = setTimeout(() => { if(activeCall && activeCall.id === callId && !activeCall.startedAt){ setDoc(callRef, { status: 'missed' }, { merge: true }).catch(() => {}); callLogToChat(chatId, me, '📞 שיחה שלא נענתה'); const el = document.getElementById('callStatus'); if(el) el.textContent = 'אין מענה'; setTimeout(() => endCall(null), 1500); } }, 45000);
+}
+async function endCall(newStatus){
+  const c = activeCall; if(!c) return; activeCall = null;
+  ringStop(); clearTimeout(c.noAnswer); clearInterval(c.timer);
+  if(c.unsub) try{ c.unsub(); }catch(e){}
+  try{ c.pc && c.pc.close(); }catch(e){}
+  if(c.stream) c.stream.getTracks().forEach(t => t.stop());
+  if(newStatus) setDoc(c.ref, { status: newStatus }, { merge: true }).catch(() => {});
+  if(c.startedAt && c.outgoing) callLogToChat(c.chatId, c.me, '📞 שיחה קולית · ' + fmtDur(Math.round((Date.now() - c.startedAt) / 1000)));
+  closeCallOverlay();
+}
+// האזנה לשיחות נכנסות – כל עוד האתר פתוח
+function startCallListener(role){
+  const me = chatMe(role); if(!me) return;
+  if(state._callListen && state._callListen.me === me) return;
+  if(state._callListen) try{ state._callListen.unsub(); }catch(e){}
+  let unsub = () => {};
+  try{
+    unsub = onSnapshot(query(collection(db, 'calls'), where('to', '==', me)), snap => {
+      (snap.docs || []).forEach(dd => {
+        const d = dd.data(), id = dd.id;
+        if(d.to !== me || d.status !== 'ringing' || trueNow().getTime() - (d.at || 0) > 50000) return;
+        if(activeCall){ if(activeCall.id !== id) setDoc(doc(db, 'calls', id), { status: 'declined' }, { merge: true }).catch(() => {}); return; }
+        if(state._ringingId === id) return;
+        incomingCall(role, id, d);
+      });
+    }, () => {});
+  }catch(e){}
+  state._callListen = { me, unsub };
+}
+function incomingCall(role, id, d){
+  state._ringingId = id;
+  const me = chatMe(role), name = state._chatNames && state._chatNames[d.from] || d.fromName || 'שיחה נכנסת';
+  const callRef = doc(db, 'calls', id);
+  callOverlay(`<div class="call-box">
+    <div class="call-avatar">${escapeHtml(name.charAt(0))}</div>
+    <div class="call-name">${escapeHtml(name)}</div>
+    <div class="call-status" id="callStatus">שיחה קולית נכנסת...</div>
+    <div class="call-btns"><button type="button" class="call-btn hang" id="callDecline" title="דחייה">📞</button><button type="button" class="call-btn answer" id="callAnswer" title="מענה">📞</button></div>
+    <audio id="callAudio" autoplay playsinline></audio></div>`);
+  ringStart(true);
+  showDesktopNote('📞 ' + name + ' מתקשר אליך', 'לחצו כדי לענות באתר', null);
+  const stopWatch = onSnapshot(callRef, snap => { const x = snap.data() || {}; if(x.status !== 'ringing' && !activeCall){ ringStop(); closeCallOverlay(); state._ringingId = null; stopWatch(); } });
+  document.getElementById('callDecline').onclick = () => { ringStop(); stopWatch(); state._ringingId = null; setDoc(callRef, { status: 'declined' }, { merge: true }).catch(() => {}); closeCallOverlay(); };
+  document.getElementById('callAnswer').onclick = async () => {
+    ringStop(); stopWatch();
+    let stream;
+    try{ stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }catch(e){ showToast('צריך לאשר גישה למיקרופון כדי לענות'); setDoc(callRef, { status: 'declined' }, { merge: true }).catch(() => {}); closeCallOverlay(); return; }
+    const pc = new RTCPeerConnection(RTC_CFG);
+    stream.getTracks().forEach(t => pc.addTrack(t, stream));
+    activeCall = { id, ref: callRef, pc, stream, role, chatId: d.chatId, me, other: d.from, outgoing: false };
+    callScreen(name, 'מתחבר...', true);
+    const applyCands = wirePeer(pc, callRef, 'cTo', 'cFrom');
+    await pc.setRemoteDescription(d.offer);
+    const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
+    await setDoc(callRef, { answer: { type: ans.type, sdp: ans.sdp }, status: 'active' }, { merge: true });
+    activeCall.unsub = onSnapshot(callRef, snap => { if(!activeCall || activeCall.id !== id) return; const x = snap.data() || {}; applyCands(x); if(x.status === 'ended') endCall(null); });
+    state._ringingId = null;
+  };
 }
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
