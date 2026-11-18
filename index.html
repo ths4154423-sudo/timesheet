@@ -802,6 +802,14 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .paste-prev{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-height:55vh; overflow:auto; margin-bottom:12px; }
 .paste-prev img{ max-width:100%; max-height:50vh; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,.15); }
 .paste-file{ padding:10px 14px; background:#F0F2F5; border-radius:8px; }
+.wa-tray{ display:flex; align-items:center; gap:8px; padding:8px 12px 4px; background:#F0F2F5; overflow-x:auto; flex:0 0 auto; }
+.wa-tray[hidden]{ display:none; }
+.wa-tray-item{ position:relative; flex:0 0 auto; }
+.wa-tray-item img, .wa-tray-file{ width:64px; height:64px; object-fit:cover; border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#fff; font-size:22px; box-shadow:0 1px 3px rgba(0,0,0,.15); }
+.wa-tray-file small{ font-size:9.5px; max-width:60px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wa-tray-item button{ position:absolute; top:-6px; left:-6px; width:20px; height:20px; border-radius:50%; border:none; background:#54656F; color:#fff; font-size:11px; cursor:pointer; line-height:20px; padding:0; }
+.wa-tray-hint{ font-size:12px; white-space:nowrap; }
+.wa-chat.wa-drop{ outline:3px dashed #00A884; outline-offset:-10px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8096,6 +8104,7 @@ async function renderChatRoom(role, otherId){
       <div class="wa-searchbar" id="chatSearchBar" hidden><input type="search" id="chatSearchIn" placeholder="חיפוש בשיחה..." /><span id="chatSearchCnt" class="hint"></span><button type="button" class="wa-back" id="chatSearchUp" aria-label="הקודמת">▲</button><button type="button" class="wa-back" id="chatSearchDown" aria-label="הבאה">▼</button><button type="button" class="wa-back" id="chatSearchX" aria-label="סגירה">✕</button></div>
       <div class="wa-pinbar" id="chatPinBar" hidden><span>📌</span><span class="wa-pin-txt" id="chatPinTxt"></span><button type="button" class="wa-back" id="chatPinX" title="ביטול ההצמדה" aria-label="ביטול ההצמדה">✕</button></div>
       <div class="wa-chat wa-room-chat" id="chatBody"></div>
+      <div class="wa-tray" id="chatTray" hidden></div>
       <div class="wa-replybar" id="chatReplyBar" hidden><div class="wa-quote"><b id="chatReplyWho"></b><span id="chatReplySnip"></span></div><button type="button" class="wa-back" id="chatReplyX" aria-label="ביטול">✕</button></div>
       <div class="wa-compose">
         <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
@@ -8302,17 +8311,37 @@ async function renderChatRoom(role, otherId){
   };
   input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; if(input.value.trim()) sigTyping('typing'); });
   input.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); document.getElementById('chatSend').click(); } });
-  document.getElementById('chatSend').onclick = () => { const t = input.value.trim(); if(!t) return input.focus(); input.value = ''; input.style.height = ''; input.focus(); send({ text: t }); };
+  // קבצים שממתינים לשליחה (נבחרו או הודבקו): מוצגים מעל שדה הכתיבה, ונשלחים רק בלחיצה על Enter או על כפתור השליחה
+  let pending = [];
+  const tray = document.getElementById('chatTray');
+  const paintTray = () => {
+    tray.hidden = !pending.length;
+    tray.innerHTML = pending.map((f, i) => `<div class="wa-tray-item">${/^image\//.test(f.type) ? `<img src="${f._url}" alt="" />` : `<span class="wa-tray-file">📄<small>${escapeHtml(f.name.slice(0, 18))}</small></span>`}<button type="button" data-tray-x="${i}" aria-label="הסרה">✕</button></div>`).join('')
+      + (pending.length ? `<span class="hint wa-tray-hint">Enter לשליחה${pending.length > 1 ? ' · ' + pending.length + ' קבצים' : ''}</span>` : '');
+    tray.querySelectorAll('[data-tray-x]').forEach(b => b.onclick = () => { const f = pending.splice(+b.dataset.trayX, 1)[0]; if(f && f._url) URL.revokeObjectURL(f._url); paintTray(); input.focus(); });
+  };
+  const addPending = files => {
+    files.slice(0, 10 - pending.length).forEach(f => { if(/^image\//.test(f.type)) f._url = URL.createObjectURL(f); pending.push(f); });
+    if(files.length + pending.length > 10) showToast('אפשר עד 10 קבצים בהודעה אחת');
+    paintTray(); input.focus();
+  };
+  document.getElementById('chatSend').onclick = () => {
+    if(pending.length){ const files = pending; pending = []; paintTray(); files.forEach(f => f._url && setTimeout(() => URL.revokeObjectURL(f._url), 5000)); sendFiles(files); input.focus(); return; }
+    const t = input.value.trim(); if(!t) return input.focus(); input.value = ''; input.style.height = ''; input.focus(); send({ text: t });
+  };
   // כמה קבצים ביחד (עד 10) נשלחים בהודעה אחת, כמו אלבום בוואטסאפ. טקסט שבשדה נשלח ככיתוב
-  document.getElementById('chatFile').onchange = e => { const picked = [...(e.target.files || [])]; e.target.value = ''; sendFiles(picked); };
+  document.getElementById('chatFile').onchange = e => { const picked = [...(e.target.files || [])]; e.target.value = ''; addPending(picked); };
+  // גרירת קבצים לתוך השיחה
+  body.addEventListener('dragover', e => { if(e.dataTransfer && [...e.dataTransfer.types].includes('Files')){ e.preventDefault(); body.classList.add('wa-drop'); } });
+  body.addEventListener('dragleave', () => body.classList.remove('wa-drop'));
+  body.addEventListener('drop', e => { e.preventDefault(); body.classList.remove('wa-drop'); const fs = [...((e.dataTransfer && e.dataTransfer.files) || [])]; if(fs.length) addPending(fs); });
   // הדבקה (Ctrl+V, או בחירה מהיסטוריית הלוח ב-Win+V): תמונה או קובץ שבלוח נשלחים מיד, והטקסט שבשדה הופך לכיתוב
   input.addEventListener('paste', async e => {
     const files = [...((e.clipboardData && e.clipboardData.items) || [])].filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean);
     if(!files.length) return;
     e.preventDefault();
     const named = files.map((f, i) => f.name && f.name !== 'image.png' ? f : new File([f], 'צילום מסך ' + nowTimeStr().slice(0, 5).replace(':', '-') + (files.length > 1 ? '-' + (i + 1) : '') + '.png', { type: f.type || 'image/png' }));
-    const ok = await confirmPaste(named);
-    if(ok) sendFiles(named);
+    addPending(named);
   });
   const sendFiles = async picked0 => {
     const picked = (picked0 || []).slice(0, 10); if(!picked.length) return;
