@@ -606,7 +606,7 @@
 .wa-compose[hidden]{ display:none; }
 .wa-compose textarea{ flex:1 1 160px; border:none !important; background:#fff !important; border-radius:18px; padding:8px 12px; font:inherit; font-size:14.5px; resize:none; outline:none; min-height:20px; max-height:110px; box-shadow:none !important; }
 .wa-btn{ width:38px; height:38px; flex:0 0 38px; border-radius:50%; border:none; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
-.wa-btn.send{ background:#00A884; color:#fff; transform:scaleX(-1); }
+.wa-btn.send{ background:#00A884; color:#fff; }
 .wa-btn.mic{ background:#fff; color:#54656F; }
 .wa-btn.mic.rec{ background:#EA4335; color:#fff; }
 .wa-status{ flex-basis:100%; font-size:12.5px; padding:0 8px; }
@@ -676,7 +676,8 @@
 @keyframes callPulse{ 0%{ box-shadow:0 0 0 0 rgba(0,168,132,.6); } 100%{ box-shadow:0 0 0 22px rgba(0,168,132,0); } }
 .logout-link{ display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:14px; font-weight:500; color:var(--ink, #243B53); background:none; border:none; padding:6px 4px; cursor:pointer; opacity:.85; }
 .logout-link:hover{ opacity:1; color:#C0392B; }
-.logout-link svg{ transform:scaleX(-1); }
+#headerActions{ display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:6px; }
+#headerActions .logout-link{ flex-basis:100%; justify-content:flex-end; margin-top:2px; }
 .call-remote{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; display:none; }
 .call-ov.has-video .call-remote{ display:block; }
 .call-local{ position:absolute; top:16px; left:16px; width:140px; height:105px; object-fit:cover; border-radius:10px; z-index:2; background:#222; transform:scaleX(-1); box-shadow:0 4px 16px rgba(0,0,0,.4); }
@@ -686,6 +687,29 @@
 .call-ov.has-video .call-status{ color:#fff; text-shadow:0 1px 4px #000; }
 .wa-notice{ font-size:13px; color:#54656F; background:#FFF8E1; border:1px solid #F3E2A9; border-radius:10px; padding:8px 12px; margin-bottom:10px; }
 .wa-mon-title{ font-size:13px; font-weight:700; color:#54656F; padding:10px 16px 6px; }
+.wa-btn svg, .wa-back svg, .wa-avatar svg{ display:block; }
+.wa-btn.attach, .wa-btn.mic{ color:#54656F; }
+.wa-back{ display:flex; align-items:center; justify-content:center; width:38px; height:38px; border-radius:50%; color:#54656F; }
+.wa-back:hover{ background:rgba(0,0,0,.06); }
+#chatRoomBack svg, #monBack svg{ transform:none; }
+.wa-avatar.group{ color:#fff; background:#7FB8A4; }
+.wa-newgroup .wa-avatar{ background:#00A884; color:#fff; }
+.wa-ticks svg{ display:inline-block; vertical-align:-1px; }
+.wa-ticks{ letter-spacing:0 !important; }
+.wa-row{ position:relative; align-items:center; gap:4px; flex-wrap:wrap; }
+.wa-row.out{ flex-direction:row; }
+.wa-rx-btn{ order:-1; border:none; background:rgba(255,255,255,.9); color:#54656F; width:28px; height:28px; border-radius:50%; cursor:pointer; opacity:0; transition:opacity .12s; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+.wa-row.in .wa-rx-btn{ order:2; }
+.wa-row:hover .wa-rx-btn{ opacity:1; }
+@media (hover:none){ .wa-rx-btn{ opacity:.7; } }
+.wa-rx-pop{ position:fixed; z-index:10002; display:flex; gap:2px; background:#fff; border-radius:24px; padding:4px 6px; box-shadow:0 4px 18px rgba(0,0,0,.18); }
+.wa-rx-pop button{ border:none; background:none; font-size:22px; cursor:pointer; width:38px; height:38px; border-radius:50%; transition:transform .1s; }
+.wa-rx-pop button:hover{ transform:scale(1.25); background:#F0F2F5; }
+.wa-rx-show{ flex-basis:100%; display:flex; gap:3px; margin-top:-6px; }
+.wa-row.out .wa-rx-show{ justify-content:flex-end; padding-left:10px; } .wa-row.in .wa-rx-show{ justify-content:flex-start; padding-right:10px; }
+.wa-rx-show span{ background:#fff; border-radius:12px; padding:1px 6px; font-size:13px; box-shadow:0 1px 2px rgba(0,0,0,.15); position:relative; z-index:1; }
+.wa-rx-show span.mine{ background:#E7F8F1; }
+.call-btn svg{ width:28px; height:28px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -3340,7 +3364,7 @@ function renderAdminDashboard(tab){
   if(shabbatGuard()) return;
   if(!canSeeTab(tab)) tab = 'dashboard';
   resetTheme();
-  setHeader('פאנל ניהול', '<button class="logout-link" id="logoutBtn" title="התנתקות"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>התנתקות</button>');
+  setHeader('פאנל ניהול', '<button class="logout-link" id="logoutBtn" title="התנתקות"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><polyline points="8 7 3 12 8 17"/><line x1="3" y1="12" x2="15" y2="12"/></svg>התנתקות</button>');
   document.body.classList.add('admin-mode');
   const kpi = (id, icon, label) => `<div class="kpi loading" id="kpi_${id}"><div class="k-label">${adminIcon(icon)} ${label}</div><div class="k-value">—</div><div class="k-sub"></div></div>`;
   app.innerHTML = `
@@ -5424,7 +5448,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   state.currentEmployee = emp;
   const empSettings = await getEmpSettings(emp.id);
   applyEmployeeTheme(empSettings);
-  setHeader('שלום, ' + emp.name, (empSettings.hideMirror ? '' : '<span class="mirror-grp" style="display:inline-flex; gap:2px;"><button class="btn ghost small" id="mirrorBtn" title="מראה">🪞 מראה</button><button class="btn ghost small" id="hideMirrorBtn" title="הסתרת המראה" style="padding-inline:8px;">✕</button></span> ') + '<button class="btn ghost small" id="chatBtn">💬 צ׳אט<span id="chatBadge" class="tasks-badge"></span></button> <button class="btn ghost small" id="tasksBtn">✔ משימות<span id="tasksBadge" class="tasks-badge"></span></button> <button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="logout-link" id="logoutBtn" title="התנתקות"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>התנתקות</button>');
+  setHeader('שלום, ' + emp.name, (empSettings.hideMirror ? '' : '<span class="mirror-grp" style="display:inline-flex; gap:2px;"><button class="btn ghost small" id="mirrorBtn" title="מראה">🪞 מראה</button><button class="btn ghost small" id="hideMirrorBtn" title="הסתרת המראה" style="padding-inline:8px;">✕</button></span> ') + '<button class="btn ghost small" id="chatBtn">💬 צ׳אט<span id="chatBadge" class="tasks-badge"></span></button> <button class="btn ghost small" id="tasksBtn">✔ משימות<span id="tasksBadge" class="tasks-badge"></span></button> <button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="logout-link" id="logoutBtn" title="התנתקות"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><polyline points="8 7 3 12 8 17"/><line x1="3" y1="12" x2="15" y2="12"/></svg>התנתקות</button>');
   setTimeout(() => maybeBirthdayGreeting(emp), 600);
   const month = state._empMonth || currentMonthStr();
 
@@ -7496,6 +7520,7 @@ async function playTaskAudio(btn){
   taskAudioEl.play().catch(() => { btn.textContent = idle; showToast('לא הצלחנו להשמיע'); });
 }
 
+const WAI = {attach:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>',send:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.6 20.4 3 12l17.6-8.4V10L8 12l12.6 2z"/></svg>',mic:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V5a3.5 3.5 0 1 0-7 0v6a3.5 3.5 0 0 0 3.5 3.5zm6.3-3.6a.9.9 0 0 0-1.8 0 4.5 4.5 0 0 1-9 0 .9.9 0 0 0-1.8 0 6.3 6.3 0 0 0 5.4 6.2V20H9a.9.9 0 0 0 0 1.8h6a.9.9 0 0 0 0-1.8h-2.1v-2.9a6.3 6.3 0 0 0 5.4-6.2z"/></svg>',stop:'<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',phone:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19.4 15.6l-2.6-.3a2 2 0 0 0-1.7.6l-1.9 1.9a15.1 15.1 0 0 1-6.6-6.6l1.9-1.9a2 2 0 0 0 .6-1.7l-.3-2.6A2 2 0 0 0 6.8 3.2H5A2 2 0 0 0 3 5.3 17.9 17.9 0 0 0 18.7 21a2 2 0 0 0 2.1-2v-1.7a2 2 0 0 0-1.4-1.7z"/></svg>',video:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M15.5 8.6V7a2 2 0 0 0-2-2h-9a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1.6l4.3 3a.8.8 0 0 0 1.2-.7V6.3a.8.8 0 0 0-1.2-.7z"/></svg>',trash:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',adduser:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>',back:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 4l-1.4 1.4 5.6 5.6H4v2h12.2l-5.6 5.6L12 20l8-8z"/></svg>',group:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1a4.2 4.2 0 0 1 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>',newgroup:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4z"/></svg>',chev:'<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.4 9.3 12 13.9l4.6-4.6L18 10.7l-6 6-6-6z"/></svg>',smile:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/></svg>',eye:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 5C7 5 2.7 8.1 1 12.5 2.7 16.9 7 20 12 20s9.3-3.1 11-7.5C21.3 8.1 17 5 12 5zm0 12.5a5 5 0 1 1 5-5 5 5 0 0 1-5 5zm0-8a3 3 0 1 0 3 3 3 3 0 0 0-3-3z"/></svg>',ticks:'<svg viewBox="0 0 18 12" width="16" height="11" fill="currentColor"><path d="M17.4.6a.7.7 0 0 0-1 0L9.6 7.4 8.6 6.4l-1 1 1.5 1.5a.7.7 0 0 0 1 0L17.4 1.6a.7.7 0 0 0 0-1zM12.6.6a.7.7 0 0 0-1 0L4.8 7.4 1.6 4.2a.7.7 0 0 0-1 1l3.7 3.7a.7.7 0 0 0 1 0L12.6 1.6a.7.7 0 0 0 0-1z"/></svg>'};
 // ================= צ'אט צוות: שיחה אישית בין כל שניים, וקבוצה "כל הצוות" =================
 // chats/<id>: id של שיחה אישית = שני המזהים ממוינים ומחוברים ב-"__"; הקבוצה = "team"; המנהל = "mgr"
 const CHAT_MAX = 300;
@@ -7550,7 +7575,7 @@ async function renderChatHome(role){
   const target = role === 'mgr' ? document.getElementById('tabContent') : app;
   if(role !== 'mgr'){ stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog();
     const co = state.currentEmployee && state.currentEmployee.chatOnly;
-    setHeader(co ? 'שלום, ' + state.currentEmployee.name : 'צ׳אט', co ? '<button class="logout-link" id="chatBackBtn" title="התנתקות"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>התנתקות</button>' : '<button class="btn ghost small" id="chatBackBtn">חזרה</button>');
+    setHeader(co ? 'שלום, ' + state.currentEmployee.name : 'צ׳אט', co ? '<button class="logout-link" id="chatBackBtn" title="התנתקות"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><polyline points="8 7 3 12 8 17"/><line x1="3" y1="12" x2="15" y2="12"/></svg>התנתקות</button>' : '<button class="btn ghost small" id="chatBackBtn">חזרה</button>');
     document.getElementById('chatBackBtn').onclick = co
       ? () => { state.currentEmployee = null; clearSession(); signOut(auth).catch(() => {}); renderLanding(); }
       : () => renderEmployeeDashboard(state.currentEmployee); }
@@ -7568,10 +7593,10 @@ async function renderChatHome(role){
     ${!('Notification' in window) ? '' : Notification.permission !== 'granted' ? `<div class="card wa-notif"><span>🔔 רוצים הודעה קופצת בשולחן העבודה כשמגיעה הודעה?</span><button type="button" class="btn brass small" id="chatNotifOn">${Notification.permission === 'denied' ? 'ההתראות חסומות בדפדפן' : 'הפעלת התראות'}</button></div>` : `<div class="wa-notif-ok">🔔 ההתראות פעילות · <button type="button" class="linklike" id="chatNotifTest">שליחת התראת ניסיון</button></div>`}
     ${role === 'mgr' ? '' : '<div class="wa-notice">💼 הצ׳אט הוא כלי עבודה. השיחות והקבוצות גלויות גם למנהל.</div>'}
     <div class="card wa-list">
-      <button type="button" class="wa-contact wa-newgroup" id="chatNewGroup"><span class="wa-avatar group">＋</span><span class="wa-c-main"><b>קבוצה חדשה</b><span class="wa-c-prev">בוחרים משתתפים ונותנים שם</span></span></button>
+      <button type="button" class="wa-contact wa-newgroup" id="chatNewGroup"><span class="wa-avatar group">${WAI.newgroup}</span><span class="wa-c-main"><b>קבוצה חדשה</b><span class="wa-c-prev">בוחרים משתתפים ונותנים שם</span></span></button>
       ${rows.map(r => `
         <button type="button" class="wa-contact" data-chat-open="${r.c.id}">
-          <span class="wa-avatar${r.c.group ? ' group' : ''}">${r.c.group ? '👥' : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
+          <span class="wa-avatar${r.c.group ? ' group' : ''}">${r.c.group ? WAI.group : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
           <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(r.c.name)}</b><span class="wa-c-time">${r.last ? chatTime(r.last.at) : ''}</span></span>
             <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml(r.prev)}</span>${r.un ? `<span class="wa-c-unread">${r.un}</span>` : ''}</span></span>
         </button>`).join('')}
@@ -7626,14 +7651,18 @@ function chatBubblesHtml(ch, me, isGroup, members){
     const seenAll = others.length && others.every(x => (m.seenBy || []).includes(x));
     if(m.deleted) return `<div class="wa-row ${mine ? 'out' : 'in'}"><div class="wa-bubble wa-deleted">🚫 ${mine ? 'מחקת את ההודעה' : 'ההודעה נמחקה'}<span class="wa-time">${chatTime(m.at)}</span></div></div>`;
     const canDel = mine || me === 'mgr';
+    const rx = m.reactions || {}, counts = {};
+    Object.values(rx).forEach(e => { counts[e] = (counts[e] || 0) + 1; });
+    const reactHtml = (Object.keys(counts).length ? `<div class="wa-rx-show">${Object.entries(counts).map(([e, n]) => `<span${rx[me] === e ? ' class="mine"' : ''}>${e}${n > 1 ? ' ' + n : ''}</span>`).join('')}</div>` : '')
+      + (me === '__viewer__' ? '' : `<button type="button" class="wa-rx-btn" data-react-open="${m.id}" title="תגובה" aria-label="תגובה">${WAI.smile}</button>`);
     return `<div class="wa-row ${mine ? 'out' : 'in'}"><div class="wa-bubble">
-      ${canDel ? `<button type="button" class="wa-del" data-msg-del="${m.id}" title="מחיקת ההודעה" aria-label="מחיקת ההודעה">⌄</button>` : ''}
+      ${canDel ? `<button type="button" class="wa-del" data-msg-del="${m.id}" title="מחיקת ההודעה" aria-label="מחיקת ההודעה">${WAI.chev}</button>` : ''}
       ${!mine && isGroup ? `<div class="wa-name">${escapeHtml(state._chatNames[m.from] || '')}</div>` : ''}
       ${m.fileId ? (/^image\//.test(m.fileType || '') ? `<img class="wa-img" data-file-img="${m.fileId}" alt="" />` : `<button type="button" class="wa-file" data-file-open="${m.fileId}" data-file-name="${escapeHtml(m.fileName || 'קובץ')}">📄 ${escapeHtml(m.fileName || 'קובץ')}</button>`) : ''}
       ${m.audioId ? `<button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button>` : ''}
       ${m.text ? `<div class="wa-text">${escapeHtml(m.text)}</div>` : ''}
-      <span class="wa-time">${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">✓✓</span>` : ''}</span>
-    </div></div>`;
+      <span class="wa-time">${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
+    </div>${reactHtml}</div>`;
   }).join('');
 }
 async function renderChatRoom(role, otherId){
@@ -7647,18 +7676,18 @@ async function renderChatRoom(role, otherId){
   let members = custom ? ((g && g.members) || [me]) : otherId === 'team' ? Object.keys(state._chatNames) : [me, otherId];
   target.innerHTML = `
     <div class="card wa-room">
-      <div class="wa-room-head"><button type="button" class="wa-back" id="chatRoomBack" aria-label="חזרה">→</button>
-        <span class="wa-avatar${isGroup ? ' group' : ''}">${isGroup ? '👥' : escapeHtml(name.charAt(0) || '?')}</span>
+      <div class="wa-room-head"><button type="button" class="wa-back" id="chatRoomBack" aria-label="חזרה">${WAI.back}</button>
+        <span class="wa-avatar${isGroup ? ' group' : ''}">${isGroup ? WAI.group : escapeHtml(name.charAt(0) || '?')}</span>
         <span style="flex:1;"><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span>
-        ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">👤＋</button>' : ''}
-        ${isGroup ? '' : '<button type="button" class="wa-back" id="chatVideo" title="שיחת וידאו" aria-label="שיחת וידאו">🎥</button><button type="button" class="wa-back" id="chatCall" title="שיחה קולית" aria-label="שיחה קולית">📞</button>'}
-        <button type="button" class="wa-back" id="chatClear" title="ניקוי הצ׳אט" aria-label="ניקוי הצ׳אט">🗑</button></div>
+        ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">' + WAI.adduser + '</button>' : ''}
+        ${isGroup ? '' : '<button type="button" class="wa-back" id="chatVideo" title="שיחת וידאו" aria-label="שיחת וידאו">' + WAI.video + '</button><button type="button" class="wa-back" id="chatCall" title="שיחה קולית" aria-label="שיחה קולית">' + WAI.phone + '</button>'}
+        <button type="button" class="wa-back" id="chatClear" title="ניקוי הצ׳אט" aria-label="ניקוי הצ׳אט">${WAI.trash}</button></div>
       <div class="wa-chat wa-room-chat" id="chatBody"></div>
       <div class="wa-compose">
         <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
-        <label class="wa-btn attach" title="צירוף קובץ">📎<input type="file" id="chatFile" hidden /></label>
-        <button type="button" class="wa-btn send" id="chatSend" title="שליחה">➤</button>
-        <button type="button" class="wa-btn mic" id="chatMic" title="הקלטה">🎙</button>
+        <label class="wa-btn attach" title="צירוף קובץ">${WAI.attach}<input type="file" id="chatFile" hidden /></label>
+        <button type="button" class="wa-btn send" id="chatSend" title="שליחה">${WAI.send}</button>
+        <button type="button" class="wa-btn mic" id="chatMic" title="הקלטה">${WAI.mic}</button>
         <span class="hint wa-status" id="chatStatus"></span>
       </div>
     </div>`;
@@ -7694,6 +7723,27 @@ async function renderChatRoom(role, otherId){
     body.innerHTML = chatBubblesHtml(cur, me, isGroup, members) + `<div class="wa-row in wa-typing" id="chatTyping" hidden><div class="wa-bubble"><span class="wa-dots"><i></i><i></i><i></i></span> <span class="wa-typing-txt"></span></div></div>`;
     body.querySelectorAll('[data-file-img]').forEach(async img => { const f = await loadTaskFile(img.dataset.fileImg); if(f){ img.src = f.data; img.onclick = () => openLightbox(f.data, f.name); } });
     body.querySelectorAll('[data-file-open]').forEach(b => b.onclick = async () => { const f = await loadTaskFile(b.dataset.fileOpen); if(!f) return showToast('לא הצלחנו לטעון את הקובץ'); const a = document.createElement('a'); a.href = f.data; a.download = b.dataset.fileName || 'file'; document.body.appendChild(a); a.click(); a.remove(); });
+    body.querySelectorAll('[data-react-open]').forEach(b => b.onclick = ev => {
+      ev.stopPropagation();
+      document.querySelectorAll('.wa-rx-pop').forEach(x => x.remove());
+      const pop = document.createElement('div'); pop.className = 'wa-rx-pop';
+      pop.innerHTML = ['👍', '❤️', '😂', '😮', '🙏', '👏'].map(e => `<button type="button" data-rx="${e}">${e}</button>`).join('');
+      document.body.appendChild(pop);
+      const r0 = b.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+      pop.style.top = (r0.top - ph - 6 < 8 ? r0.bottom + 6 : r0.top - ph - 6) + 'px';
+      pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r0.left + r0.width / 2 - pw / 2)) + 'px';
+      const close = e => { if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('click', close); } };
+      setTimeout(() => document.addEventListener('click', close), 0);
+      pop.querySelectorAll('[data-rx]').forEach(x => x.onclick = async e2 => {
+        e2.stopPropagation(); pop.remove();
+        const fresh = await loadChat(id); if(!fresh) return;
+        const m = (fresh.msgs || []).find(y => y.id === b.dataset.reactOpen); if(!m) return;
+        const r = { ...(m.reactions || {}) };
+        if(r[me] === x.dataset.rx) delete r[me]; else r[me] = x.dataset.rx;
+        m.reactions = r;
+        await saveDoc(() => setDoc(doc(db, 'chats', id), { msgs: fresh.msgs }, { merge: true }), 'chatReact');
+      });
+    });
     body.querySelectorAll('[data-msg-del]').forEach(b => b.onclick = async ev => {
       ev.stopPropagation();
       if(!(await showConfirmModal('למחוק את ההודעה? היא תימחק אצל כולם.', { yes: 'מחיקה', danger: true }))) return;
@@ -7756,14 +7806,14 @@ async function renderChatRoom(role, otherId){
       let secs = 0; const tm = setInterval(() => { secs++; stEl.textContent = 'מקליט... ' + secs + ' שניות · לחצו ⏹ לשליחה'; sigTyping('recording'); if(secs >= 120) rec.stop(); }, 1000);
       rec.ondataavailable = ev => { if(ev.data.size) chunks.push(ev.data); };
       rec.onstop = async () => {
-        clearInterval(tm); stream.getTracks().forEach(t => t.stop()); mic.textContent = '🎙'; mic.classList.remove('rec'); stEl.textContent = 'שומר...';
+        clearInterval(tm); stream.getTracks().forEach(t => t.stop()); mic.innerHTML = WAI.mic; mic.classList.remove('rec'); stEl.textContent = 'שומר...';
         const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
         const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
         const audioId = uid() + uid();
         const ok = await saveVoiceMessage(audioId, dataUrl);
         stEl.textContent = ok === true ? '' : 'שגיאה בשמירת ההקלטה'; if(ok === true) send({ audioId });
       };
-      rec.start(); mic.textContent = '⏹'; mic.classList.add('rec'); sigTyping('recording');
+      rec.start(); mic.innerHTML = WAI.stop; mic.classList.add('rec'); sigTyping('recording');
     }catch(err){ stEl.textContent = 'אין גישה למיקרופון. יש לאשר הרשאה בדפדפן.'; }
   };
   let unsub = () => {};
@@ -7773,7 +7823,7 @@ async function renderChatRoom(role, otherId){
       const d = snap.exists() ? snap.data() : { msgs: [] };
       typing = d.typing || null;
       if(custom && Array.isArray(d.members)) members = d.members;
-      const sig = JSON.stringify([(d.cleared || {})[me] || '', (d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted])]);
+      const sig = JSON.stringify([(d.cleared || {})[me] || '', (d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted, m.reactions || null])]);
       if(sig !== paint.sig){ paint.sig = sig; cur = d; paint(); markSeen(); } else paintTyping();
     }, () => {});
   }catch(e){ cur = (await loadChat(id)) || { msgs: [] }; paint(); markSeen(); }
@@ -7929,9 +7979,9 @@ function callScreen(name, statusTxt, inCall, video, localStream){
     <div class="call-name">${escapeHtml(name || '')}</div>
     <div class="call-status" id="callStatus">${escapeHtml(statusTxt)}</div>
     <div class="call-btns">
-      ${inCall ? '<button type="button" class="call-btn mute" id="callMute" title="השתקה">🎙</button>' : ''}
-      ${video ? '<button type="button" class="call-btn mute" id="callCam" title="כיבוי מצלמה">📷</button>' : ''}
-      <button type="button" class="call-btn hang" id="callHang" title="ניתוק">📞</button>
+      ${inCall ? '<button type="button" class="call-btn mute" id="callMute" title="השתקה">' + WAI.mic + '</button>' : ''}
+      ${video ? '<button type="button" class="call-btn mute" id="callCam" title="כיבוי מצלמה">' + WAI.video + '</button>' : ''}
+      <button type="button" class="call-btn hang" id="callHang" title="ניתוק">${WAI.phone}</button>
     </div>
     <audio id="callAudio" autoplay playsinline></audio>
   </div>`);
@@ -7940,7 +7990,7 @@ function callScreen(name, statusTxt, inCall, video, localStream){
   const cb = document.getElementById('callCam');
   if(cb) cb.onclick = () => { const t = activeCall && activeCall.stream && activeCall.stream.getVideoTracks()[0]; if(!t) return; t.enabled = !t.enabled; cb.classList.toggle('on', !t.enabled); };
   const mb = document.getElementById('callMute');
-  if(mb) mb.onclick = () => { if(!activeCall || !activeCall.stream) return; const t = activeCall.stream.getAudioTracks()[0]; t.enabled = !t.enabled; mb.classList.toggle('on', !t.enabled); mb.textContent = t.enabled ? '🎙' : '🔇'; };
+  if(mb) mb.onclick = () => { if(!activeCall || !activeCall.stream) return; const t = activeCall.stream.getAudioTracks()[0]; t.enabled = !t.enabled; mb.classList.toggle('on', !t.enabled); mb.classList.toggle('on', !t.enabled); };
 }
 function wirePeer(pc, callRef, myField, otherField){
   const sent = [];
@@ -8023,7 +8073,7 @@ function incomingCall(role, id, d){
     <div class="call-avatar">${escapeHtml(name.charAt(0))}</div>
     <div class="call-name">${escapeHtml(name)}</div>
     <div class="call-status" id="callStatus">${d.video ? 'שיחת וידאו נכנסת...' : 'שיחה קולית נכנסת...'}</div>
-    <div class="call-btns"><button type="button" class="call-btn hang" id="callDecline" title="דחייה">📞</button><button type="button" class="call-btn answer" id="callAnswer" title="מענה">📞</button></div>
+    <div class="call-btns"><button type="button" class="call-btn hang" id="callDecline" title="דחייה">${WAI.phone}</button><button type="button" class="call-btn answer" id="callAnswer" title="מענה">${WAI.phone}</button></div>
     <audio id="callAudio" autoplay playsinline></audio></div>`);
   ringStart(true);
   showDesktopNote((d.video ? '🎥 ' : '📞 ') + name + ' מתקשר אליך', 'לחצו כדי לענות באתר', null);
@@ -8056,10 +8106,10 @@ async function renderChatMonitor(target, myGroupIds){
   others.sort((a, b) => String(((b.msgs || []).slice(-1)[0] || {}).at || '').localeCompare(String(((a.msgs || []).slice(-1)[0] || {}).at || '')));
   const box = document.createElement('div');
   box.className = 'card wa-list';
-  box.innerHTML = `<div class="wa-mon-title">👁 שיחות בין עובדים (צפייה בלבד)</div>` + others.map(c => {
+  box.innerHTML = `<div class="wa-mon-title">שיחות בין עובדים · צפייה בלבד</div>` + others.map(c => {
     const last = (c.msgs || []).slice(-1)[0] || {};
     return `<button type="button" class="wa-contact" data-mon-open="${c.id}">
-      <span class="wa-avatar group">👁</span>
+      <span class="wa-avatar group">${WAI.eye}</span>
       <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(label(c))}</b><span class="wa-c-time">${chatTime(last.at)}</span></span>
       <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml((state._chatNames[last.from] || '') + ': ' + (last.deleted ? '🚫 נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.audioId ? '🎙 הודעה קולית' : ''))))}</span></span></span></button>`;
   }).join('');
@@ -8071,7 +8121,7 @@ function renderChatMonitorRoom(c, label){
   const target = document.getElementById('tabContent');
   const members = /^g_/.test(c.id) ? (c.members || []) : c.id.split('__');
   target.innerHTML = `<div class="card wa-room">
-    <div class="wa-room-head"><button type="button" class="wa-back" id="monBack">→</button><span class="wa-avatar group">👁</span>
+    <div class="wa-room-head"><button type="button" class="wa-back" id="monBack">${WAI.back}</button><span class="wa-avatar group">${WAI.eye}</span>
       <span style="flex:1;"><b>${escapeHtml(label(c))}</b><span class="wa-room-sub">צפייה בלבד · ההודעות לא מסומנות כנקראו</span></span></div>
     <div class="wa-chat wa-room-chat" id="monBody"></div></div>`;
   document.getElementById('monBack').onclick = () => renderChatHome('mgr');
