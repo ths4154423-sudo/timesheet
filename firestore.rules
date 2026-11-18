@@ -55,6 +55,10 @@ service cloud.firestore {
     match /auditLog/{empId}/items/{item} {
       allow create: if isAdmin() || isEmployeeId(empId);
     }
+    match /tasks/{empId} {
+      allow write: if can('employees');
+      allow read, write: if isEmployeeId(empId);
+    }
     match /meta/requests {
       allow write: if can('requests');
       allow read, write: if isEmployee();
