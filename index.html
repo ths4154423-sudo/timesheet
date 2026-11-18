@@ -623,6 +623,7 @@
 .wa-lb-name{ flex:1; font-size:14px; opacity:.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .wa-lb-btn{ width:40px; height:40px; border-radius:50%; border:none; background:rgba(255,255,255,.12); color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; text-decoration:none; }
 @keyframes waFade{ from{ opacity:0; } to{ opacity:1; } }
+.wa-row.wa-typing[hidden]{ display:none; }
 .wa-typing .wa-bubble{ padding:8px 12px; color:#667781; font-size:13px; min-width:0; }
 .wa-typing.solo{ margin:4px 32px 0 0; }
 .wa-dots{ display:inline-flex; gap:3px; vertical-align:middle; }
@@ -667,12 +668,21 @@ const fbApp = initializeApp(firebaseConfig);
 // persistentLocalCache: שומר את כל הנתונים ב-IndexedDB של המכשיר. כשאין אינטרנט, קריאות
 // (למשל טעינת שעות/עובדים) חוזרות מהעותק המקומי, וכתיבות (החתמות, עריכות) נשמרות מקומית
 // ומסתנכרנות לבד עם השרת ברגע שהחיבור חוזר - כולל אחרי סגירת האתר/רענון.
-const db = initializeFirestore(fbApp, {
+const mkDb = a => initializeFirestore(a, {
   experimentalForceLongPolling: true,
   useFetchStreams: false,
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
-const auth = getAuth(fbApp);
+// שני חיבורים נפרדים ל-Firebase: אחד למנהל ואחד לעובד. כך אפשר לפתוח באותו דפדפן כרטיסייה
+// של מנהל וכרטיסייה של עובד, ורענון באחת לא מעביר אותה לחשבון של השנייה.
+const dbAdmin = mkDb(fbApp), authAdmin = getAuth(fbApp);
+const fbAppEmp = initializeApp(firebaseConfig, 'emp');
+const dbEmp = mkDb(fbAppEmp), authEmp = getAuth(fbAppEmp);
+let db = dbAdmin, auth = authAdmin;
+function useConn(role){
+  if(role === 'employee'){ db = dbEmp; auth = authEmp; } else { db = dbAdmin; auth = authAdmin; }
+  try{ sessionStorage.setItem('tabRole', role); }catch(e){}
+}
 
 // ---------- גשר (שרת ב-Render) ----------
 // הקודים האישיים של העובדים נבדקים בגשר ולא בדפדפן, כך שהם לא נשלחים לאף אחד.
@@ -908,15 +918,18 @@ function speakHebrew(text){
 // ---------- session persistence (survives page refresh) ----------
 function saveSession(session){
   try{ localStorage.setItem('timesheet_session', JSON.stringify(session)); }catch(e){}
+  try{ sessionStorage.setItem('timesheet_session', JSON.stringify(session)); }catch(e){}
 }
 function loadSession(){
   try{
-    const s = localStorage.getItem('timesheet_session');
+    let s = null; try{ s = sessionStorage.getItem('timesheet_session'); }catch(e){}
+    if(!s) s = localStorage.getItem('timesheet_session');
     return s ? JSON.parse(s) : null;
   }catch(e){ return null; }
 }
 function clearSession(){
   try{ localStorage.removeItem('timesheet_session'); }catch(e){}
+  try{ sessionStorage.removeItem('timesheet_session'); sessionStorage.removeItem('tabRole'); }catch(e){}
 }
 
 // ---------- storage helpers (Firestore) ----------
@@ -1787,6 +1800,14 @@ async function init(){
   // רשימת העובדים המלאה (כולל קודים אישיים) נטענת רק אחרי כניסת מנהל - לא לפני
   state.loading = false;
 
+  // איזה חיבור הכרטיסייה הזו משתמשת בו: לפי מה שנבחר בה קודם (גם אחרי רענון), ואם זו כרטיסייה חדשה – לפי מי שמחובר
+  let tabRole = null; try{ tabRole = sessionStorage.getItem('tabRole'); }catch(e){}
+  try{ await Promise.race([Promise.all([authAdmin.authStateReady(), authEmp.authStateReady()]), new Promise(r => setTimeout(r, 4000))]); }catch(e){}
+  const adminUser = authAdmin.currentUser, empUser = authEmp.currentUser;
+  if(tabRole === 'employee' && empUser) useConn('employee');
+  else if(tabRole === 'admin') useConn('admin');
+  else if(empUser && !(adminUser && adminUser.email)) useConn('employee');
+  else { db = dbAdmin; auth = authAdmin; }
   onAuthStateChanged(auth, async (user) => {
     if(authReady) return; // only handle the initial resolution; explicit sign-in/out render themselves
     authReady = true;
@@ -1814,9 +1835,8 @@ async function init(){
       renderLanding();
       return;
     }
-    // סשן עובד מגרסה קודמת של האתר (בלי התחברות ל-Firebase) - צריך להיכנס מחדש עם הקוד
-    if(session && session.role === 'employee') clearSession();
     if(user){
+      useConn('admin');
       if(!(await ensureEmployeesLoaded())) return;
       state.isAdmin = true;
       state.adminEmail = user.email;
@@ -1916,7 +1936,17 @@ function renderLanding(){
       </div>
     </div>
   `;
-  document.getElementById('btnAdmin').onclick = renderAdminLogin;
+  document.getElementById('btnAdmin').onclick = async () => {
+    // הניהול עדיין מחובר (חזרו לדף הראשי בלי להתנתק) – נכנסים ישר
+    const u = authAdmin.currentUser;
+    if(u && u.email){
+      useConn('admin');
+      if(!(await ensureEmployeesLoaded())) return;
+      state.isAdmin = true; state.adminEmail = u.email;
+      renderAdminDashboard('dashboard'); return;
+    }
+    renderAdminLogin();
+  };
   document.getElementById('btnEmp').onclick = renderEmployeeLogin;
 }
 
@@ -1960,6 +1990,7 @@ function renderAdminLogin(){
     submitBtn.disabled = true;
     submitBtn.textContent = 'מתחבר...';
     try{
+      useConn('admin');
       await signInWithEmailAndPassword(auth, email, pass);
       if(!(await ensureEmployeesLoaded())) return;
       state.isAdmin = true;
@@ -2107,6 +2138,7 @@ async function renderEmployeeLogin(){
         return done(LOGIN_ERR[login.error] || 'שגיאת מערכת זמנית. נסו שוב בעוד כמה רגעים.');
       }
       try{
+        useConn('employee');
         await signInWithCustomToken(auth, login.token);
       }catch(err){
         console.error('employee sign-in error', err);
@@ -3283,7 +3315,11 @@ function renderAdminDashboard(tab){
     // הערה: לא מוחקים כאן את סימון "המכשיר המהימן" - "יציאה" כאן משמשת גם כניווט חזרה למסך
     // הראשי (למשל כדי להגיע לדשבורד של עובד), לא רק כניתוק אמיתי. ניתוק מלא של המכשיר נמצא
     // בנפרד בהגדרות → אבטחה, בשביל מקרה של אובדן/מכירת המכשיר.
-    try{ await signOut(auth); }catch(e){ console.error('sign-out error', e); }
+    // בדפדפן שבו פתוחה גם כרטיסייה של עובד: אפשר לחזור לדף הראשי בלי להתנתק מהניהול,
+    // כדי שהכרטיסיות האחרות של הניהול יישארו מחוברות
+    const full = await showConfirmModal('להתנתק מהניהול? אם תבחר "רק לדף הראשי", הניהול יישאר מחובר בכרטיסיות אחרות.', { yes: 'התנתקות', no: 'רק לדף הראשי', danger: false });
+    if(full){ try{ await signOut(authAdmin); }catch(e){ console.error('sign-out error', e); } }
+    try{ sessionStorage.removeItem('tabRole'); }catch(e){}
     renderLanding();
   };
 
