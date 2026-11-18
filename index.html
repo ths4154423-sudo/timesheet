@@ -651,6 +651,14 @@
 .wa-back{ border:none; background:none; font-size:20px; cursor:pointer; color:#54656F; padding:4px 6px; }
 .wa-room-chat{ border-radius:0; max-height:none; height:60vh; padding:12px 16px; }
 .wa-room .wa-compose{ border-radius:0; margin:0; padding:8px 10px; }
+.wa-del{ position:absolute; top:2px; left:4px; border:none; background:inherit; color:#8696A0; font-size:15px; line-height:1; cursor:pointer; opacity:0; padding:2px 4px; border-radius:50%; }
+.wa-bubble:hover .wa-del, .wa-del:focus{ opacity:1; }
+@media (hover:none){ .wa-del{ opacity:.6; } }
+.wa-deleted{ color:#8696A0 !important; font-style:italic; font-size:13.5px; }
+.wa-newgroup .wa-avatar{ font-size:22px; color:#00A884; }
+.wa-pick{ max-width:420px; width:92vw; text-align:right; }
+.wa-pick-list{ max-height:50vh; overflow-y:auto; margin:6px 0; }
+.wa-pick-row{ display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid #F0F2F5; cursor:pointer; font-size:15px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -671,7 +679,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signInWithCustomToken, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
@@ -7447,7 +7455,14 @@ async function playTaskAudio(btn){
 // chats/<id>: id של שיחה אישית = שני המזהים ממוינים ומחוברים ב-"__"; הקבוצה = "team"; המנהל = "mgr"
 const CHAT_MAX = 300;
 function chatMe(role){ return role === 'mgr' ? 'mgr' : (state.currentEmployee && state.currentEmployee.id); }
-function chatIdWith(me, other){ return other === 'team' ? 'team' : [me, other].sort().join('__'); }
+function chatIdWith(me, other){ return (other === 'team' || /^g_/.test(other)) ? other : [me, other].sort().join('__'); }
+// קבוצות שנפתחו בצ'אט (chats/g_...): שם, משתתפים, מי פתח
+async function myChatGroups(me){
+  try{
+    const snap = await withTimeout(getDocs(query(collection(db, 'chats'), where('members', 'array-contains', me))), 20000, 'chatGroups');
+    return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(g => /^g_/.test(g.id || '') && (g.members || []).includes(me));
+  }catch(e){ console.error('chatGroups', e); return []; }
+}
 async function chatContacts(role){
   let list;
   if(role === 'mgr') list = activeEmployees().map(e => ({ id: e.id, name: e.name }));
@@ -7485,15 +7500,18 @@ async function renderChatHome(role){
     setHeader('צ׳אט', '<button class="btn ghost small" id="chatBackBtn">חזרה</button>');
     document.getElementById('chatBackBtn').onclick = () => renderEmployeeDashboard(state.currentEmployee); }
   target.innerHTML = '<div class="empty-state">טוען...</div>';
-  const contacts = await chatContacts(role);
-  const chats = await Promise.all(contacts.map(c => loadChat(chatIdWith(me, c.id))));
+  const contacts0 = await chatContacts(role);
+  const groups = await myChatGroups(me);
+  const contacts = [contacts0[0], ...groups.map(g => ({ id: g.id, name: g.name || 'קבוצה', group: true, custom: true })), ...contacts0.slice(1)];
+  const chats = await Promise.all(contacts.map((c, i) => c.custom ? Promise.resolve(groups.find(g => g.id === c.id)) : loadChat(chatIdWith(me, c.id))));
   const rows = contacts.map((c, i) => {
     const ch = chats[i] || { msgs: [] }, last = (ch.msgs || []).slice(-1)[0], un = chatUnread(ch, me);
-    const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.text || (last.fileId ? '📎 קובץ' : last.audioId ? '🎙 הודעה קולית' : '')) : 'אין הודעות עדיין';
+    const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.audioId ? '🎙 הודעה קולית' : ''))) : 'אין הודעות עדיין';
     return { c, last, un, prev };
-  }).sort((a, b) => (a.c.group ? -1 : b.c.group ? 1 : String(b.last ? b.last.at : '').localeCompare(String(a.last ? a.last.at : ''))));
+  }).sort((a, b) => (a.c.id === 'team' ? -1 : b.c.id === 'team' ? 1 : String(b.last ? b.last.at : '').localeCompare(String(a.last ? a.last.at : ''))));
   target.innerHTML = `
     <div class="card wa-list">
+      <button type="button" class="wa-contact wa-newgroup" id="chatNewGroup"><span class="wa-avatar group">＋</span><span class="wa-c-main"><b>קבוצה חדשה</b><span class="wa-c-prev">בוחרים משתתפים ונותנים שם</span></span></button>
       ${rows.map(r => `
         <button type="button" class="wa-contact" data-chat-open="${r.c.id}">
           <span class="wa-avatar${r.c.group ? ' group' : ''}">${r.c.group ? '👥' : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
@@ -7502,13 +7520,47 @@ async function renderChatHome(role){
         </button>`).join('')}
     </div>`;
   target.querySelectorAll('[data-chat-open]').forEach(b => b.onclick = () => renderChatRoom(role, b.dataset.chatOpen));
+  document.getElementById('chatNewGroup').onclick = async () => {
+    const pick = await chatPickMembers(contacts0.filter(c => !c.group), [], true);
+    if(!pick) return;
+    const gid = 'g_' + uid() + uid();
+    const ok = await saveDoc(() => setDoc(doc(db, 'chats', gid), { name: pick.name, members: [me, ...pick.ids.filter(x => x !== me)], createdBy: me, msgs: [] }), 'chatGroupNew');
+    if(ok !== true){ showToast('לא הצלחנו לפתוח את הקבוצה'); return; }
+    renderChatRoom(role, gid);
+  };
+}
+// חלון בחירת משתתפים (וגם שם, לקבוצה חדשה). מחזיר { name, ids } או null
+function chatPickMembers(list, selected, askName, title){
+  return new Promise(resolve => {
+    const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+    ov.innerHTML = `<div class="confirm-box wa-pick">
+      <h3 style="margin:0 0 10px;">${escapeHtml(title || 'קבוצה חדשה')}</h3>
+      ${askName ? '<input type="text" id="wpName" maxlength="40" placeholder="שם הקבוצה" style="margin-bottom:10px;" />' : ''}
+      <div class="wa-pick-list">${list.map(c => `<label class="wa-pick-row"><input type="checkbox" value="${c.id}" ${selected.includes(c.id) ? 'checked disabled' : ''} style="width:auto;" /> <span class="wa-avatar" style="width:34px;height:34px;flex-basis:34px;font-size:14px;">${escapeHtml((c.name || '?').charAt(0))}</span> ${escapeHtml(c.name)}</label>`).join('') || '<p class="hint">אין אנשים להוספה</p>'}</div>
+      <div class="error-msg" id="wpErr"></div>
+      <div class="actions"><button type="button" class="btn brass" id="wpOk">${askName ? 'פתיחת הקבוצה' : 'הוספה'}</button><button type="button" class="btn ghost" id="wpNo">ביטול</button></div></div>`;
+    document.body.appendChild(ov);
+    const done = v => { ov.remove(); resolve(v); };
+    ov.querySelector('#wpNo').onclick = () => done(null);
+    ov.onclick = e => { if(e.target === ov) done(null); };
+    ov.querySelector('#wpOk').onclick = () => {
+      const ids = [...ov.querySelectorAll('.wa-pick-list input:checked:not(:disabled)')].map(x => x.value);
+      const name = askName ? ov.querySelector('#wpName').value.trim() : '';
+      if(askName && !name){ ov.querySelector('#wpErr').textContent = 'צריך לתת שם לקבוצה'; return; }
+      if(!ids.length){ ov.querySelector('#wpErr').textContent = 'צריך לבחור לפחות משתתף אחד'; return; }
+      done({ name, ids });
+    };
+  });
 }
 function chatBubblesHtml(ch, me, isGroup, members){
   return (ch.msgs || []).map(m => {
     const mine = m.from === me;
     const others = members.filter(x => x !== m.from);
     const seenAll = others.length && others.every(x => (m.seenBy || []).includes(x));
+    if(m.deleted) return `<div class="wa-row ${mine ? 'out' : 'in'}"><div class="wa-bubble wa-deleted">🚫 ${mine ? 'מחקת את ההודעה' : 'ההודעה נמחקה'}<span class="wa-time">${chatTime(m.at)}</span></div></div>`;
+    const canDel = mine || me === 'mgr';
     return `<div class="wa-row ${mine ? 'out' : 'in'}"><div class="wa-bubble">
+      ${canDel ? `<button type="button" class="wa-del" data-msg-del="${m.id}" title="מחיקת ההודעה" aria-label="מחיקת ההודעה">⌄</button>` : ''}
       ${!mine && isGroup ? `<div class="wa-name">${escapeHtml(state._chatNames[m.from] || '')}</div>` : ''}
       ${m.fileId ? (/^image\//.test(m.fileType || '') ? `<img class="wa-img" data-file-img="${m.fileId}" alt="" />` : `<button type="button" class="wa-file" data-file-open="${m.fileId}" data-file-name="${escapeHtml(m.fileName || 'קובץ')}">📄 ${escapeHtml(m.fileName || 'קובץ')}</button>`) : ''}
       ${m.audioId ? `<button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button>` : ''}
@@ -7519,16 +7571,18 @@ function chatBubblesHtml(ch, me, isGroup, members){
 }
 async function renderChatRoom(role, otherId){
   if(state._chatWatch){ try{ state._chatWatch(); }catch(e){} state._chatWatch = null; }
-  const me = chatMe(role), id = chatIdWith(me, otherId), isGroup = otherId === 'team';
-  if(!state._chatNames) await chatContacts(role);
+  const me = chatMe(role), id = chatIdWith(me, otherId), custom = /^g_/.test(otherId), isGroup = otherId === 'team' || custom;
+  const allContacts = await chatContacts(role);
   const target = role === 'mgr' ? document.getElementById('tabContent') : app;
-  const name = state._chatNames[otherId] || '';
-  const members = isGroup ? Object.keys(state._chatNames) : [me, otherId];
+  const g = custom ? await loadChat(id) : null;
+  const name = custom ? ((g && g.name) || 'קבוצה') : (state._chatNames[otherId] || '');
+  let members = custom ? ((g && g.members) || [me]) : otherId === 'team' ? Object.keys(state._chatNames) : [me, otherId];
   target.innerHTML = `
     <div class="card wa-room">
       <div class="wa-room-head"><button type="button" class="wa-back" id="chatRoomBack" aria-label="חזרה">→</button>
         <span class="wa-avatar${isGroup ? ' group' : ''}">${isGroup ? '👥' : escapeHtml(name.charAt(0) || '?')}</span>
-        <span><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span></div>
+        <span style="flex:1;"><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span>
+        ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">👤＋</button>' : ''}</div>
       <div class="wa-chat wa-room-chat" id="chatBody"></div>
       <div class="wa-compose">
         <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
@@ -7539,6 +7593,16 @@ async function renderChatRoom(role, otherId){
       </div>
     </div>`;
   document.getElementById('chatRoomBack').onclick = () => renderChatHome(role);
+  const addBtn = document.getElementById('chatAddMembers');
+  if(addBtn) addBtn.onclick = async () => {
+    const pick = await chatPickMembers(allContacts.filter(c => !c.group), members, false, 'הוספת משתתפים');
+    if(!pick) return;
+    const fresh = await loadChat(id); if(!fresh) return showToast('שגיאה בטעינה');
+    const nm = [...new Set([...(fresh.members || []), ...pick.ids])];
+    const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), { members: nm }, { merge: true }), 'chatAddMembers');
+    if(ok !== true) return showToast('שגיאה בשמירה');
+    members = nm; showToast('המשתתפים נוספו'); paintTyping();
+  };
   const body = document.getElementById('chatBody'), input = document.getElementById('chatInput'), stEl = document.getElementById('chatStatus');
   let cur = { msgs: [] }, typing = null;
   const paint = () => {
@@ -7546,6 +7610,16 @@ async function renderChatRoom(role, otherId){
     body.innerHTML = chatBubblesHtml(cur, me, isGroup, members) + `<div class="wa-row in wa-typing" id="chatTyping" hidden><div class="wa-bubble"><span class="wa-dots"><i></i><i></i><i></i></span> <span class="wa-typing-txt"></span></div></div>`;
     body.querySelectorAll('[data-file-img]').forEach(async img => { const f = await loadTaskFile(img.dataset.fileImg); if(f){ img.src = f.data; img.onclick = () => openLightbox(f.data, f.name); } });
     body.querySelectorAll('[data-file-open]').forEach(b => b.onclick = async () => { const f = await loadTaskFile(b.dataset.fileOpen); if(!f) return showToast('לא הצלחנו לטעון את הקובץ'); const a = document.createElement('a'); a.href = f.data; a.download = b.dataset.fileName || 'file'; document.body.appendChild(a); a.click(); a.remove(); });
+    body.querySelectorAll('[data-msg-del]').forEach(b => b.onclick = async ev => {
+      ev.stopPropagation();
+      if(!(await showConfirmModal('למחוק את ההודעה? היא תימחק אצל כולם.', { yes: 'מחיקה', danger: true }))) return;
+      const fresh = await loadChat(id); if(!fresh) return showToast('שגיאה בטעינה');
+      const m = (fresh.msgs || []).find(x => x.id === b.dataset.msgDel); if(!m) return;
+      if(m.from !== me && me !== 'mgr') return;
+      ['text', 'fileId', 'fileName', 'fileType', 'audioId'].forEach(k => delete m[k]); m.deleted = true;
+      const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), { msgs: fresh.msgs }, { merge: true }), 'chatDelete');
+      if(ok !== true) showToast('המחיקה לא הצליחה');
+    });
     paintTyping();
     if(atBottom || !paint.done) body.scrollTop = body.scrollHeight;
     paint.done = true;
@@ -7556,7 +7630,7 @@ async function renderChatRoom(role, otherId){
     el.hidden = !on;
     const txt = on ? (isGroup ? (state._chatNames[typing.who] || '') + ' ' : '') + (typing.kind === 'recording' ? 'מקליט הודעה...' : 'מקליד...') : '';
     if(on) el.querySelector('.wa-typing-txt').textContent = txt;
-    const sub = document.getElementById('chatSub'); if(sub) sub.textContent = on ? txt : (isGroup ? members.length + ' משתתפים' : '');
+    const sub = document.getElementById('chatSub'); if(sub) sub.textContent = on ? txt : (custom ? members.map(x => x === me ? 'אתה' : (state._chatNames[x] || '')).filter(Boolean).join(', ') : isGroup ? members.length + ' משתתפים' : '');
   };
   const markSeen = async () => {
     if(!chatUnread(cur, me)) return;
@@ -7573,7 +7647,7 @@ async function renderChatRoom(role, otherId){
     cur = { ...cur, msgs: [...(cur.msgs || []), m] }; paint();
     const fresh = await loadChat(id); if(!fresh){ showToast('ההודעה לא נשלחה'); return; }
     const msgs = [...(fresh.msgs || []), m].slice(-CHAT_MAX);
-    const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), { msgs, members }, { merge: true }), 'chatSend');
+    const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), custom ? { msgs } : { msgs, members }, { merge: true }), 'chatSend');
     if(ok !== true) showToast('ההודעה לא נשלחה');
   };
   input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; if(input.value.trim()) sigTyping('typing'); });
@@ -7614,7 +7688,8 @@ async function renderChatRoom(role, otherId){
       if(!document.getElementById('chatBody')){ unsub(); return; }
       const d = snap.exists() ? snap.data() : { msgs: [] };
       typing = d.typing || null;
-      const sig = JSON.stringify((d.msgs || []).map(m => [m.id, (m.seenBy || []).length]));
+      if(custom && Array.isArray(d.members)) members = d.members;
+      const sig = JSON.stringify((d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted]));
       if(sig !== paint.sig){ paint.sig = sig; cur = d; paint(); markSeen(); } else paintTyping();
     }, () => {});
   }catch(e){ cur = (await loadChat(id)) || { msgs: [] }; paint(); markSeen(); }
