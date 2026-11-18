@@ -751,7 +751,7 @@ body.wa-open{ overflow:hidden; }
 .wa-chat .wa-bubble::after{ content:''; display:block; clear:both; }
 .wa-chat .wa-del{ z-index:1; }
 .wa-lb-stage{ position:absolute; inset:60px 0 0; display:flex; align-items:center; justify-content:center; overflow:hidden; touch-action:none; }
-.wa-lb-stage img{ max-width:94vw; max-height:calc(100vh - 90px); transform-origin:center center; transition:transform .08s ease-out; user-select:none; border-radius:2px; box-shadow:0 8px 40px rgba(0,0,0,.5); }
+.wa-lb-stage img{ width:94vw; height:calc(100vh - 90px); max-width:none; max-height:none; object-fit:contain; box-shadow:none !important; background:transparent; transform-origin:center center; transition:transform .08s ease-out; user-select:none; border-radius:2px; box-shadow:0 8px 40px rgba(0,0,0,.5); }
 .wa-lb-pct{ color:#E9EDEF; font-size:13px; min-width:44px; text-align:center; }
 .wa-lb-bar{ z-index:2; }
 .wa-lb-doc{ position:absolute; inset:60px 3vw 16px; width:94vw; height:calc(100vh - 76px); border:none; background:#fff; border-radius:6px; }
@@ -7406,11 +7406,14 @@ function shrinkImage(file){
   return new Promise((resolve, reject) => {
     const img = new Image(), url = URL.createObjectURL(file);
     img.onload = () => {
-      const max = 1280, k = Math.min(1, max / Math.max(img.width, img.height));
+      const max = 2048, k = Math.min(1, max / Math.max(img.width, img.height));
       const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
-      let q = 0.82, out = c.toDataURL('image/jpeg', q);
-      while(out.length > 900000 && q > 0.4){ q -= 0.12; out = c.toDataURL('image/jpeg', q); }
+      let q = 0.88, out = c.toDataURL('image/jpeg', q);
+      while(out.length > 900000 && q > 0.45){ q -= 0.08; out = c.toDataURL('image/jpeg', q); }
+      // אם עדיין גדולה מדי – מקטינים את הרזולוציה בהדרגה (עדיף חדה וקטנה יותר מאשר מטושטשת)
+      let w = c.width, h = c.height;
+      while(out.length > 900000 && w > 900){ w = Math.round(w * 0.8); h = Math.round(h * 0.8); const c2 = document.createElement('canvas'); c2.width = w; c2.height = h; c2.getContext('2d').drawImage(c, 0, 0, w, h); out = c2.toDataURL('image/jpeg', 0.8); }
       resolve(out);
     };
     img.onerror = reject; img.src = url;
