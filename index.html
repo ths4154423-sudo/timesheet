@@ -586,6 +586,31 @@
 .task-reply .who{ font-weight:600; font-size:13px; }
 .task-reply-open{ font:inherit; font-size:13px; background:none; border:none; color:var(--brass-dark, #0f766e); cursor:pointer; padding:4px 0; }
 .task-reply-box textarea{ width:100%; font:inherit; font-size:14px; }
+.wa-thread{ margin:4px 32px 6px 0; }
+.wa-chat{ background:#EFEAE2; background-image:radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px); background-size:14px 14px; border-radius:12px; padding:10px 10px 6px; display:flex; flex-direction:column; gap:4px; }
+.wa-row{ display:flex; }
+.wa-row.out{ justify-content:flex-end; }
+.wa-row.in{ justify-content:flex-start; }
+.wa-bubble{ position:relative; max-width:78%; padding:6px 9px 18px; border-radius:8px; font-size:14.5px; line-height:1.4; color:#111B21; box-shadow:0 1px .5px rgba(11,20,26,.13); min-width:70px; }
+.wa-row.in .wa-bubble{ background:#fff; border-top-right-radius:0; }
+.wa-row.out .wa-bubble{ background:#D9FDD3; border-top-left-radius:0; }
+.wa-row.in .wa-bubble::before{ content:''; position:absolute; top:0; right:-7px; border-style:solid; border-width:0 0 9px 8px; border-color:transparent transparent transparent #fff; transform:scaleX(-1); }
+.wa-row.out .wa-bubble::before{ content:''; position:absolute; top:0; left:-7px; border-style:solid; border-width:0 8px 9px 0; border-color:transparent #D9FDD3 transparent transparent; transform:scaleX(-1); }
+.wa-name{ font-size:12.5px; font-weight:600; color:#1FA855; margin-bottom:1px; }
+.wa-text{ white-space:pre-wrap; word-break:break-word; }
+.wa-time{ position:absolute; bottom:3px; left:8px; font-size:11px; color:#667781; direction:ltr; white-space:nowrap; }
+.wa-ticks{ color:#8696A0; letter-spacing:-3px; margin-left:2px; }
+.wa-ticks.seen{ color:#53BDEB; }
+.wa-voice{ font:inherit; font-size:14px; border:none; background:rgba(0,0,0,.05); border-radius:16px; padding:5px 12px; cursor:pointer; color:#111B21; }
+.wa-compose{ display:flex; align-items:flex-end; gap:6px; margin-top:6px; background:#F0F2F5; border-radius:24px; padding:5px 6px; flex-wrap:wrap; }
+.wa-compose[hidden]{ display:none; }
+.wa-compose textarea{ flex:1 1 160px; border:none !important; background:#fff !important; border-radius:18px; padding:8px 12px; font:inherit; font-size:14.5px; resize:none; outline:none; min-height:20px; max-height:110px; box-shadow:none !important; }
+.wa-btn{ width:38px; height:38px; flex:0 0 38px; border-radius:50%; border:none; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
+.wa-btn.send{ background:#00A884; color:#fff; transform:scaleX(-1); }
+.wa-btn.mic{ background:#fff; color:#54656F; }
+.wa-btn.mic.rec{ background:#EA4335; color:#fff; }
+.wa-status{ flex-basis:100%; font-size:12.5px; padding:0 8px; }
+.wa-status:empty{ display:none; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7057,23 +7082,33 @@ async function renderAdminTasks(){
 // ---------- תגובות על משימות: העובד שואל/מגיב, המנהל עונה. טקסט, הקלטה מהאתר (voiceMessages) או הקלטה מהקו ----------
 function taskRepliesHtml(t, empId, viewer){
   const reps = t.replies || [];
-  const who = r => r.from === 'mgr' ? (viewer === 'mgr' ? 'אתה' : 'המנהל') : (viewer === 'emp' ? 'אתה' : 'העובד');
+  const when = r => {
+    const at = String(r.at || ''); if(!at) return '';
+    const d = at.slice(0, 10), tm = at.length > 15 ? at.slice(11, 16) : '';
+    // הקלטות מהקו נשמרות בשעון UTC (ISO עם Z) – ממירים לשעון ישראל
+    if(/Z$/.test(at)){ try{ const x = new Date(at); return x.toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit', day: x.toISOString().slice(0,10) === todayStr() ? undefined : '2-digit', month: x.toISOString().slice(0,10) === todayStr() ? undefined : '2-digit' }); }catch(e){ return ''; } }
+    return (d === todayStr() ? '' : d.split('-').reverse().slice(0, 2).join('/') + ' ') + tm;
+  };
+  const mine = r => r.from === viewer;
   return `
-    <div class="task-replies" data-reps-for="${t.id}">
-      ${reps.map(r => `
-        <div class="task-reply ${r.from}">
-          <span class="who">${who(r)}:</span>
-          ${r.text ? `<span>${escapeHtml(r.text)}</span>` : ''}
-          ${(r.voice || r.audioId) ? `<button type="button" class="btn ghost small" data-play="${t.id}" data-pemp="${empId}" data-reply="${r.id}"${r.audioId ? ` data-audio="${r.audioId}"` : ''}>▶ השמעה</button>` : ''}
-        </div>`).join('')}
+    <div class="wa-thread" data-reps-for="${t.id}">
+      ${reps.length ? `<div class="wa-chat">
+        ${reps.map(r => `
+          <div class="wa-row ${mine(r) ? 'out' : 'in'}">
+            <div class="wa-bubble">
+              ${mine(r) ? '' : `<div class="wa-name">${r.from === 'mgr' ? 'המנהל' : 'העובד'}</div>`}
+              ${r.text ? `<div class="wa-text">${escapeHtml(r.text)}</div>` : ''}
+              ${(r.voice || r.audioId) ? `<button type="button" class="wa-voice" data-play="${t.id}" data-pemp="${empId}" data-reply="${r.id}"${r.audioId ? ` data-audio="${r.audioId}"` : ''}>▶ הודעה קולית</button>` : ''}
+              <span class="wa-time">${when(r)}${mine(r) ? ` <span class="wa-ticks${r[viewer === 'emp' ? 'seenMgr' : 'seenEmp'] ? ' seen' : ''}">✓✓</span>` : ''}</span>
+            </div>
+          </div>`).join('')}
+      </div>` : ''}
       <button type="button" class="task-reply-open" data-reply-open="${t.id}">💬 ${viewer === 'emp' ? 'תגובה למנהל' : 'תשובה לעובד'}</button>
-      <div class="task-reply-box" data-reply-box="${t.id}" hidden>
-        <textarea rows="2" maxlength="500" placeholder="${viewer === 'emp' ? 'מה לא ברור? כתבו למנהל...' : 'התשובה לעובד...'}"></textarea>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:6px;">
-          <button type="button" class="btn brass small" data-reply-send="${t.id}">שליחה</button>
-          <button type="button" class="btn ghost small" data-reply-rec="${t.id}">🎙 הקלטה</button>
-          <span class="hint" data-reply-status="${t.id}" style="font-size:12.5px;"></span>
-        </div>
+      <div class="wa-compose" data-reply-box="${t.id}" hidden>
+        <textarea rows="1" maxlength="500" placeholder="הקלד הודעה"></textarea>
+        <button type="button" class="wa-btn send" data-reply-send="${t.id}" title="שליחה" aria-label="שליחה">➤</button>
+        <button type="button" class="wa-btn mic" data-reply-rec="${t.id}" title="הקלטה" aria-label="הקלטה">🎙</button>
+        <span class="hint wa-status" data-reply-status="${t.id}"></span>
       </div>
     </div>`;
 }
@@ -7097,6 +7132,10 @@ function bindTaskReplies(root, empId, from, after){
     showToast(from === 'emp' ? 'התגובה נשלחה למנהל' : 'התשובה נשלחה לעובד');
     after();
   };
+  root.querySelectorAll('.wa-compose textarea').forEach(ta => {
+    ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 110) + 'px'; });
+    ta.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); ta.parentElement.querySelector('[data-reply-send]').click(); } });
+  });
   root.querySelectorAll('[data-reply-send]').forEach(b => b.onclick = ev => {
     ev.preventDefault();
     const box = root.querySelector(`[data-reply-box="${b.dataset.replySend}"]`);
@@ -7117,7 +7156,7 @@ function bindTaskReplies(root, empId, from, after){
       rec.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
       rec.onstop = async () => {
         clearInterval(timer); stream.getTracks().forEach(t => t.stop());
-        b.textContent = '🎙 הקלטה'; st.textContent = 'שומר...';
+        b.textContent = '🎙'; b.classList.remove('rec'); st.textContent = 'שומר...';
         const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
         const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
         const audioId = uid() + uid();
@@ -7125,7 +7164,7 @@ function bindTaskReplies(root, empId, from, after){
         if(ok !== true){ st.textContent = 'שגיאה בשמירת ההקלטה'; return; }
         send(id, { audioId }, b);
       };
-      rec.start(); b.textContent = '⏹ סיום ושליחה'; st.textContent = 'מקליט...';
+      rec.start(); b.textContent = '⏹'; b.classList.add('rec'); st.textContent = 'מקליט... לחצו ⏹ לשליחה';
     }catch(e){ st.textContent = 'אין גישה למיקרופון. יש לאשר הרשאה בדפדפן.'; }
   });
 }
@@ -7151,7 +7190,8 @@ async function refreshTasksNavBadge(){
 // השמעת משימה קולית שהוקלטה בקו (הגשר מביא את ההקלטה מימות המשיח)
 let taskAudioEl = null;
 async function playTaskAudio(btn){
-  if(taskAudioEl && !taskAudioEl.paused && taskAudioEl._id === (btn.dataset.reply || btn.dataset.play)){ taskAudioEl.pause(); btn.textContent = '▶ השמעה'; return; }
+  const idle = btn.classList.contains('wa-voice') ? '▶ הודעה קולית' : '▶ השמעה';
+  if(taskAudioEl && !taskAudioEl.paused && taskAudioEl._id === (btn.dataset.reply || btn.dataset.play)){ taskAudioEl.pause(); btn.textContent = idle; return; }
   const label = btn.textContent; btn.disabled = true; btn.textContent = 'טוען...';
   const key = btn.dataset.reply || btn.dataset.play;
   let res;
@@ -7162,8 +7202,8 @@ async function playTaskAudio(btn){
   if(taskAudioEl) taskAudioEl.pause();
   taskAudioEl = new Audio(res.audio); taskAudioEl._id = key;
   btn.textContent = '⏸ עצירה';
-  taskAudioEl.onended = () => { btn.textContent = '▶ השמעה'; };
-  taskAudioEl.play().catch(() => { btn.textContent = '▶ השמעה'; showToast('לא הצלחנו להשמיע'); });
+  taskAudioEl.onended = () => { btn.textContent = idle; };
+  taskAudioEl.play().catch(() => { btn.textContent = idle; showToast('לא הצלחנו להשמיע'); });
 }
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
