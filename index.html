@@ -755,6 +755,8 @@ body.wa-open{ overflow:hidden; }
 .wa-lb-pct{ color:#E9EDEF; font-size:13px; min-width:44px; text-align:center; }
 .wa-lb-bar{ z-index:2; }
 .wa-lb-doc{ position:absolute; inset:60px 3vw 16px; width:94vw; height:calc(100vh - 76px); border:none; background:#fff; border-radius:6px; }
+.wa-lb-media{ max-width:94vw; max-height:calc(100vh - 100px); border-radius:6px; background:#000; }
+audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7443,6 +7445,23 @@ function openLightbox(src, name){
 function openChatFile(f, name){
   const type = (String(f.data).match(/^data:([^;,]+)/) || [])[1] || '';
   if(/^image\//.test(type)) return openLightbox(f.data, name);
+  if(/^(video|audio)\//.test(type)){
+    let url = f.data;
+    try{ const b64 = f.data.split(',')[1], bin = atob(b64), arr = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); url = URL.createObjectURL(new Blob([arr], { type })); }catch(e){}
+    const ov = document.createElement('div'); ov.className = 'wa-lightbox';
+    const tag = /^video/.test(type) ? 'video' : 'audio';
+    ov.innerHTML = `<div class="wa-lb-bar"><button type="button" class="wa-lb-btn" data-lb-close aria-label="סגירה">✕</button><span class="wa-lb-name"></span><a class="wa-lb-btn" download aria-label="הורדה">⬇</a></div>
+      <div class="wa-lb-stage"><${tag} controls autoplay playsinline class="wa-lb-media"></${tag}></div>`;
+    ov.querySelector('.wa-lb-name').textContent = name || '';
+    ov.querySelector('.wa-lb-media').src = url;
+    const a = ov.querySelector('a'); a.href = url; a.download = name || 'file';
+    const close = () => { const m = ov.querySelector('.wa-lb-media'); if(m) m.pause(); ov.remove(); document.removeEventListener('keydown', onKey); if(url.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(url), 1000); };
+    const onKey = e => { if(e.key === 'Escape') close(); };
+    ov.onclick = e => { if(e.target === ov || e.target.classList.contains('wa-lb-stage') || e.target.closest('[data-lb-close]')) close(); };
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(ov);
+    return;
+  }
   if(type === 'application/pdf' || /^text\//.test(type)){
     let url = f.data;
     try{ const b64 = f.data.split(',')[1], bin = atob(b64), arr = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); url = URL.createObjectURL(new Blob([arr], { type: type + (/^text\//.test(type) ? ';charset=utf-8' : '') })); }catch(e){}
@@ -7818,7 +7837,7 @@ function chatBubblesHtml(ch, me, isGroup, members){
       ${!mine && isGroup ? `<div class="wa-name">${escapeHtml(state._chatNames[m.from] || '')}</div>` : ''}
       ${m.fwd ? '<div class="wa-fwd">↪ הועברה</div>' : ''}
       ${m.reply ? `<div class="wa-quote" data-jump="${m.reply.id}"><b>${m.reply.from === me ? 'אתה' : escapeHtml(state._chatNames[m.reply.from] || '')}</b><span>${escapeHtml(m.reply.snip || '')}</span></div>` : ''}
-      ${m.fileId ? (/^image\//.test(m.fileType || '') ? `<img class="wa-img" data-file-img="${m.fileId}" alt="" />` : `<button type="button" class="wa-file" data-file-open="${m.fileId}" data-file-name="${escapeHtml(m.fileName || 'קובץ')}">📄 ${escapeHtml(m.fileName || 'קובץ')}</button>`) : ''}
+      ${m.fileId ? (/^image\//.test(m.fileType || '') ? `<img class="wa-img" data-file-img="${m.fileId}" alt="" />` : `<button type="button" class="wa-file" data-file-open="${m.fileId}" data-file-name="${escapeHtml(m.fileName || 'קובץ')}">${/^video\//.test(m.fileType || '') ? '🎬' : /^audio\//.test(m.fileType || '') ? '🎵' : '📄'} ${escapeHtml(m.fileName || 'קובץ')}</button>`) : ''}
       ${m.audioId ? `<button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button>` : ''}
       ${m.text ? `<div class="wa-text">${escapeHtml(m.text)}</div>` : ''}
       <span class="wa-time">${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
