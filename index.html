@@ -6934,7 +6934,7 @@ async function renderEmployeeTasks(emp){
   const row = (t, ds, canCheck) => `
     <label class="task-row${taskDone(t, ds) ? ' done' : ''}${canCheck ? '' : ' admin'}">
       ${canCheck ? `<input type="checkbox" class="task-check" data-task="${t.id}" ${taskDone(t, ds) ? 'checked' : ''} />` : '<span class="task-mark">•</span>'}
-      <span style="flex:1;">${escapeHtml(t.text)}</span>
+      <span style="flex:1;">${escapeHtml(t.text)}${t.voice ? '<span class="hint" style="display:block; font-size:12.5px;">את ההקלטה שומעים בקו, ברישום הכניסה</span>' : ''}</span>
       ${t.repeat ? '<span class="hint" style="font-size:12px;">כל יום</span>' : t.nodate ? '<span class="hint" style="font-size:12px;">ללא תאריך</span>' : ds !== today ? `<span class="hint mono" style="font-size:12px;">${t.date.split('-').reverse().join('/')}</span>` : ''}
     </label>`;
   const doneN = todays.filter(t => taskDone(t, today)).length;
@@ -6996,7 +6996,7 @@ async function renderAdminTasks(){
       ${items === null ? '<p class="hint">לא הצלחנו לטעון את המשימות.</p>' : list.length ? list.map(t => `
         <div class="task-row admin${taskDone(t, date) ? ' done' : ''}">
           <span class="task-mark">${taskDone(t, date) ? '✓' : '○'}</span>
-          <span style="flex:1;">${escapeHtml(t.text)}${t.repeat ? ' <span class="hint" style="font-size:12px;">· כל יום</span>' : t.nodate ? ' <span class="hint" style="font-size:12px;">· ללא תאריך</span>' : ''}</span>
+          <span style="flex:1;">${escapeHtml(t.text)}${t.voice ? ' <span class="hint" style="font-size:12px;">· מהקו</span>' : ''}${t.repeat ? ' <span class="hint" style="font-size:12px;">· כל יום</span>' : t.nodate ? ' <span class="hint" style="font-size:12px;">· ללא תאריך</span>' : ''}</span>
           <button type="button" class="btn ghost small" data-tdel="${t.id}">מחיקה</button>
         </div>`).join('') : '<p class="hint" style="margin:4px 0 0;">אין משימות ליום הזה.</p>'}
       <form id="taskAddForm" style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
