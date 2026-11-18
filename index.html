@@ -8009,9 +8009,15 @@ async function renderChatRoom(role, otherId){
     members = nm; showToast('המשתתפים נוספו'); paintTyping();
   };
   const body = document.getElementById('chatBody'), input = document.getElementById('chatInput'), stEl = document.getElementById('chatStatus');
+  // "צמוד לתחתית": כל עוד המשתמש בסוף השיחה, כל שינוי גובה (הודעה חדשה, תמונה שנטענה, שדה כתיבה שגדל) משאיר את ההודעה האחרונה גלויה
+  let pinned = true;
+  const pinBottom = () => { if(pinned) body.scrollTop = body.scrollHeight; };
+  body.addEventListener('scroll', () => { pinned = body.scrollHeight - body.scrollTop - body.clientHeight < 80; }, { passive: true });
+  try{ const ro = new ResizeObserver(() => pinBottom()); ro.observe(body); const room = body.closest('.wa-room'); if(room) ro.observe(room); }catch(e){}
+  body.addEventListener('load', e => { if(e.target && e.target.tagName === 'IMG') pinBottom(); }, true);
   let cur = { msgs: [] }, typing = null;
   const paint = () => {
-    const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+    const atBottom = pinned;
     body.innerHTML = chatBubblesHtml(cur, me, isGroup, members) + `<div class="wa-row in wa-typing" id="chatTyping" hidden><div class="wa-bubble"><span class="wa-dots"><i></i><i></i><i></i></span> <span class="wa-typing-txt"></span></div></div>`;
     body.querySelectorAll('[data-file-img]').forEach(async img => {
       const f = await loadTaskFile(img.dataset.fileImg); if(!f) return;
@@ -8036,7 +8042,7 @@ async function renderChatRoom(role, otherId){
     });
     body.querySelectorAll('[data-jump]').forEach(q => q.onclick = () => { const t = body.querySelector(`[data-row="${q.dataset.jump}"]`); if(t){ t.scrollIntoView({ block: 'center', behavior: 'smooth' }); t.classList.add('wa-flash'); setTimeout(() => t.classList.remove('wa-flash'), 1200); } });
     paintTyping();
-    if(atBottom || !paint.done) body.scrollTop = body.scrollHeight;
+    if(atBottom || !paint.done){ pinned = true; body.scrollTop = body.scrollHeight; requestAnimationFrame(pinBottom); setTimeout(pinBottom, 120); }
     paint.done = true;
   };
   const paintTyping = () => {
@@ -8124,7 +8130,7 @@ async function renderChatRoom(role, otherId){
     sigTyping(null);
     const m = Object.assign({ id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [] }, extra);
     if(replyTo){ m.reply = replyTo; setReply(null); }
-    cur = { ...cur, msgs: [...(cur.msgs || []), m] }; paint();
+    pinned = true; cur = { ...cur, msgs: [...(cur.msgs || []), m] }; paint();
     const fresh = await loadChat(id); if(!fresh){ showToast('ההודעה לא נשלחה'); return; }
     const msgs = [...(fresh.msgs || []), m].slice(-CHAT_MAX);
     const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), custom ? { msgs } : { msgs, members }, { merge: true }), 'chatSend');
