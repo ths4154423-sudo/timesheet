@@ -792,6 +792,11 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .wa-row.wa-hit-cur .wa-bubble{ box-shadow:0 0 0 3px #FFB300; }
 .wa-home-search{ padding:4px 6px 10px; }
 .wa-home-search input{ width:100%; border:none !important; background:#F0F2F5 !important; border-radius:20px; padding:9px 14px; font:inherit; font-size:14.5px; outline:none; box-shadow:none !important; }
+.task-att-img{ width:44px; height:44px; object-fit:cover; border-radius:6px; cursor:zoom-in; background:#eee; flex:0 0 auto; }
+.task-report summary{ cursor:pointer; font-weight:600; }
+.task-report th{ font-size:13px; color:#54656F; font-weight:600; padding:6px; }
+.task-report td{ padding:6px; border-top:1px solid #F0F2F5; }
+.task-pc{ display:inline-block; min-width:48px; padding:2px 8px; border-radius:10px; font-size:13px; background:linear-gradient(90deg, #D9FDD3 var(--p), #F0F2F5 var(--p)); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7223,7 +7228,24 @@ function setTaskDone(t, ds, v){
 }
 
 // כשהעובד נכנס: מעדכנים את המספר על כפתור "משימות", ופעם אחת ביום קופצת הודעה אם יש משימות פתוחות להיום
+// תזכורת על משימה בשעה שהמנהל קבע – כל עוד האתר פתוח אצל העובד (בנוסף לצינתוק מהקו)
+function startTaskReminderTimer(emp){
+  if(state._taskRemTimer) clearInterval(state._taskRemTimer);
+  const tick = async () => {
+    if(!state.currentEmployee || state.currentEmployee.id !== emp.id){ clearInterval(state._taskRemTimer); return; }
+    const now = nowTimeStr().slice(0, 5), today = todayStr();
+    const items = await loadTasks(emp.id); if(!items) return;
+    tasksForDate(items, today).filter(t => t.remindAt && !taskDone(t, today) && t.remindAt <= now).forEach(t => {
+      const k = 'taskRem:' + t.id + ':' + today; let seen = false; try{ seen = localStorage.getItem(k) === '1'; }catch(e){}
+      if(seen) return; try{ localStorage.setItem(k, '1'); }catch(e){}
+      chatPing(); showToast('⏰ תזכורת למשימה: ' + t.text);
+      showDesktopNote('⏰ תזכורת למשימה', t.text, () => renderEmployeeTasks(emp));
+    });
+  };
+  state._taskRemTimer = setInterval(tick, 60000); setTimeout(tick, 5000);
+}
 async function checkEmpTasks(emp){
+  startTaskReminderTimer(emp);
   const items = await loadTasks(emp.id);
   if(!items) return;
   const today = todayStr();
@@ -7258,7 +7280,7 @@ async function renderEmployeeTasks(emp, soft){
   const row = (t, ds, canCheck) => `<div class="task-item">
     <div class="task-row${taskDone(t, ds) ? ' done' : ''}${canCheck ? '' : ' admin'}">
       ${canCheck ? `<input type="checkbox" class="task-check" data-task="${t.id}" ${taskDone(t, ds) ? 'checked' : ''} />` : '<span class="task-mark">•</span>'}
-      <span style="flex:1; cursor:pointer;" data-thread-toggle="${t.id}">${escapeHtml(t.text)}</span>${t.voice ? `<button type="button" class="btn ghost small" data-play="${t.id}" data-pemp="${emp.id}">▶ השמעה</button>` : ''}
+      <span style="flex:1; cursor:pointer;" data-thread-toggle="${t.id}">${escapeHtml(t.text)}${t.remindAt ? ` <span class="hint" style="font-size:12px;">· ⏰ ${t.remindAt}</span>` : ''}</span>${taskAttachHtml(t)}${t.voice ? `<button type="button" class="btn ghost small" data-play="${t.id}" data-pemp="${emp.id}">▶ השמעה</button>` : ''}
       ${t.repeat ? '<span class="hint" style="font-size:12px;">כל יום</span>' : t.nodate ? '<span class="hint" style="font-size:12px;">ללא תאריך</span>' : ds !== today ? `<span class="hint mono" style="font-size:12px;">${t.date.split('-').reverse().join('/')}</span>` : ''}
     </div>${taskRepliesHtml(t, emp.id, 'emp')}</div>`;
   const doneN = todays.filter(t => taskDone(t, today)).length;
@@ -7276,6 +7298,7 @@ async function renderEmployeeTasks(emp, soft){
       ${later.map(t => row(t, t.date, false)).join('')}
     </div>` : ''}`;
   bindTaskReplies(app, emp.id, 'emp', () => renderEmployeeTasks(emp, true));
+  bindTaskAttachments(app);
   watchTaskThreads(emp.id, 'emp', () => renderEmployeeTasks(emp, true));
   if(unseenCount(items, 'emp')) markRepliesSeen(emp.id, 'emp');
   app.querySelectorAll('[data-task]').forEach(cb => {
@@ -7319,23 +7342,35 @@ async function renderAdminTasks(soft){
       </div>
       <div style="margin-top:12px;"><label class="hint" style="font-size:13px;">תאריך&nbsp;</label><input type="date" id="taskDate" value="${date}" style="width:auto;" /></div>
     </div>
+    <details class="card task-report">
+      <summary>📊 סיכום משימות לחודש ${monthLabel(date.slice(0, 7))}</summary>
+      <table style="width:100%; margin-top:10px;"><thead><tr><th style="text-align:right;">עובד</th><th>משימות</th><th>בוצעו</th><th>אחוז</th></tr></thead><tbody>
+        ${emps.map(e => { const st = taskMonthStats(byEmp[e.id], date.slice(0, 7)); const pc = st.total ? Math.round(st.done / st.total * 100) : null;
+          return `<tr><td>${escapeHtml(e.name)}</td><td class="mono" style="text-align:center;">${st.total}</td><td class="mono" style="text-align:center;">${st.done}</td><td style="text-align:center;">${pc === null ? '—' : `<span class="task-pc" style="--p:${pc}%;">${pc}%</span>`}</td></tr>`; }).join('')}
+      </tbody></table>
+      <p class="hint" style="font-size:12.5px; margin:8px 0 0;">משימה קבועה נספרת פעם אחת לכל יום עבודה (א'–ה') עד היום.</p>
+    </details>
     <div class="card">
       <h3 style="margin-top:0;">המשימות של ${escapeHtml((emps.find(e => e.id === empId) || {}).name || '')} · ${dateLabel}</h3>
       ${items === null ? '<p class="hint">לא הצלחנו לטעון את המשימות.</p>' : list.length ? list.map(t => `
         <div class="task-item"><div class="task-row admin${taskDone(t, date) ? ' done' : ''}">
           <span class="task-mark">${taskDone(t, date) ? '✓' : '○'}</span>
-          <span style="flex:1; cursor:pointer;" data-thread-toggle="${t.id}">${escapeHtml(t.text)}${t.voice ? ' <span class="hint" style="font-size:12px;">· מהקו</span>' : ''}${t.repeat ? ' <span class="hint" style="font-size:12px;">· כל יום</span>' : t.nodate ? ' <span class="hint" style="font-size:12px;">· ללא תאריך</span>' : ''}</span>
+          <span style="flex:1; cursor:pointer;" data-thread-toggle="${t.id}">${escapeHtml(t.text)}${t.voice ? ' <span class="hint" style="font-size:12px;">· מהקו</span>' : ''}${t.repeat ? ' <span class="hint" style="font-size:12px;">· כל יום</span>' : t.nodate ? ' <span class="hint" style="font-size:12px;">· ללא תאריך</span>' : ''}${t.remindAt ? ` <span class="hint" style="font-size:12px;">· ⏰ ${t.remindAt}</span>` : ''}</span>
+          ${taskAttachHtml(t)}
           ${t.voice ? `<button type="button" class="btn ghost small" data-play="${t.id}" data-pemp="${empId}">▶ השמעה</button>` : ''}
           <button type="button" class="btn ghost small" data-tdel="${t.id}">מחיקה</button>
         </div>${taskRepliesHtml(t, empId, 'mgr')}</div>`).join('') : '<p class="hint" style="margin:4px 0 0;">אין משימות ליום הזה.</p>'}
       <form id="taskAddForm" style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <input type="text" id="taskText" placeholder="משימה חדשה..." maxlength="200" style="flex:1 1 220px;" required />
         <select id="taskKind" style="width:auto;"><option value="date">לתאריך שנבחר</option><option value="repeat">כל יום (א'–ה')</option><option value="nodate">ללא תאריך</option></select>
+        <label class="hint" style="display:flex; align-items:center; gap:4px; font-size:13px; margin:0; white-space:nowrap;" title="אם המשימה לא בוצעה עד השעה הזו, העובד מקבל צינתוק והתראה">⏰ תזכורת <input type="time" id="taskRemind" style="width:auto;" /></label>
+        <label class="btn ghost small" style="margin:0; cursor:pointer;" title="צירוף תמונה או קובץ">📎 <span id="taskAttachName">צירוף</span><input type="file" id="taskAttach" hidden /></label>
         <button type="submit" class="btn brass">הוספה</button>
       </form>
     </div>`;
   content.querySelectorAll('[data-temp]').forEach(b => b.onclick = () => { state._taskEmp = b.dataset.temp; renderAdminTasks(); });
   bindTaskReplies(content, empId, 'mgr', () => renderAdminTasks(true));
+  bindTaskAttachments(content);
   watchTaskThreads(empId, 'mgr', () => renderAdminTasks(true));
   if(items && unseenCount(items, 'mgr')) markRepliesSeen(empId, 'mgr').then(refreshTasksNavBadge);
   else refreshTasksNavBadge();
@@ -7349,18 +7384,61 @@ async function renderAdminTasks(soft){
     if(r !== true){ showToast('שגיאה בשמירה'); return; }
     renderAdminTasks();
   });
+  const attIn = document.getElementById('taskAttach');
+  attIn.onchange = () => { document.getElementById('taskAttachName').textContent = attIn.files[0] ? attIn.files[0].name.slice(0, 18) : 'צירוף'; };
   document.getElementById('taskAddForm').onsubmit = async ev => {
     ev.preventDefault();
     const text = document.getElementById('taskText').value.trim(); if(!text) return;
     const kind = document.getElementById('taskKind').value;
-    const fresh = await loadTasks(empId); if(fresh === null){ showToast('שגיאה בטעינה'); return; }
-    fresh.push(kind === 'repeat' ? { id: uid(), text, repeat: true, from: date, doneDates: [] }
-      : kind === 'nodate' ? { id: uid(), text, nodate: true, done: false, created: date }
-      : { id: uid(), text, date, done: false });
+    const remindAt = document.getElementById('taskRemind').value || '';
+    const btn = ev.target.querySelector('button[type=submit]'); btn.disabled = true;
+    let attach = null;
+    if(attIn.files[0]){
+      const file = attIn.files[0];
+      let data; try{ data = /^image\//.test(file.type) ? await shrinkImage(file) : await new Promise((r, j) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = j; fr.readAsDataURL(file); }); }catch(e){ btn.disabled = false; return showToast('לא הצלחנו לקרוא את הקובץ'); }
+      if(data.length > 950000){ btn.disabled = false; return showToast('הקובץ גדול מדי (עד כ-700KB)'); }
+      const fileId = uid() + uid();
+      const ok = await saveDoc(() => setDoc(doc(db, 'voiceMessages', fileId), { file: data, name: file.name, type: file.type || '', createdAt: new Date().toISOString() }), 'taskAttach');
+      if(ok !== true){ btn.disabled = false; return showToast('שגיאה בהעלאת הקובץ'); }
+      attach = { fileId, fileName: file.name, fileType: /^image\//.test(file.type) ? 'image/jpeg' : (file.type || '') };
+    }
+    const fresh = await loadTasks(empId); if(fresh === null){ btn.disabled = false; showToast('שגיאה בטעינה'); return; }
+    const extra = { ...(remindAt ? { remindAt } : {}), ...(attach ? { attach } : {}) };
+    fresh.push(kind === 'repeat' ? { id: uid(), text, repeat: true, from: date, doneDates: [], ...extra }
+      : kind === 'nodate' ? { id: uid(), text, nodate: true, done: false, created: date, ...extra }
+      : { id: uid(), text, date, done: false, ...extra });
     const r = await saveTasks(empId, fresh);
     if(r !== true){ showToast('שגיאה בשמירה: ' + r); return; }
     showToast('המשימה נוספה'); renderAdminTasks();
   };
+}
+
+// קובץ או תמונה שהמנהל צירף למשימה
+function taskAttachHtml(t){
+  const a = t && t.attach; if(!a) return '';
+  return /^image\//.test(a.fileType || '') ? `<img class="task-att-img" data-att-img="${a.fileId}" alt="" title="${escapeHtml(a.fileName || '')}" />`
+    : `<button type="button" class="btn ghost small" data-att-file="${a.fileId}" data-att-name="${escapeHtml(a.fileName || 'קובץ')}">📎 ${escapeHtml((a.fileName || 'קובץ').slice(0, 20))}</button>`;
+}
+function bindTaskAttachments(root){
+  root.querySelectorAll('[data-att-img]').forEach(async img => { const f = await loadTaskFile(img.dataset.attImg); if(f){ img.src = f.data; img.onclick = ev => { ev.stopPropagation(); openLightbox(f.data, f.name); }; } });
+  root.querySelectorAll('[data-att-file]').forEach(b => b.onclick = async ev => { ev.preventDefault(); ev.stopPropagation(); const f = await loadTaskFile(b.dataset.attFile); if(!f) return showToast('לא הצלחנו לטעון את הקובץ'); openChatFile(f, b.dataset.attName); });
+}
+// סיכום חודשי של המשימות לכל עובד: כמה קיבל, כמה ביצע
+function taskMonthStats(items, ym){
+  const today = todayStr(), [y, m] = ym.split('-').map(Number), last = new Date(y, m, 0).getDate();
+  let total = 0, done = 0;
+  (items || []).forEach(t => {
+    if(!t) return;
+    if(t.repeat){
+      for(let d = 1; d <= last; d++){
+        const ds = ym + '-' + String(d).padStart(2, '0');
+        if(ds < (t.from || '') || ds > today || dowOf(ds) > 4) continue;
+        total++; if((t.doneDates || []).includes(ds)) done++;
+      }
+    } else if(t.nodate){ if(String(t.created || '').slice(0, 7) === ym || (t.done && String(t.doneAt || '').slice(0, 7) === ym)){ total++; if(t.done) done++; } }
+    else if(String(t.date || '').slice(0, 7) === ym && t.date <= today){ total++; if(t.done) done++; }
+  });
+  return { total, done };
 }
 
 // ---------- תגובות על משימות: העובד שואל/מגיב, המנהל עונה. טקסט, הקלטה מהאתר (voiceMessages) או הקלטה מהקו ----------
