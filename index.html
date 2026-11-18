@@ -750,6 +750,11 @@ body.wa-open{ overflow:hidden; }
 .wa-chat .wa-time{ position:static; float:left; display:inline-flex; align-items:center; gap:3px; margin:7px 10px -3px 0; line-height:1; }
 .wa-chat .wa-bubble::after{ content:''; display:block; clear:both; }
 .wa-chat .wa-del{ z-index:1; }
+.wa-lb-stage{ position:absolute; inset:60px 0 0; display:flex; align-items:center; justify-content:center; overflow:hidden; touch-action:none; }
+.wa-lb-stage img{ max-width:94vw; max-height:calc(100vh - 90px); transform-origin:center center; transition:transform .08s ease-out; user-select:none; border-radius:2px; box-shadow:0 8px 40px rgba(0,0,0,.5); }
+.wa-lb-pct{ color:#E9EDEF; font-size:13px; min-width:44px; text-align:center; }
+.wa-lb-bar{ z-index:2; }
+.wa-lb-doc{ position:absolute; inset:60px 3vw 16px; width:94vw; height:calc(100vh - 76px); border:none; background:#fff; border-radius:6px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7386,18 +7391,75 @@ function shrinkImage(file){
 }
 
 // תמונה בגדול באותו חלון (כמו בוואטסאפ); סוגרים בלחיצה, ב-✕ או ב-Esc
+// תצוגת תמונה בגדול, עם זום: גלגלת עכבר, צביטה בטלפון, לחיצה כפולה, גרירה, וכפתורי + / −
 function openLightbox(src, name){
   const ov = document.createElement('div');
   ov.className = 'wa-lightbox';
-  ov.innerHTML = `<div class="wa-lb-bar"><button type="button" class="wa-lb-btn" data-lb-close aria-label="סגירה">✕</button><span class="wa-lb-name"></span><a class="wa-lb-btn" download aria-label="הורדה">⬇</a></div><img alt="" />`;
-  ov.querySelector('img').src = src;
+  ov.innerHTML = `<div class="wa-lb-bar"><button type="button" class="wa-lb-btn" data-lb-close aria-label="סגירה">✕</button><span class="wa-lb-name"></span>
+      <button type="button" class="wa-lb-btn" data-z="out" aria-label="הקטנה">−</button><span class="wa-lb-pct">100%</span><button type="button" class="wa-lb-btn" data-z="in" aria-label="הגדלה">+</button>
+      <a class="wa-lb-btn" download aria-label="הורדה">⬇</a></div>
+    <div class="wa-lb-stage"><img alt="" draggable="false" /></div>`;
+  const img = ov.querySelector('img'), stage = ov.querySelector('.wa-lb-stage'), pct = ov.querySelector('.wa-lb-pct');
+  img.src = src;
   ov.querySelector('.wa-lb-name').textContent = name || '';
   const a = ov.querySelector('a'); a.href = src; a.download = name || 'image.jpg';
-  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
-  const onKey = e => { if(e.key === 'Escape') close(); };
-  ov.onclick = e => { if(e.target === ov || e.target.closest('[data-lb-close]') || e.target.tagName === 'IMG') close(); };
+  let z = 1, x = 0, y = 0;
+  const apply = () => { z = Math.min(8, Math.max(1, z)); if(z === 1){ x = 0; y = 0; } img.style.transform = `translate(${x}px, ${y}px) scale(${z})`; img.style.cursor = z > 1 ? 'grab' : 'zoom-in'; pct.textContent = Math.round(z * 100) + '%'; };
+  const zoomAt = (nz, cx, cy) => { const r = stage.getBoundingClientRect(); const ox = cx - r.left - r.width / 2, oy = cy - r.top - r.height / 2; const k = Math.min(8, Math.max(1, nz)) / z; x = ox - (ox - x) * k; y = oy - (oy - y) * k; z = Math.min(8, Math.max(1, nz)); apply(); };
+  const center = () => { const r = stage.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  ov.querySelector('[data-z=in]').onclick = e => { e.stopPropagation(); zoomAt(z * 1.5, ...center()); };
+  ov.querySelector('[data-z=out]').onclick = e => { e.stopPropagation(); zoomAt(z / 1.5, ...center()); };
+  stage.addEventListener('wheel', e => { e.preventDefault(); zoomAt(z * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX, e.clientY); }, { passive: false });
+  img.addEventListener('dblclick', e => { e.stopPropagation(); zoomAt(z > 1 ? 1 : 2.5, e.clientX, e.clientY); });
+  // גרירה בעכבר
+  let drag = null, moved = false;
+  img.addEventListener('mousedown', e => { if(z <= 1) return; e.preventDefault(); drag = { sx: e.clientX - x, sy: e.clientY - y }; moved = false; img.style.cursor = 'grabbing'; });
+  const onMove = e => { if(!drag) return; moved = true; x = e.clientX - drag.sx; y = e.clientY - drag.sy; apply(); };
+  const onUp = () => { if(drag){ drag = null; apply(); } };
+  window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+  // מגע: צביטה לזום, אצבע אחת להזזה, הקשה כפולה
+  let pinch = null, pan = null, lastTap = 0;
+  stage.addEventListener('touchstart', e => {
+    if(e.touches.length === 2){ const [t1, t2] = e.touches; pinch = { d: Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY), z, cx: (t1.clientX + t2.clientX) / 2, cy: (t1.clientY + t2.clientY) / 2 }; pan = null; }
+    else if(e.touches.length === 1){
+      const t = e.touches[0], now = Date.now();
+      if(now - lastTap < 300){ zoomAt(z > 1 ? 1 : 2.5, t.clientX, t.clientY); lastTap = 0; return; }
+      lastTap = now; if(z > 1) pan = { sx: t.clientX - x, sy: t.clientY - y };
+    }
+  }, { passive: true });
+  stage.addEventListener('touchmove', e => {
+    if(pinch && e.touches.length === 2){ e.preventDefault(); const [t1, t2] = e.touches; const d = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY); zoomAt(pinch.z * d / pinch.d, pinch.cx, pinch.cy); }
+    else if(pan && e.touches.length === 1){ e.preventDefault(); const t = e.touches[0]; x = t.clientX - pan.sx; y = t.clientY - pan.sy; apply(); }
+  }, { passive: false });
+  stage.addEventListener('touchend', e => { if(e.touches.length < 2) pinch = null; if(!e.touches.length) pan = null; });
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  const onKey = e => { if(e.key === 'Escape') close(); if(e.key === '+' || e.key === '=') zoomAt(z * 1.5, ...center()); if(e.key === '-') zoomAt(z / 1.5, ...center()); };
+  ov.onclick = e => { if(e.target.closest('[data-lb-close]') || ((e.target === ov || e.target === stage) && z === 1)) close(); else if(e.target === img && z === 1 && !moved) zoomAt(2.5, e.clientX, e.clientY); };
   document.addEventListener('keydown', onKey);
   document.body.appendChild(ov);
+  apply();
+}
+// פתיחת קובץ שנשלח בצ'אט: תמונה – בתצוגה עם זום; PDF – בתוך האתר עם הזום של הדפדפן; טקסט – בתצוגה; אחר – הורדה
+function openChatFile(f, name){
+  const type = (String(f.data).match(/^data:([^;,]+)/) || [])[1] || '';
+  if(/^image\//.test(type)) return openLightbox(f.data, name);
+  if(type === 'application/pdf' || /^text\//.test(type)){
+    let url = f.data;
+    try{ const b64 = f.data.split(',')[1], bin = atob(b64), arr = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); url = URL.createObjectURL(new Blob([arr], { type: type + (/^text\//.test(type) ? ';charset=utf-8' : '') })); }catch(e){}
+    const ov = document.createElement('div'); ov.className = 'wa-lightbox';
+    ov.innerHTML = `<div class="wa-lb-bar"><button type="button" class="wa-lb-btn" data-lb-close aria-label="סגירה">✕</button><span class="wa-lb-name"></span><a class="wa-lb-btn" download aria-label="הורדה">⬇</a></div>
+      <iframe class="wa-lb-doc" title="תצוגת קובץ"></iframe>`;
+    ov.querySelector('.wa-lb-name').textContent = name || '';
+    ov.querySelector('iframe').src = url;
+    const a = ov.querySelector('a'); a.href = url; a.download = name || 'file';
+    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); if(url.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(url), 1000); };
+    const onKey = e => { if(e.key === 'Escape') close(); };
+    ov.onclick = e => { if(e.target === ov || e.target.closest('[data-lb-close]')) close(); };
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(ov);
+    return;
+  }
+  const a = document.createElement('a'); a.href = f.data; a.download = name || 'file'; document.body.appendChild(a); a.click(); a.remove();
 }
 
 // "מקליד... / מקליט הודעה..." – נשמר בשדה typing במסמך המשימות של העובד, והצד השני מאזין לשינויים
@@ -7474,7 +7536,7 @@ function bindTaskReplies(root, empId, from, after){
     ev.preventDefault();
     const f = await loadTaskFile(b.dataset.fileOpen);
     if(!f){ showToast('לא הצלחנו לטעון את הקובץ'); return; }
-    const a = document.createElement('a'); a.href = f.data; a.download = b.dataset.fileName || 'file'; document.body.appendChild(a); a.click(); a.remove();
+    openChatFile(f, b.dataset.fileName);
   });
   root.querySelectorAll('[data-reply-file]').forEach(inp => inp.onchange = async () => {
     const id = inp.dataset.replyFile, st = root.querySelector(`[data-reply-status="${id}"]`);
@@ -7824,7 +7886,7 @@ async function renderChatRoom(role, otherId){
     const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
     body.innerHTML = chatBubblesHtml(cur, me, isGroup, members) + `<div class="wa-row in wa-typing" id="chatTyping" hidden><div class="wa-bubble"><span class="wa-dots"><i></i><i></i><i></i></span> <span class="wa-typing-txt"></span></div></div>`;
     body.querySelectorAll('[data-file-img]').forEach(async img => { const f = await loadTaskFile(img.dataset.fileImg); if(f){ img.src = f.data; img.onclick = () => openLightbox(f.data, f.name); } });
-    body.querySelectorAll('[data-file-open]').forEach(b => b.onclick = async () => { const f = await loadTaskFile(b.dataset.fileOpen); if(!f) return showToast('לא הצלחנו לטעון את הקובץ'); const a = document.createElement('a'); a.href = f.data; a.download = b.dataset.fileName || 'file'; document.body.appendChild(a); a.click(); a.remove(); });
+    body.querySelectorAll('[data-file-open]').forEach(b => b.onclick = async () => { const f = await loadTaskFile(b.dataset.fileOpen); if(!f) return showToast('לא הצלחנו לטעון את הקובץ'); openChatFile(f, b.dataset.fileName); });
     body.querySelectorAll('[data-react-open], [data-msg-menu]').forEach(b => b.onclick = ev => { ev.stopPropagation(); openMsgMenu(b, b.dataset.reactOpen || b.dataset.msgMenu, !!b.dataset.reactOpen); });
     body.querySelectorAll('[data-mid]').forEach(el => {
       el.addEventListener('contextmenu', ev => { ev.preventDefault(); openMsgMenu(el, el.dataset.mid); });
@@ -8273,7 +8335,7 @@ function renderChatMonitorRoom(c, label){
   const paint = d => {
     body.innerHTML = chatBubblesHtml({ msgs: d.msgs || [] }, '__viewer__', true, members);
     body.querySelectorAll('[data-file-img]').forEach(async img => { const f = await loadTaskFile(img.dataset.fileImg); if(f){ img.src = f.data; img.onclick = () => openLightbox(f.data, f.name); } });
-    body.querySelectorAll('[data-file-open]').forEach(b => b.onclick = async () => { const f = await loadTaskFile(b.dataset.fileOpen); if(!f) return; const a = document.createElement('a'); a.href = f.data; a.download = b.dataset.fileName || 'file'; document.body.appendChild(a); a.click(); a.remove(); });
+    body.querySelectorAll('[data-file-open]').forEach(b => b.onclick = async () => { const f = await loadTaskFile(b.dataset.fileOpen); if(!f) return; openChatFile(f, b.dataset.fileName); });
     body.querySelectorAll('[data-msg-del]').forEach(b => b.remove());
     body.scrollTop = body.scrollHeight;
   };
