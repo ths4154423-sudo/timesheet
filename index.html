@@ -617,6 +617,19 @@
 .wa-img{ display:block; max-width:220px; max-height:220px; border-radius:6px; margin-bottom:4px; cursor:zoom-in; background:#ddd; min-height:40px; }
 .wa-file{ font:inherit; font-size:14px; border:none; background:rgba(0,0,0,.05); border-radius:8px; padding:7px 10px; cursor:pointer; color:#111B21; margin-bottom:2px; max-width:100%; text-align:right; }
 .wa-btn.attach{ background:#fff; color:#54656F; margin:0; }
+.wa-lightbox{ position:fixed; inset:0; z-index:10000; background:rgba(11,20,26,.92); display:flex; align-items:center; justify-content:center; animation:waFade .15s ease-out; }
+.wa-lightbox img{ max-width:94vw; max-height:84vh; border-radius:4px; box-shadow:0 8px 40px rgba(0,0,0,.5); cursor:zoom-out; }
+.wa-lb-bar{ position:absolute; top:0; left:0; right:0; display:flex; align-items:center; gap:12px; padding:10px 14px; color:#E9EDEF; }
+.wa-lb-name{ flex:1; font-size:14px; opacity:.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wa-lb-btn{ width:40px; height:40px; border-radius:50%; border:none; background:rgba(255,255,255,.12); color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; text-decoration:none; }
+@keyframes waFade{ from{ opacity:0; } to{ opacity:1; } }
+.wa-typing .wa-bubble{ padding:8px 12px; color:#667781; font-size:13px; min-width:0; }
+.wa-typing.solo{ margin:4px 32px 0 0; }
+.wa-dots{ display:inline-flex; gap:3px; vertical-align:middle; }
+.wa-dots i{ width:7px; height:7px; border-radius:50%; background:#34B7F1; display:block; animation:waDot 1.2s infinite ease-in-out; }
+.wa-dots i:nth-child(2){ animation-delay:.18s; } .wa-dots i:nth-child(3){ animation-delay:.36s; }
+@keyframes waDot{ 0%,60%,100%{ transform:translateY(0); opacity:.45; } 30%{ transform:translateY(-4px); opacity:1; } }
+.wa-toggle.typing::after{ content:' · מקליד...'; color:#34B7F1; font-weight:600; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -637,7 +650,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signInWithCustomToken, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
@@ -7000,6 +7013,7 @@ async function renderEmployeeTasks(emp){
       ${later.map(t => row(t, t.date, false)).join('')}
     </div>` : ''}`;
   bindTaskReplies(app, emp.id, 'emp', () => renderEmployeeTasks(emp));
+  watchTaskThreads(emp.id, 'emp', () => renderEmployeeTasks(emp));
   if(unseenCount(items, 'emp')) markRepliesSeen(emp.id, 'emp');
   app.querySelectorAll('[data-task]').forEach(cb => {
     cb.onchange = async () => {
@@ -7059,6 +7073,7 @@ async function renderAdminTasks(){
     </div>`;
   content.querySelectorAll('[data-temp]').forEach(b => b.onclick = () => { state._taskEmp = b.dataset.temp; renderAdminTasks(); });
   bindTaskReplies(content, empId, 'mgr', () => renderAdminTasks());
+  watchTaskThreads(empId, 'mgr', () => renderAdminTasks());
   if(items && unseenCount(items, 'mgr')) markRepliesSeen(empId, 'mgr').then(refreshTasksNavBadge);
   else refreshTasksNavBadge();
   document.getElementById('taskDate').onchange = e => { if(e.target.value){ state._taskDate = e.target.value; renderAdminTasks(); } };
@@ -7114,7 +7129,8 @@ function taskRepliesHtml(t, empId, viewer){
               <span class="wa-time">${when(r)}${mine(r) ? ` <span class="wa-ticks${r[viewer === 'emp' ? 'seenMgr' : 'seenEmp'] ? ' seen' : ''}">✓✓</span>` : ''}</span>
             </div>
           </div>`).join('')}
-      </div>` : ''}
+        <div class="wa-row in wa-typing" data-typing-for="${t.id}" hidden><div class="wa-bubble"><span class="wa-dots"><i></i><i></i><i></i></span> <span class="wa-typing-txt"></span></div></div>
+      </div>` : `<div class="wa-row in wa-typing solo" data-typing-for="${t.id}" hidden><div class="wa-bubble"><span class="wa-dots"><i></i><i></i><i></i></span> <span class="wa-typing-txt"></span></div></div>`}
       ${reps.length || open ? '' : `<button type="button" class="task-reply-open" data-thread-toggle="${t.id}">💬 ${viewer === 'emp' ? 'תגובה למנהל' : 'תשובה לעובד'}</button>`}
       <div class="wa-compose" data-reply-box="${t.id}"${reps.length || open ? '' : ' hidden'}>
         <textarea rows="1" maxlength="500" placeholder="הקלד הודעה"></textarea>
@@ -7147,6 +7163,70 @@ function shrinkImage(file){
     img.onerror = reject; img.src = url;
   });
 }
+
+// תמונה בגדול באותו חלון (כמו בוואטסאפ); סוגרים בלחיצה, ב-✕ או ב-Esc
+function openLightbox(src, name){
+  const ov = document.createElement('div');
+  ov.className = 'wa-lightbox';
+  ov.innerHTML = `<div class="wa-lb-bar"><button type="button" class="wa-lb-btn" data-lb-close aria-label="סגירה">✕</button><span class="wa-lb-name"></span><a class="wa-lb-btn" download aria-label="הורדה">⬇</a></div><img alt="" />`;
+  ov.querySelector('img').src = src;
+  ov.querySelector('.wa-lb-name').textContent = name || '';
+  const a = ov.querySelector('a'); a.href = src; a.download = name || 'image.jpg';
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = e => { if(e.key === 'Escape') close(); };
+  ov.onclick = e => { if(e.target === ov || e.target.closest('[data-lb-close]') || e.target.tagName === 'IMG') close(); };
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(ov);
+}
+
+// "מקליד... / מקליט הודעה..." – נשמר בשדה typing במסמך המשימות של העובד, והצד השני מאזין לשינויים
+let lastTypingSent = 0, lastTypingKey = '';
+function signalTyping(empId, taskId, who, kind){
+  const key = taskId + ':' + kind, now = Date.now();
+  if(kind && key === lastTypingKey && now - lastTypingSent < 2500) return;
+  lastTypingKey = kind ? key : ''; lastTypingSent = now;
+  const typing = kind ? { taskId, who, kind, at: trueNow().getTime() } : null;
+  setDoc(doc(db, 'tasks', empId), { typing }, { merge: true }).catch(() => {});
+}
+// מאזין למסמך המשימות כל עוד הדף פתוח: מציג "מקליד", ומרענן כשמגיעה הודעה חדשה (בלי למחוק טיוטה)
+function watchTaskThreads(empId, viewer, rerender){
+  if(state._threadWatch){ try{ state._threadWatch.unsub(); }catch(e){} clearInterval(state._threadWatch.timer); state._threadWatch = null; }
+  const countReps = items => (items || []).reduce((n, t) => n + ((t && t.replies) || []).length, 0);
+  let known = null, typing = null;
+  const paint = () => {
+    if(!document.querySelector('.wa-thread')){ stop(); return; }
+    document.querySelectorAll('[data-typing-for]').forEach(el => {
+      const on = typing && typing.who !== viewer && typing.taskId === el.dataset.typingFor && trueNow().getTime() - (typing.at || 0) < 7000;
+      el.hidden = !on;
+      if(on){ el.querySelector('.wa-typing-txt').textContent = (typing.who === 'mgr' ? 'המנהל ' : 'העובד ') + (typing.kind === 'recording' ? 'מקליט הודעה...' : 'מקליד...');
+        const chat = el.closest('.wa-chat'); if(chat) chat.scrollTop = chat.scrollHeight; }
+    });
+    document.querySelectorAll('[data-thread-toggle].wa-toggle:not(.open)').forEach(b => {
+      const on = typing && typing.who !== viewer && typing.taskId === b.dataset.threadToggle && trueNow().getTime() - (typing.at || 0) < 7000;
+      b.classList.toggle('typing', !!on);
+    });
+  };
+  const stop = () => { if(state._threadWatch){ try{ state._threadWatch.unsub(); }catch(e){} clearInterval(state._threadWatch.timer); state._threadWatch = null; } };
+  let unsub = () => {};
+  try{
+    unsub = onSnapshot(doc(db, 'tasks', empId), snap => {
+      const d = snap.exists() ? snap.data() : {};
+      typing = d.typing || null;
+      const n = countReps(d.items);
+      if(known !== null && n !== known){ known = n; keepDraftsAndRerender(rerender); return; }
+      known = n; paint();
+    }, () => {});
+  }catch(e){}
+  state._threadWatch = { unsub, timer: setInterval(paint, 1500) };
+}
+async function keepDraftsAndRerender(rerender){
+  const drafts = {}; let focused = null;
+  document.querySelectorAll('[data-reply-box]').forEach(b => { const ta = b.querySelector('textarea'); if(ta && ta.value) drafts[b.dataset.replyBox] = ta.value; if(ta && document.activeElement === ta) focused = b.dataset.replyBox; });
+  if(document.querySelector('.wa-btn.mic.rec')) return;   // לא מרעננים באמצע הקלטה
+  await rerender();
+  Object.entries(drafts).forEach(([id, v]) => { const ta = document.querySelector(`[data-reply-box="${id}"] textarea`); if(ta) ta.value = v; });
+  if(focused){ const ta = document.querySelector(`[data-reply-box="${focused}"] textarea`); if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
+}
 // מחבר את כפתורי התגובה. after() – מה לעשות אחרי שליחה (רינדור מחדש)
 function bindTaskReplies(root, empId, from, after){
   const recState = {};
@@ -7161,7 +7241,7 @@ function bindTaskReplies(root, empId, from, after){
   });
   root.querySelectorAll('[data-file-img]').forEach(async img => {
     const f = await loadTaskFile(img.dataset.fileImg);
-    if(f){ img.src = f.data; img.onclick = () => window.open().document.write('<img src="' + f.data + '" style="max-width:100%">'); } else img.alt = 'לא הצלחנו לטעון את התמונה';
+    if(f){ img.src = f.data; img.onclick = () => openLightbox(f.data, f.name); } else img.alt = 'לא הצלחנו לטעון את התמונה';
   });
   root.querySelectorAll('[data-file-open]').forEach(b => b.onclick = async ev => {
     ev.preventDefault();
@@ -7190,6 +7270,7 @@ function bindTaskReplies(root, empId, from, after){
   });
   const send = async (taskId, reply, btn) => {
     if(btn) btn.disabled = true;
+    signalTyping(empId, taskId, from, null);
     const fresh = await loadTasks(empId);
     const t = fresh && fresh.find(x => x.id === taskId);
     if(!t){ showToast('המשימה כבר לא קיימת'); after(); return; }
@@ -7201,7 +7282,8 @@ function bindTaskReplies(root, empId, from, after){
     after();
   };
   root.querySelectorAll('.wa-compose textarea').forEach(ta => {
-    ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 110) + 'px'; });
+    const tid = ta.parentElement.dataset.replyBox;
+    ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 110) + 'px'; if(ta.value.trim()) signalTyping(empId, tid, from, 'typing'); });
     ta.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); ta.parentElement.querySelector('[data-reply-send]').click(); } });
   });
   root.querySelectorAll('[data-reply-send]').forEach(b => b.onclick = ev => {
@@ -7233,6 +7315,8 @@ function bindTaskReplies(root, empId, from, after){
         send(id, { audioId }, b);
       };
       rec.start(); b.textContent = '⏹'; b.classList.add('rec'); st.textContent = 'מקליט... לחצו ⏹ לשליחה';
+      signalTyping(empId, id, from, 'recording');
+      const recPing = setInterval(() => { if(rec.state !== 'recording'){ clearInterval(recPing); return; } signalTyping(empId, id, from, 'recording'); }, 3000);
     }catch(e){ st.textContent = 'אין גישה למיקרופון. יש לאשר הרשאה בדפדפן.'; }
   });
 }
