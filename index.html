@@ -659,6 +659,7 @@
 .wa-pick{ max-width:420px; width:92vw; text-align:right; }
 .wa-pick-list{ max-height:50vh; overflow-y:auto; margin:6px 0; }
 .wa-pick-row{ display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid #F0F2F5; cursor:pointer; font-size:15px; }
+.wa-notif{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:12px 16px; font-size:14px; background:#E7F8F1; border-color:#BDE9D6; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -3370,6 +3371,7 @@ function renderAdminDashboard(tab){
 
   if(canSeeTab('tasks') && tab !== 'tasks') refreshTasksNavBadge();
   if(tab !== 'chat') refreshChatBadge('mgr');
+  startChatNotifier('mgr');
   if(tab === 'dashboard') fillAdminKpis();
   else { const b = document.querySelector('[data-badge="requests"]'); if(b) loadRequests().then(l => { if(l){ const n = l.filter(r => r.status === 'pending').length; b.textContent = n ? String(n) : ''; } }); }
 }
@@ -5387,7 +5389,7 @@ async function renderAdminSettings(){
 
 // ---------- EMPLOYEE DASHBOARD ----------
 async function renderEmployeeDashboard(emp, editingId, useCache){
-  if(emp && emp.chatOnly){ state.currentEmployee = emp; return renderChatHome('emp'); }
+  if(emp && emp.chatOnly){ state.currentEmployee = emp; startChatNotifier('emp'); return renderChatHome('emp'); }
   if(shabbatGuard()) return;
   stopLiveTimer();
   stopLiveMoneyTimer();
@@ -5950,6 +5952,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   // שעצרה את המשך הפונקציה - ולכן כפתור "עדכון שינויים" בעריכה לא עשה כלום.
   checkEmpTasks(emp);
   refreshChatBadge('emp');
+  startChatNotifier('emp');
   const readoutHoursEl = document.getElementById('readoutHours');
   if(readoutHoursEl) readoutHoursEl.textContent = fmtHours(totalHours);
   const readoutPayEl = document.getElementById('readoutPay');
@@ -7529,6 +7532,7 @@ async function renderChatHome(role){
     return { c, last, un, prev };
   }).sort((a, b) => (a.c.id === 'team' ? -1 : b.c.id === 'team' ? 1 : String(b.last ? b.last.at : '').localeCompare(String(a.last ? a.last.at : ''))));
   target.innerHTML = `
+    ${('Notification' in window) && Notification.permission !== 'granted' ? `<div class="card wa-notif"><span>🔔 רוצים הודעה קופצת בשולחן העבודה כשמגיעה הודעה?</span><button type="button" class="btn brass small" id="chatNotifOn">${Notification.permission === 'denied' ? 'ההתראות חסומות בדפדפן' : 'הפעלת התראות'}</button></div>` : ''}
     <div class="card wa-list">
       <button type="button" class="wa-contact wa-newgroup" id="chatNewGroup"><span class="wa-avatar group">＋</span><span class="wa-c-main"><b>קבוצה חדשה</b><span class="wa-c-prev">בוחרים משתתפים ונותנים שם</span></span></button>
       ${rows.map(r => `
@@ -7539,6 +7543,12 @@ async function renderChatHome(role){
         </button>`).join('')}
     </div>`;
   target.querySelectorAll('[data-chat-open]').forEach(b => b.onclick = () => renderChatRoom(role, b.dataset.chatOpen));
+  const nb = document.getElementById('chatNotifOn');
+  if(nb) nb.onclick = async () => {
+    if(Notification.permission === 'denied'){ showToast('צריך לאפשר התראות בהגדרות האתר בדפדפן (סמל המנעול ליד הכתובת)'); return; }
+    const r = await Notification.requestPermission();
+    if(r === 'granted'){ showToast('ההתראות הופעלו'); new Notification('דירתא – צ׳אט', { body: 'מעכשיו תקבלו כאן הודעה כשמגיעה הודעה חדשה', icon: 'logo.jpg' }); renderChatHome(role); }
+  };
   document.getElementById('chatNewGroup').onclick = async () => {
     const pick = await chatPickMembers(contacts0.filter(c => !c.group), [], true);
     if(!pick) return;
@@ -7591,6 +7601,7 @@ function chatBubblesHtml(ch, me, isGroup, members){
 async function renderChatRoom(role, otherId){
   if(state._chatWatch){ try{ state._chatWatch(); }catch(e){} state._chatWatch = null; }
   const me = chatMe(role), id = chatIdWith(me, otherId), custom = /^g_/.test(otherId), isGroup = otherId === 'team' || custom;
+  state._chatOpenId = id;
   const allContacts = await chatContacts(role);
   const target = role === 'mgr' ? document.getElementById('tabContent') : app;
   const g = custom ? await loadChat(id) : null;
@@ -7761,6 +7772,54 @@ function renderChatOnlyForm(id){
     const ok = await saveEmployees(updated); if(ok !== true) return showToast('שגיאה בשמירה');
     state.employees = updated; showToast('הוסר'); state._empView = 'list'; renderAdminEmployees();
   };
+}
+
+// התראה קופצת בשולחן העבודה על הודעה חדשה בצ'אט – כל עוד האתר פתוח בכרטיסייה כלשהי (גם ברקע)
+async function startChatNotifier(role){
+  const me = chatMe(role); if(!me) return;
+  if(state._chatNotif && state._chatNotif.me === me) return;
+  if(state._chatNotif){ state._chatNotif.unsubs.forEach(u => { try{ u(); }catch(e){} }); }
+  const unsubs = []; state._chatNotif = { me, unsubs };
+  let ids;
+  try{
+    const contacts = await chatContacts(role);
+    const groups = await myChatGroups(me);
+    ids = [...contacts.map(c => chatIdWith(me, c.id)), ...groups.map(g => g.id)];
+    groups.forEach(g => { state._chatNames[g.id] = g.name; });
+  }catch(e){ return; }
+  const lastSeenIds = {};
+  ids.forEach(id => {
+    try{
+      unsubs.push(onSnapshot(doc(db, 'chats', id), snap => {
+        const d = snap.exists() ? snap.data() : {}, msgs = d.msgs || [];
+        const newest = msgs.slice(-1)[0];
+        if(!(id in lastSeenIds)){ lastSeenIds[id] = newest ? newest.id : null; return; }   // טעינה ראשונה – לא מתריעים על ישנות
+        const prevIdx = lastSeenIds[id] ? msgs.findIndex(m => m.id === lastSeenIds[id]) : -1;
+        const fresh = msgs.slice(prevIdx + 1).filter(m => m.from !== me && !m.deleted);
+        lastSeenIds[id] = newest ? newest.id : null;
+        if(!fresh.length) return;
+        refreshChatBadge(role);
+        const inRoomNow = document.getElementById('chatBody') && state._chatOpenId === id && document.visibilityState === 'visible';
+        if(inRoomNow) return;
+        notifyChat(role, id, d, fresh[fresh.length - 1]);
+      }, () => {}));
+    }catch(e){}
+  });
+}
+function notifyChat(role, id, d, m){
+  const who = state._chatNames[m.from] || 'הודעה חדשה';
+  const where = id === 'team' ? 'כל הצוות' : /^g_/.test(id) ? (d.name || 'קבוצה') : '';
+  const body = m.text ? m.text.slice(0, 140) : m.fileId ? '📎 קובץ' : m.audioId ? '🎙 הודעה קולית' : '';
+  if(!('Notification' in window) || Notification.permission !== 'granted'){ if(document.visibilityState === 'visible') showToast('💬 ' + who + ': ' + body); return; }
+  try{
+    const n = new Notification(where ? where + ' · ' + who : who, { body, icon: 'logo.jpg', tag: 'chat-' + id, renotify: true });
+    n.onclick = () => {
+      window.focus(); n.close();
+      const other = id === 'team' || /^g_/.test(id) ? id : id.split('__').find(x => x !== chatMe(role));
+      if(role === 'mgr'){ renderAdminDashboard('chat'); setTimeout(() => renderChatRoom('mgr', other), 300); }
+      else renderChatRoom('emp', other);
+    };
+  }catch(e){}
 }
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
