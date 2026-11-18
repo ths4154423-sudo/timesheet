@@ -677,7 +677,8 @@
 .logout-link{ display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:14px; font-weight:500; color:var(--ink, #243B53); background:none; border:none; padding:6px 4px; cursor:pointer; opacity:.85; }
 .logout-link:hover{ opacity:1; color:#C0392B; }
 #headerActions{ display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:6px; }
-#headerActions .logout-link{ flex-basis:100%; justify-content:flex-end; margin-top:2px; }
+#headerActions .logout-link{ flex-basis:100%; justify-content:flex-end; order:-1; margin-bottom:2px; }
+.logout-link svg{ transform:scaleX(-1); }
 .call-remote{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; display:none; }
 .call-ov.has-video .call-remote{ display:block; }
 .call-local{ position:absolute; top:16px; left:16px; width:140px; height:105px; object-fit:cover; border-radius:10px; z-index:2; background:#222; transform:scaleX(-1); box-shadow:0 4px 16px rgba(0,0,0,.4); }
@@ -710,6 +711,23 @@
 .wa-rx-show span{ background:#fff; border-radius:12px; padding:1px 6px; font-size:13px; box-shadow:0 1px 2px rgba(0,0,0,.15); position:relative; z-index:1; }
 .wa-rx-show span.mine{ background:#E7F8F1; }
 .call-btn svg{ width:28px; height:28px; }
+.wa-menu{ position:fixed; z-index:10002; background:#fff; border-radius:14px; box-shadow:0 6px 28px rgba(0,0,0,.22); overflow:hidden; min-width:210px; }
+.wa-menu-rx{ display:flex; gap:2px; padding:6px 8px; border-bottom:1px solid #F0F2F5; }
+.wa-menu-rx button{ border:none; background:none; font-size:22px; width:36px; height:36px; border-radius:50%; cursor:pointer; }
+.wa-menu-rx button:hover, .wa-menu-rx button.on{ background:#E7F8F1; }
+.wa-menu-list button{ display:block; width:100%; text-align:right; font:inherit; font-size:15px; border:none; background:none; padding:11px 16px; cursor:pointer; color:#111B21; }
+.wa-menu-list button:hover{ background:#F5F6F6; }
+.wa-menu-list button.danger{ color:#D93025; }
+.wa-quote{ display:flex; flex-direction:column; background:rgba(0,0,0,.05); border-right:4px solid #06CF9C; border-radius:6px; padding:4px 8px; margin-bottom:4px; font-size:13px; cursor:pointer; max-width:100%; }
+.wa-quote b{ color:#06CF9C; font-size:12.5px; }
+.wa-quote span{ color:#54656F; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wa-replybar{ display:flex; align-items:center; gap:6px; background:#F0F2F5; padding:6px 10px 0; }
+.wa-replybar[hidden]{ display:none; }
+.wa-replybar .wa-quote{ flex:1; margin:0; background:#fff; cursor:default; }
+.wa-fwd{ font-size:12px; color:#667781; font-style:italic; margin-bottom:2px; }
+.wa-row.wa-flash .wa-bubble{ box-shadow:0 0 0 3px rgba(6,207,156,.45); }
+.wa-bubble{ -webkit-user-select:text; user-select:text; -webkit-touch-callout:none; }
+@media (hover:none){ .wa-del{ opacity:.55; } .wa-rx-btn{ opacity:.8; width:30px; height:30px; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7660,9 +7678,11 @@ function chatBubblesHtml(ch, me, isGroup, members){
     Object.values(rx).forEach(e => { counts[e] = (counts[e] || 0) + 1; });
     const reactHtml = (Object.keys(counts).length ? `<div class="wa-rx-show">${Object.entries(counts).map(([e, n]) => `<span${rx[me] === e ? ' class="mine"' : ''}>${e}${n > 1 ? ' ' + n : ''}</span>`).join('')}</div>` : '')
       + (me === '__viewer__' ? '' : `<button type="button" class="wa-rx-btn" data-react-open="${m.id}" title="תגובה" aria-label="תגובה">${WAI.smile}</button>`);
-    return `<div class="wa-row ${mine ? 'out' : 'in'}"><div class="wa-bubble">
-      ${canDel ? `<button type="button" class="wa-del" data-msg-del="${m.id}" title="מחיקת ההודעה" aria-label="מחיקת ההודעה">${WAI.chev}</button>` : ''}
+    return `<div class="wa-row ${mine ? 'out' : 'in'}" data-row="${m.id}"><div class="wa-bubble" data-mid="${m.id}">
+      ${me === '__viewer__' ? '' : `<button type="button" class="wa-del" data-msg-menu="${m.id}" title="אפשרויות" aria-label="אפשרויות">${WAI.chev}</button>`}
       ${!mine && isGroup ? `<div class="wa-name">${escapeHtml(state._chatNames[m.from] || '')}</div>` : ''}
+      ${m.fwd ? '<div class="wa-fwd">↪ הועברה</div>' : ''}
+      ${m.reply ? `<div class="wa-quote" data-jump="${m.reply.id}"><b>${m.reply.from === me ? 'אתה' : escapeHtml(state._chatNames[m.reply.from] || '')}</b><span>${escapeHtml(m.reply.snip || '')}</span></div>` : ''}
       ${m.fileId ? (/^image\//.test(m.fileType || '') ? `<img class="wa-img" data-file-img="${m.fileId}" alt="" />` : `<button type="button" class="wa-file" data-file-open="${m.fileId}" data-file-name="${escapeHtml(m.fileName || 'קובץ')}">📄 ${escapeHtml(m.fileName || 'קובץ')}</button>`) : ''}
       ${m.audioId ? `<button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button>` : ''}
       ${m.text ? `<div class="wa-text">${escapeHtml(m.text)}</div>` : ''}
@@ -7688,6 +7708,7 @@ async function renderChatRoom(role, otherId){
         ${isGroup ? '' : '<button type="button" class="wa-back" id="chatVideo" title="שיחת וידאו" aria-label="שיחת וידאו">' + WAI.video + '</button><button type="button" class="wa-back" id="chatCall" title="שיחה קולית" aria-label="שיחה קולית">' + WAI.phone + '</button>'}
         <button type="button" class="wa-back" id="chatClear" title="ניקוי הצ׳אט" aria-label="ניקוי הצ׳אט">${WAI.trash}</button></div>
       <div class="wa-chat wa-room-chat" id="chatBody"></div>
+      <div class="wa-replybar" id="chatReplyBar" hidden><div class="wa-quote"><b id="chatReplyWho"></b><span id="chatReplySnip"></span></div><button type="button" class="wa-back" id="chatReplyX" aria-label="ביטול">✕</button></div>
       <div class="wa-compose">
         <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
         <label class="wa-btn attach" title="צירוף קובץ">${WAI.attach}<input type="file" id="chatFile" hidden /></label>
@@ -7728,37 +7749,14 @@ async function renderChatRoom(role, otherId){
     body.innerHTML = chatBubblesHtml(cur, me, isGroup, members) + `<div class="wa-row in wa-typing" id="chatTyping" hidden><div class="wa-bubble"><span class="wa-dots"><i></i><i></i><i></i></span> <span class="wa-typing-txt"></span></div></div>`;
     body.querySelectorAll('[data-file-img]').forEach(async img => { const f = await loadTaskFile(img.dataset.fileImg); if(f){ img.src = f.data; img.onclick = () => openLightbox(f.data, f.name); } });
     body.querySelectorAll('[data-file-open]').forEach(b => b.onclick = async () => { const f = await loadTaskFile(b.dataset.fileOpen); if(!f) return showToast('לא הצלחנו לטעון את הקובץ'); const a = document.createElement('a'); a.href = f.data; a.download = b.dataset.fileName || 'file'; document.body.appendChild(a); a.click(); a.remove(); });
-    body.querySelectorAll('[data-react-open]').forEach(b => b.onclick = ev => {
-      ev.stopPropagation();
-      document.querySelectorAll('.wa-rx-pop').forEach(x => x.remove());
-      const pop = document.createElement('div'); pop.className = 'wa-rx-pop';
-      pop.innerHTML = ['👍', '❤️', '😂', '😮', '🙏', '👏'].map(e => `<button type="button" data-rx="${e}">${e}</button>`).join('');
-      document.body.appendChild(pop);
-      const r0 = b.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
-      pop.style.top = (r0.top - ph - 6 < 8 ? r0.bottom + 6 : r0.top - ph - 6) + 'px';
-      pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r0.left + r0.width / 2 - pw / 2)) + 'px';
-      const close = e => { if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('click', close); } };
-      setTimeout(() => document.addEventListener('click', close), 0);
-      pop.querySelectorAll('[data-rx]').forEach(x => x.onclick = async e2 => {
-        e2.stopPropagation(); pop.remove();
-        const fresh = await loadChat(id); if(!fresh) return;
-        const m = (fresh.msgs || []).find(y => y.id === b.dataset.reactOpen); if(!m) return;
-        const r = { ...(m.reactions || {}) };
-        if(r[me] === x.dataset.rx) delete r[me]; else r[me] = x.dataset.rx;
-        m.reactions = r;
-        await saveDoc(() => setDoc(doc(db, 'chats', id), { msgs: fresh.msgs }, { merge: true }), 'chatReact');
-      });
+    body.querySelectorAll('[data-react-open], [data-msg-menu]').forEach(b => b.onclick = ev => { ev.stopPropagation(); openMsgMenu(b, b.dataset.reactOpen || b.dataset.msgMenu, !!b.dataset.reactOpen); });
+    body.querySelectorAll('[data-mid]').forEach(el => {
+      el.addEventListener('contextmenu', ev => { ev.preventDefault(); openMsgMenu(el, el.dataset.mid); });
+      let lp = null;
+      el.addEventListener('touchstart', () => { lp = setTimeout(() => { lp = null; if(navigator.vibrate) navigator.vibrate(15); openMsgMenu(el, el.dataset.mid); }, 480); }, { passive: true });
+      ['touchend', 'touchmove', 'touchcancel'].forEach(t => el.addEventListener(t, () => { clearTimeout(lp); }, { passive: true }));
     });
-    body.querySelectorAll('[data-msg-del]').forEach(b => b.onclick = async ev => {
-      ev.stopPropagation();
-      if(!(await showConfirmModal('למחוק את ההודעה? היא תימחק אצל כולם.', { yes: 'מחיקה', danger: true }))) return;
-      const fresh = await loadChat(id); if(!fresh) return showToast('שגיאה בטעינה');
-      const m = (fresh.msgs || []).find(x => x.id === b.dataset.msgDel); if(!m) return;
-      if(m.from !== me && me !== 'mgr') return;
-      ['text', 'fileId', 'fileName', 'fileType', 'audioId'].forEach(k => delete m[k]); m.deleted = true;
-      const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), { msgs: fresh.msgs }, { merge: true }), 'chatDelete');
-      if(ok !== true) showToast('המחיקה לא הצליחה');
-    });
+    body.querySelectorAll('[data-jump]').forEach(q => q.onclick = () => { const t = body.querySelector(`[data-row="${q.dataset.jump}"]`); if(t){ t.scrollIntoView({ block: 'center', behavior: 'smooth' }); t.classList.add('wa-flash'); setTimeout(() => t.classList.remove('wa-flash'), 1200); } });
     paintTyping();
     if(atBottom || !paint.done) body.scrollTop = body.scrollHeight;
     paint.done = true;
@@ -7780,9 +7778,74 @@ async function renderChatRoom(role, otherId){
   let lastT = 0;
   const sigTyping = kind => { const now = Date.now(); if(kind && now - lastT < 2500) return; lastT = kind ? now : 0;
     setDoc(doc(db, 'chats', id), { typing: kind ? { who: me, kind, at: trueNow().getTime() } : null }, { merge: true }).catch(() => {}); };
+
+  // תפריט הודעה כמו בוואטסאפ: תגובה באימוג'י, השב, העתקה, העברה, מחיקה
+  const snipOf = m => m.text ? m.text.slice(0, 90) : m.fileId ? '📎 ' + (m.fileName || 'קובץ') : m.audioId ? '🎙 הודעה קולית' : '';
+  let replyTo = null;
+  const setReply = m => {
+    replyTo = m ? { id: m.id, from: m.from, snip: snipOf(m) } : null;
+    const bar = document.getElementById('chatReplyBar'); if(!bar) return;
+    bar.hidden = !m;
+    if(m){ document.getElementById('chatReplyWho').textContent = m.from === me ? 'אתה' : (state._chatNames[m.from] || ''); document.getElementById('chatReplySnip').textContent = replyTo.snip; input.focus(); }
+  };
+  document.getElementById('chatReplyX').onclick = () => setReply(null);
+  const saveMsgs = async (mutate, label) => {
+    const fresh = await loadChat(id); if(!fresh) return showToast('שגיאה בטעינה');
+    if(mutate(fresh.msgs || []) === false) return;
+    const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), { msgs: fresh.msgs }, { merge: true }), label);
+    if(ok !== true) showToast('הפעולה לא הצליחה');
+  };
+  const openMsgMenu = (anchor, mid, onlyReacts) => {
+    document.querySelectorAll('.wa-rx-pop, .wa-menu').forEach(x => x.remove());
+    const m = (cur.msgs || []).find(x => x.id === mid); if(!m || m.deleted) return;
+    const canDel = m.from === me || me === 'mgr';
+    const pop = document.createElement('div'); pop.className = 'wa-menu';
+    pop.innerHTML = `<div class="wa-menu-rx">${['👍', '❤️', '😂', '😮', '🙏', '👏'].map(e => `<button type="button" data-rx="${e}"${(m.reactions || {})[me] === e ? ' class="on"' : ''}>${e}</button>`).join('')}</div>`
+      + (onlyReacts ? '' : `<div class="wa-menu-list">
+        <button type="button" data-act="reply">↩&nbsp; השב</button>
+        ${m.text ? '<button type="button" data-act="copy">📋&nbsp; העתקה</button>' : ''}
+        <button type="button" data-act="fwd">↪&nbsp; העברה</button>
+        ${canDel ? '<button type="button" data-act="del" class="danger">🗑&nbsp; מחיקה</button>' : ''}</div>`);
+    document.body.appendChild(pop);
+    const r0 = anchor.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+    pop.style.top = Math.max(8, Math.min(window.innerHeight - ph - 8, r0.top - ph - 6 < 8 ? r0.bottom + 6 : r0.top - ph - 6)) + 'px';
+    pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r0.left + r0.width / 2 - pw / 2)) + 'px';
+    const close = e => { if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('click', close, true); document.removeEventListener('touchstart', close, true); } };
+    setTimeout(() => { document.addEventListener('click', close, true); document.addEventListener('touchstart', close, true); }, 0);
+    pop.querySelectorAll('[data-rx]').forEach(x => x.onclick = () => { pop.remove(); saveMsgs(msgs => { const t = msgs.find(y => y.id === mid); if(!t) return false; const r = { ...(t.reactions || {}) }; if(r[me] === x.dataset.rx) delete r[me]; else r[me] = x.dataset.rx; t.reactions = r; }, 'chatReact'); });
+    pop.querySelectorAll('[data-act]').forEach(x => x.onclick = async () => {
+      pop.remove();
+      const act = x.dataset.act;
+      if(act === 'reply') setReply(m);
+      else if(act === 'copy'){ try{ await navigator.clipboard.writeText(m.text); showToast('הועתק'); }catch(e){ showToast('לא הצלחנו להעתיק'); } }
+      else if(act === 'fwd') forwardMsg(m);
+      else if(act === 'del'){
+        if(!(await showConfirmModal('למחוק את ההודעה? היא תימחק אצל כולם.', { yes: 'מחיקה', danger: true }))) return;
+        saveMsgs(msgs => { const t = msgs.find(y => y.id === mid); if(!t || (t.from !== me && me !== 'mgr')) return false; ['text', 'fileId', 'fileName', 'fileType', 'audioId', 'reply', 'reactions'].forEach(k => delete t[k]); t.deleted = true; }, 'chatDelete');
+      }
+    });
+  };
+  const forwardMsg = async m => {
+    const list = allContacts.filter(c => c.id !== otherId);
+    const groups = await myChatGroups(me);
+    const opts = [...list.map(c => ({ id: c.id, name: c.name })), ...groups.filter(g => g.id !== id).map(g => ({ id: g.id, name: '👥 ' + (g.name || 'קבוצה') }))];
+    const pick = await chatPickMembers(opts, [], false, 'העברה אל...');
+    if(!pick) return;
+    const copy = { text: m.text, fileId: m.fileId, fileName: m.fileName, fileType: m.fileType, audioId: m.audioId };
+    Object.keys(copy).forEach(k => copy[k] === undefined && delete copy[k]);
+    for(const target of pick.ids){
+      const cid = chatIdWith(me, target);
+      const fresh = await loadChat(cid) || { msgs: [] };
+      const nm = Object.assign({ id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [], fwd: true }, copy);
+      const extra = /^g_/.test(cid) || cid === 'team' ? {} : { members: [me, target] };
+      await saveDoc(() => setDoc(doc(db, 'chats', cid), { msgs: [...(fresh.msgs || []), nm].slice(-CHAT_MAX), ...extra }, { merge: true }), 'chatFwd');
+    }
+    showToast(pick.ids.length > 1 ? 'ההודעה הועברה ל-' + pick.ids.length + ' שיחות' : 'ההודעה הועברה');
+  };
   const send = async extra => {
     sigTyping(null);
     const m = Object.assign({ id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [] }, extra);
+    if(replyTo){ m.reply = replyTo; setReply(null); }
     cur = { ...cur, msgs: [...(cur.msgs || []), m] }; paint();
     const fresh = await loadChat(id); if(!fresh){ showToast('ההודעה לא נשלחה'); return; }
     const msgs = [...(fresh.msgs || []), m].slice(-CHAT_MAX);
