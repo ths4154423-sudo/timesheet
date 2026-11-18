@@ -730,6 +730,21 @@
 @media (hover:none){ .wa-del{ opacity:.55; } .wa-rx-btn{ opacity:.8; width:30px; height:30px; } }
 a.wa-back[hidden]{ display:none; }
 a.wa-back{ text-decoration:none; }
+.wa-full{ position:fixed; inset:0; z-index:500; background:#fff; display:flex; flex-direction:column; height:100vh; height:100dvh; }
+.wa-full-head{ display:flex; align-items:center; gap:10px; padding:10px 14px; background:#008069; color:#fff; font-size:18px; flex:0 0 auto; }
+.wa-full-head .wa-back{ color:#fff; }
+.wa-full-head .logout-link{ color:#fff; }
+.wa-full-body{ flex:1; overflow-y:auto; padding:10px; background:#fff; }
+.wa-full-body .card{ box-shadow:none; border:none; margin-bottom:6px; }
+.wa-full-body .wa-list{ padding:0; }
+.wa-room{ position:fixed !important; inset:0; z-index:500; margin:0 !important; border-radius:0 !important; display:flex; flex-direction:column; height:100vh; height:100dvh; border:none !important; }
+.wa-room .wa-room-head{ background:#008069; color:#fff; flex:0 0 auto; }
+.wa-room .wa-room-head .wa-back{ color:#fff; }
+.wa-room .wa-room-head .wa-room-sub{ color:rgba(255,255,255,.8); }
+.wa-room .wa-room-chat{ flex:1; height:auto; min-height:0; }
+.wa-room .wa-compose, .wa-room .wa-replybar{ flex:0 0 auto; }
+@media (min-width:900px){ .wa-room .wa-room-chat{ padding:16px 8%; } .wa-full-body{ padding:10px 8%; } }
+body.wa-open{ overflow:hidden; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7652,7 +7667,14 @@ async function renderChatHome(role){
     const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.audioId ? '🎙 הודעה קולית' : ''))) : 'אין הודעות עדיין';
     return { c, last, un, prev };
   }).sort((a, b) => (a.c.id === 'team' ? -1 : b.c.id === 'team' ? 1 : String(b.last ? b.last.at : '').localeCompare(String(a.last ? a.last.at : ''))));
-  target.innerHTML = `
+  const coUser = role !== 'mgr' && state.currentEmployee && state.currentEmployee.chatOnly;
+  target.innerHTML = `<div class="wa-full" id="waFull">
+    <div class="wa-full-head">
+      ${coUser ? '' : `<button type="button" class="wa-back" id="waFullClose" aria-label="חזרה">${WAI.back}</button>`}
+      <b>צ׳אט</b>
+      ${coUser ? `<button type="button" class="logout-link" id="waFullLogout" style="margin-inline-start:auto;">התנתקות</button>` : ''}
+    </div>
+    <div class="wa-full-body">
     ${!('Notification' in window) ? '' : Notification.permission !== 'granted' ? `<div class="card wa-notif"><span>🔔 רוצים הודעה קופצת בשולחן העבודה כשמגיעה הודעה?</span><button type="button" class="btn brass small" id="chatNotifOn">${Notification.permission === 'denied' ? 'ההתראות חסומות בדפדפן' : 'הפעלת התראות'}</button></div>` : `<div class="wa-notif-ok">🔔 ההתראות פעילות · <button type="button" class="linklike" id="chatNotifTest">שליחת התראת ניסיון</button></div>`}
     ${role === 'mgr' ? '' : '<div class="wa-notice">💼 הצ׳אט הוא כלי עבודה. השיחות והקבוצות גלויות גם למנהל.</div>'}
     <div class="card wa-list">
@@ -7663,9 +7685,15 @@ async function renderChatHome(role){
           <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(r.c.name)}</b><span class="wa-c-time">${r.last ? chatTime(r.last.at) : ''}</span></span>
             <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml(r.prev)}</span>${r.un ? `<span class="wa-c-unread">${r.un}</span>` : ''}</span></span>
         </button>`).join('')}
-    </div>`;
+    </div>
+    <div id="waMonitorSlot"></div>
+    </div></div>`;
+  const fc = document.getElementById('waFullClose');
+  if(fc) fc.onclick = () => role === 'mgr' ? renderAdminDashboard('dashboard') : renderEmployeeDashboard(state.currentEmployee);
+  const fl = document.getElementById('waFullLogout');
+  if(fl) fl.onclick = () => { state.currentEmployee = null; clearSession(); signOut(auth).catch(() => {}); renderLanding(); };
   target.querySelectorAll('[data-chat-open]').forEach(b => b.onclick = () => renderChatRoom(role, b.dataset.chatOpen));
-  if(role === 'mgr') renderChatMonitor(target, groups.map(g => g.id));
+  if(role === 'mgr') renderChatMonitor(document.getElementById('waMonitorSlot'), groups.map(g => g.id));
   const nt = document.getElementById('chatNotifTest');
   if(nt) nt.onclick = () => { setTimeout(() => showDesktopNote('דירתא – התראת ניסיון', 'אם רואים את זה, ההתראות עובדות ✓', null), 2500); showToast('ההתראה תקפוץ בעוד 2 שניות – אפשר לעבור לחלון אחר'); };
   const nb = document.getElementById('chatNotifOn');
