@@ -757,6 +757,20 @@ body.wa-open{ overflow:hidden; }
 .wa-lb-doc{ position:absolute; inset:60px 3vw 16px; width:94vw; height:calc(100vh - 76px); border:none; background:#fff; border-radius:6px; }
 .wa-lb-media{ max-width:94vw; max-height:calc(100vh - 100px); border-radius:6px; background:#000; }
 audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
+.wa-doc-wrap{ position:absolute; inset:60px 0 0; display:flex; flex-direction:column; align-items:center; overflow:hidden; }
+.wa-doc-tabs{ display:flex; gap:4px; flex-wrap:wrap; padding:0 10px 8px; }
+.wa-doc-tabs[hidden]{ display:none; }
+.wa-doc-tabs button{ font:inherit; font-size:13px; border:none; border-radius:14px; padding:5px 12px; background:#2A3942; color:#E9EDEF; cursor:pointer; }
+.wa-doc-tabs button.on{ background:#00A884; }
+.wa-doc-page{ flex:1; width:min(900px, 96vw); background:#fff; color:#111; border-radius:6px 6px 0 0; overflow:auto; box-shadow:0 8px 40px rgba(0,0,0,.5); }
+.wa-doc-page.sheet{ width:96vw; }
+.wa-doc-inner{ padding:32px 40px; font-size:15px; line-height:1.6; }
+.wa-doc-inner img{ max-width:100%; }
+.wa-doc-inner table{ border-collapse:collapse; margin:8px 0; }
+.wa-doc-inner td, .wa-doc-inner th{ border:1px solid #D0D7DE; padding:4px 8px; font-size:14px; white-space:nowrap; }
+.wa-doc-page.sheet .wa-doc-inner{ padding:12px; }
+.wa-doc-page.sheet tr:first-child td{ background:#F3F6F9; font-weight:600; }
+@media (max-width:600px){ .wa-doc-inner{ padding:18px 16px; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7441,10 +7455,62 @@ function openLightbox(src, name){
   document.body.appendChild(ov);
   apply();
 }
+
+// Word ו-Excel בתוך האתר, בלי הורדה. הספריות נטענות רק כשצריך, והקובץ לא נשלח לשום שירות חיצוני
+const loadedScripts = {};
+function loadScript(src){
+  if(!loadedScripts[src]) loadedScripts[src] = new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = () => { delete loadedScripts[src]; rej(new Error('load')); }; document.head.appendChild(el); });
+  return loadedScripts[src];
+}
+function dataUrlToBuffer(d){ const bin = atob(String(d).split(',')[1] || ''), arr = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return arr.buffer; }
+async function openOfficeFile(f, name, kind){
+  const ov = document.createElement('div'); ov.className = 'wa-lightbox';
+  ov.innerHTML = `<div class="wa-lb-bar"><button type="button" class="wa-lb-btn" data-lb-close aria-label="סגירה">✕</button><span class="wa-lb-name"></span>
+      <button type="button" class="wa-lb-btn" data-z="out" aria-label="הקטנה">−</button><span class="wa-lb-pct">100%</span><button type="button" class="wa-lb-btn" data-z="in" aria-label="הגדלה">+</button>
+      <a class="wa-lb-btn" download aria-label="הורדה">⬇</a></div>
+    <div class="wa-doc-wrap"><div class="wa-doc-tabs" hidden></div><div class="wa-doc-page"><div class="wa-doc-inner"><div class="empty-state">פותח את הקובץ...</div></div></div></div>`;
+  ov.querySelector('.wa-lb-name').textContent = name || '';
+  const a = ov.querySelector('a'); a.href = f.data; a.download = name || 'file';
+  const inner = ov.querySelector('.wa-doc-inner'), pct = ov.querySelector('.wa-lb-pct');
+  let z = 1; const apply = () => { z = Math.min(3, Math.max(0.5, z)); inner.style.zoom = z; pct.textContent = Math.round(z * 100) + '%'; };
+  ov.querySelector('[data-z=in]').onclick = () => { z *= 1.2; apply(); };
+  ov.querySelector('[data-z=out]').onclick = () => { z /= 1.2; apply(); };
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = e => { if(e.key === 'Escape') close(); };
+  ov.onclick = e => { if(e.target === ov || e.target.closest('[data-lb-close]')) close(); };
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(ov);
+  try{
+    const buf = dataUrlToBuffer(f.data);
+    if(kind === 'docx'){
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js');
+      const r = await window.mammoth.convertToHtml({ arrayBuffer: buf });
+      inner.innerHTML = r.value || '<p class="hint">המסמך ריק.</p>';
+      inner.dir = /[֐-׿]/.test(inner.textContent) ? 'rtl' : 'auto';
+    } else {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+      const wb = window.XLSX.read(buf, { type: 'array' });
+      const tabs = ov.querySelector('.wa-doc-tabs');
+      const show = sn => {
+        inner.innerHTML = window.XLSX.utils.sheet_to_html(wb.Sheets[sn], { header: '', footer: '' });
+        tabs.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.sheet === sn));
+      };
+      if(wb.SheetNames.length > 1){ tabs.hidden = false; tabs.innerHTML = wb.SheetNames.map(n => `<button type="button" data-sheet="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join(''); tabs.querySelectorAll('button').forEach(b => b.onclick = () => show(b.dataset.sheet)); }
+      ov.querySelector('.wa-doc-page').classList.add('sheet');
+      show(wb.SheetNames[0]);
+    }
+  }catch(e){
+    console.error('office preview', e);
+    inner.innerHTML = '<p class="hint" style="text-align:center;">לא הצלחנו להציג את הקובץ בתוך האתר. אפשר להוריד אותו בכפתור ⬇ למעלה.</p>';
+  }
+}
 // פתיחת קובץ שנשלח בצ'אט: תמונה – בתצוגה עם זום; PDF – בתוך האתר עם הזום של הדפדפן; טקסט – בתצוגה; אחר – הורדה
 function openChatFile(f, name){
   const type = (String(f.data).match(/^data:([^;,]+)/) || [])[1] || '';
   if(/^image\//.test(type)) return openLightbox(f.data, name);
+  const ext = (String(name || '').match(/\.([a-z0-9]+)$/i) || [])[1] || '';
+  if(/wordprocessingml/.test(type) || /^docx$/i.test(ext)) return openOfficeFile(f, name, 'docx');
+  if(/spreadsheetml|ms-excel|text\/csv/.test(type) || /^(xlsx|xls|csv|ods)$/i.test(ext)) return openOfficeFile(f, name, 'sheet');
   if(/^(video|audio)\//.test(type)){
     let url = f.data;
     try{ const b64 = f.data.split(',')[1], bin = atob(b64), arr = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); url = URL.createObjectURL(new Blob([arr], { type })); }catch(e){}
