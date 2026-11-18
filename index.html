@@ -731,7 +731,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, signInWithCustomToken, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getAuth, initializeAuth, browserSessionPersistence, signInWithEmailAndPassword, signInWithCustomToken, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCJY3Pv_p7zF-DoCXhT3xgUuA-fSKElO_k",
@@ -756,7 +756,8 @@ const mkDb = a => initializeFirestore(a, {
 // של מנהל וכרטיסייה של עובד, ורענון באחת לא מעביר אותה לחשבון של השנייה.
 const dbAdmin = mkDb(fbApp), authAdmin = getAuth(fbApp);
 const fbAppEmp = initializeApp(firebaseConfig, 'emp');
-const dbEmp = mkDb(fbAppEmp), authEmp = getAuth(fbAppEmp);
+// כניסת עובד נשמרת לכל כרטיסייה בנפרד (sessionStorage): שני עובדים בשתי כרטיסיות באותו דפדפן לא דורסים זה את זה
+const dbEmp = mkDb(fbAppEmp), authEmp = initializeAuth(fbAppEmp, { persistence: browserSessionPersistence });
 let db = dbAdmin, auth = authAdmin;
 function useConn(role){
   if(role === 'employee'){ db = dbEmp; auth = authEmp; } else { db = dbAdmin; auth = authAdmin; }
@@ -5473,9 +5474,13 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           <p class="hint">לא הצלחנו לטעון את נתוני השעות שלך מהשרת (בעיית תקשורת זמנית). כדי להימנע מאובדן מידע, לא ממשיכים עד שהטעינה תצליח.</p>
           <p class="hint mono" style="font-size:11.5px; opacity:.6; direction:ltr;">${escapeHtml(String(state._lastLoadErr || ''))} · ${auth === authEmp ? 'E' : 'A'}${auth.currentUser ? (auth.currentUser.email ? ':admin' : ':emp') : ':none'}</p>
           <button type="button" class="btn brass" id="retryLoadBtn">ניסיון נוסף</button>
+          <button type="button" class="btn ghost" id="reloginBtn">כניסה מחדש עם הקוד</button>
         </div>
       `;
       document.getElementById('retryLoadBtn').onclick = () => renderEmployeeDashboard(emp, editingId, false);
+      document.getElementById('reloginBtn').onclick = () => { state.currentEmployee = null; clearSession(); signOut(auth).catch(() => {}); renderEmployeeLogin(); };
+      // החיבור שייך לעובד אחר (למשל נכנס עובד אחר בכרטיסייה אחרת) – מבקשים להיכנס מחדש
+      if(state._lastLoadErr === 'permission-denied' && auth.currentUser && auth.currentUser.uid !== emp.id){ clearSession(); signOut(auth).catch(() => {}); showToast('בכרטיסייה הזו צריך להיכנס מחדש עם הקוד'); renderEmployeeLogin(); }
       return;
     }
   }
