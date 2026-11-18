@@ -1170,7 +1170,9 @@ async function getEmpSettings(empId){
   return settings;
 }
 
-function activeEmployees(){ return (state.employees || []).filter(e => !e.frozen); }
+// עובדים פעילים לשעות, שכר ומשימות – בלי מוקפאים ובלי משתתפי "צ'אט בלבד"
+function activeEmployees(){ return (state.employees || []).filter(e => !e.frozen && !e.chatOnly); }
+function chatOnlyMembers(){ return (state.employees || []).filter(e => e.chatOnly && !e.frozen); }
 // ---------- תאריך עברי מלא לראש הדף ----------
 function hebYearStr(y){
   let n = y % 1000;
@@ -2175,6 +2177,7 @@ async function renderEmployeeLogin(){
       const emp = login.emp;
       saveSession({ role: 'employee', empId: emp.id, emp });
       state.employees = [emp];
+      if(emp.chatOnly){ renderEmployeeDashboard(emp); return; }
       const hoursData = await loadHours(emp.id);
       if(hoursData === null){
         renderEmployeeDashboard(emp, null, false);
@@ -4361,6 +4364,7 @@ function renderAdminEmployees(){
   content.innerHTML = `
     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
       <button class="btn brass" id="goToAddEmp">+ הוסף עובד חדש</button>
+      <button class="btn ghost" id="goToAddChatOnly">💬 משתתף לצ׳אט בלבד</button>
       <button class="btn ghost" id="goToHealth">${btnIcon('check')}בדיקת תקינות</button>
     </div>
     ${!state._empView ? `
@@ -4391,6 +4395,7 @@ function renderAdminEmployees(){
   const evb = document.getElementById('empViewBack'); if(evb) evb.onclick = () => { state._empView = null; renderAdminEmployees(); };
   if(!state._empView) loadTrash().then(tr => { const tc = document.getElementById('trashCount'); if(tc && tr) tc.textContent = tr.length ? `${tr.length} עובדים שנמחקו · אפשר לשחזר במשך 30 יום` : 'ריקה'; });
   document.getElementById('goToAddEmp').onclick = renderAddEmployeePage;
+  document.getElementById('goToAddChatOnly').onclick = () => renderChatOnlyForm(null);
   document.getElementById('goToHealth').onclick = renderAdminHealthCheck;
   if(state._empView === 'trash') renderTrashCard(); else if(state._empView === 'audit') renderAuditCard(); else if(state._empView === 'list') renderEmpList();
 }
@@ -4589,6 +4594,15 @@ function showEmployeeDetailsModal(emp){
 function renderEmpList(){
   const listEl = document.getElementById('empList');
   if(!listEl || state.employees.length === 0) return;
+  setTimeout(() => {
+    const co = chatOnlyMembers(); if(!co.length || !listEl.isConnected) return;
+    const box = document.createElement('div');
+    box.innerHTML = `<h4 style="margin:22px 0 8px;">משתתפי צ׳אט בלבד (${co.length})</h4>` + co.map(e => `
+      <div class="list-item"><div class="avatar-row">${avatarHtml(e, 'small')}<div><div class="name">${escapeHtml(e.name)}</div><div class="meta">💬 מחובר רק לצ׳אט · לא לקו ולא לשעות</div></div></div>
+      <div class="row-actions"><button class="btn ghost small" data-co-edit="${e.id}">עריכה</button></div></div>`).join('');
+    listEl.appendChild(box);
+    box.querySelectorAll('[data-co-edit]').forEach(b => b.onclick = () => renderChatOnlyForm(b.dataset.coEdit));
+  }, 0);
   const frozen = state.employees.filter(e => e.frozen);
   listEl.innerHTML = activeEmployees().map(emp => `
     <div class="list-item clickable" data-emp-row="${emp.id}">
@@ -5373,6 +5387,7 @@ async function renderAdminSettings(){
 
 // ---------- EMPLOYEE DASHBOARD ----------
 async function renderEmployeeDashboard(emp, editingId, useCache){
+  if(emp && emp.chatOnly){ state.currentEmployee = emp; return renderChatHome('emp'); }
   if(shabbatGuard()) return;
   stopLiveTimer();
   stopLiveMoneyTimer();
@@ -7466,7 +7481,7 @@ async function myChatGroups(me){
 }
 async function chatContacts(role){
   let list;
-  if(role === 'mgr') list = activeEmployees().map(e => ({ id: e.id, name: e.name }));
+  if(role === 'mgr') list = (state.employees || []).filter(e => !e.frozen).map(e => ({ id: e.id, name: e.name }));
   else { const r = await bridge('emp-list'); list = (r.list || []).filter(e => e.id !== chatMe(role)); }
   if(role !== 'mgr') list.unshift({ id: 'mgr', name: 'המנהל' });
   list.unshift({ id: 'team', name: 'כל הצוות', group: true });
@@ -7498,8 +7513,11 @@ async function renderChatHome(role){
   const me = chatMe(role);
   const target = role === 'mgr' ? document.getElementById('tabContent') : app;
   if(role !== 'mgr'){ stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog();
-    setHeader('צ׳אט', '<button class="btn ghost small" id="chatBackBtn">חזרה</button>');
-    document.getElementById('chatBackBtn').onclick = () => renderEmployeeDashboard(state.currentEmployee); }
+    const co = state.currentEmployee && state.currentEmployee.chatOnly;
+    setHeader(co ? 'שלום, ' + state.currentEmployee.name : 'צ׳אט', co ? '<button class="btn ghost small" id="chatBackBtn">יציאה</button>' : '<button class="btn ghost small" id="chatBackBtn">חזרה</button>');
+    document.getElementById('chatBackBtn').onclick = co
+      ? () => { state.currentEmployee = null; clearSession(); signOut(auth).catch(() => {}); renderLanding(); }
+      : () => renderEmployeeDashboard(state.currentEmployee); }
   target.innerHTML = '<div class="empty-state">טוען...</div>';
   const contacts0 = await chatContacts(role);
   const groups = await myChatGroups(me);
@@ -7697,6 +7715,52 @@ async function renderChatRoom(role, otherId){
   const tick = setInterval(() => { if(!document.getElementById('chatBody')){ clearInterval(tick); return; } paintTyping(); }, 1500);
   state._chatWatch = () => { unsub(); clearInterval(tick); };
   input.focus();
+}
+
+// משתתף "צ'אט בלבד": נכנס לאתר עם שם וקוד אישי, ורואה רק את הצ'אט. לא מחובר לקו, לשעות או לשכר
+function renderChatOnlyForm(id){
+  const content = document.getElementById('tabContent');
+  const e = id ? state.employees.find(x => x.id === id) : null;
+  content.innerHTML = `
+    <div style="margin-bottom:12px;"><button type="button" class="btn ghost small" id="coBack">‹ חזרה</button></div>
+    <div class="card">
+      <h3 style="margin-top:0;">${e ? 'עריכת משתתף צ׳אט' : 'משתתף חדש לצ׳אט בלבד'}</h3>
+      <p class="hint" style="font-size:13.5px; margin-top:-4px;">נכנס לאתר ב"כניסת עובד" עם השם והקוד האישי, ורואה רק את הצ׳אט. הוא לא מחובר לקו הטלפוני, לא רושם שעות ולא מופיע בסיכומים.</p>
+      <form id="coForm">
+        <div class="field"><label>שם</label><input type="text" id="coName" maxlength="40" value="${e ? escapeHtml(e.name) : ''}" required /></div>
+        <div class="field"><label>קוד אישי (4–6 ספרות)</label><input type="text" id="coPin" inputmode="numeric" maxlength="6" value="${e ? escapeHtml(e.pin || '') : ''}" required /></div>
+        <div class="field"><label>אימייל (לא חובה, לשחזור קוד שנשכח)</label><input type="email" id="coEmail" value="${e ? escapeHtml(e.email || '') : ''}" /></div>
+        <div class="error-msg" id="coErr"></div>
+        <div class="actions" style="justify-content:flex-start; gap:10px;">
+          <button type="submit" class="btn brass">${e ? 'שמירה' : 'הוספה'}</button>
+          ${e ? '<button type="button" class="btn danger" id="coDel">הסרה מהצ׳אט</button>' : ''}
+        </div>
+      </form>
+    </div>`;
+  document.getElementById('coBack').onclick = () => { state._empView = 'list'; renderAdminEmployees(); };
+  document.getElementById('coForm').onsubmit = async ev => {
+    ev.preventDefault();
+    const name = document.getElementById('coName').value.trim(), pin = document.getElementById('coPin').value.trim(), email = document.getElementById('coEmail').value.trim();
+    const err = document.getElementById('coErr');
+    if(!name) return err.textContent = 'צריך שם';
+    if(!/^\d{4,6}$/.test(pin)) return err.textContent = 'הקוד האישי צריך להיות 4 עד 6 ספרות';
+    const list = await loadEmployees(); if(list === null) return err.textContent = 'שגיאה בטעינה, נסו שוב';
+    let updated;
+    if(e) updated = list.map(x => x.id === e.id ? { ...x, name, pin, email } : x);
+    else updated = [...list, { id: uid(), name, username: name, pin, email, phone: '', address: '', photo: null, payType: 'fixed', rate: 0, chatOnly: true }];
+    const ok = await saveEmployees(updated);
+    if(ok !== true) return err.textContent = 'שגיאה בשמירה: ' + ok;
+    state.employees = updated; showToast(e ? 'נשמר' : 'המשתתף נוסף לצ׳אט');
+    state._empView = 'list'; renderAdminEmployees();
+  };
+  const del = document.getElementById('coDel');
+  if(del) del.onclick = async () => {
+    if(!(await showConfirmModal('להסיר את ' + e.name + ' מהצ׳אט? הוא לא יוכל להיכנס יותר.', { yes: 'הסרה', danger: true }))) return;
+    const list = await loadEmployees(); if(list === null) return showToast('שגיאה בטעינה');
+    const updated = list.filter(x => x.id !== e.id);
+    const ok = await saveEmployees(updated); if(ok !== true) return showToast('שגיאה בשמירה');
+    state.employees = updated; showToast('הוסר'); state._empView = 'list'; renderAdminEmployees();
+  };
 }
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
