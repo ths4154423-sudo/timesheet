@@ -2578,7 +2578,35 @@ async function renderEmployeeReminders(emp){
         <div class="error-msg" id="remErr"></div>
         <div class="actions" style="justify-content:flex-start;"><button type="submit" class="btn brass">שמירה</button></div>
       </form>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;">🚫 ביטול צינתוק לימים מסוימים</h3>
+      <p class="hint" style="font-size:13.5px; margin-top:-4px;">למשל יום שלא באים לעבודה ולא נרשם כחופש. באותו יום לא יישלח צינתוק כניסה וגם לא צינתוק יציאה. אפשר לעשות את זה גם בטלפון, בשלוחה, במקש 6.</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <button type="button" class="btn ghost small" id="skipTomorrow">ביטול למחר</button>
+        <input type="date" id="skipDate" min="${todayStr()}" style="width:auto;" />
+        <button type="button" class="btn brass small" id="skipAdd">ביטול לתאריך הזה</button>
+      </div>
+      <div id="skipList" style="margin-top:12px;"></div>
     </div>`;
+  const skipLabel = d => { const [y, m, dd] = d.split('-').map(Number); const wd = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'][new Date(y, m - 1, dd).getDay()]; return 'יום ' + wd + ', ' + dd + '/' + m + (d === todayStr() ? ' (היום)' : ''); };
+  const paintSkips = list => {
+    const el = document.getElementById('skipList'); if(!el) return;
+    const up = (list || []).filter(d => d >= todayStr()).sort();
+    el.innerHTML = up.length ? up.map(d => `<div class="list-item" style="padding:8px 4px;"><span>🔕 ${skipLabel(d)}</span><button type="button" class="btn ghost small" data-skip-del="${d}">החזרת הצינתוק</button></div>`).join('') : '<p class="hint" style="margin:0;">אין ימים מבוטלים.</p>';
+    el.querySelectorAll('[data-skip-del]').forEach(b => b.onclick = () => updSkips(l => l.filter(x => x !== b.dataset.skipDel)));
+  };
+  const updSkips = async fn => {
+    const fresh = await loadSettings(emp.id) || {};
+    const next = [...new Set(fn((fresh.reminderSkipDates || []).filter(d => d >= todayStr())))].sort();
+    const ok = await saveSettings(emp.id, { ...fresh, reminderSkipDates: next });
+    if(ok !== true) return showToast('שגיאה בשמירה');
+    if(state._settingsCache && state._settingsCache.empId === emp.id) state._settingsCache = null;
+    paintSkips(next);
+  };
+  paintSkips(st.reminderSkipDates);
+  document.getElementById('skipTomorrow').onclick = () => { const n = ilNow(); n.setDate(n.getDate() + 1); const d = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); updSkips(l => [...l, d]).then(() => showToast('הצינתוק בוטל למחר')); };
+  document.getElementById('skipAdd').onclick = () => { const d = document.getElementById('skipDate').value; if(!d) return showToast('בחרו תאריך'); updSkips(l => [...l, d]).then(() => showToast('הצינתוק בוטל')); };
   document.getElementById('remBackBtn').onclick = () => renderEmployeeSettingsCategory(emp, 'sound');
   document.getElementById('remForm').onsubmit = async (e) => {
     e.preventDefault();
