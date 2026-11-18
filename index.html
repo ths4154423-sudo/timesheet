@@ -777,10 +777,14 @@ const mkDb = a => initializeFirestore(a, {
 const dbAdmin = mkDb(fbApp), authAdmin = getAuth(fbApp);
 const fbAppEmp = initializeApp(firebaseConfig, 'emp');
 // כניסת עובד נשמרת לכל כרטיסייה בנפרד (sessionStorage): שני עובדים בשתי כרטיסיות באותו דפדפן לא דורסים זה את זה
-const dbEmp = mkDb(fbAppEmp), authEmp = initializeAuth(fbAppEmp, { persistence: browserSessionPersistence });
+const authEmp = initializeAuth(fbAppEmp, { persistence: browserSessionPersistence });
+// החיבור של העובד נפתח רק בכרטיסייה שבה עובד באמת נכנס. אחרת כרטיסיית מנהל (בלי עובד מחובר)
+// עלולה להיות "הכרטיסייה הראשית" של המטמון המשותף, והשרת דוחה את הקריאות של העובד (permission-denied)
+let dbEmpInst = null;
+const dbEmpGet = () => dbEmpInst || (dbEmpInst = mkDb(fbAppEmp));
 let db = dbAdmin, auth = authAdmin;
 function useConn(role){
-  if(role === 'employee'){ db = dbEmp; auth = authEmp; } else { db = dbAdmin; auth = authAdmin; }
+  if(role === 'employee'){ db = dbEmpGet(); auth = authEmp; } else { db = dbAdmin; auth = authAdmin; }
   try{ sessionStorage.setItem('tabRole', role); }catch(e){}
 }
 
