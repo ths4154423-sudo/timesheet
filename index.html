@@ -631,6 +631,9 @@
 .wa-dots i:nth-child(2){ animation-delay:.18s; } .wa-dots i:nth-child(3){ animation-delay:.36s; }
 @keyframes waDot{ 0%,60%,100%{ transform:translateY(0); opacity:.45; } 30%{ transform:translateY(-4px); opacity:1; } }
 .wa-toggle.typing::after{ content:' · מקליד...'; color:#34B7F1; font-weight:600; }
+.wa-row.pending .wa-ticks::before{ content:'🕓'; letter-spacing:0; margin-left:3px; }
+.wa-row.pending .wa-ticks{ color:transparent; }
+.wa-row.failed .wa-time::after{ content:' ⚠ לא נשלחה'; color:#d93025; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -5683,7 +5686,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     <div class="readout">
       <div class="digit-block"><div class="num mono" id="readoutHours">0</div><div class="lbl">סה"כ שעות החודש</div></div>
       <div class="digit-block"><div class="num mono" id="readoutPay">${fmtMoney(0)}</div><div class="lbl">סה"כ לתשלום</div></div>
-      <div id="payForecast" style="grid-column:1/-1; flex-basis:100%; width:100%; text-align:center; font-size:13px; opacity:.75; margin-top:6px; display:none;"></div>
+      <div id="payForecast" style="flex-basis:100%; width:100%; text-align:center; font-size:14px; color:#BCCCDC; margin-top:2px; display:none;"></div>
     </div>
 
     ${(() => {
@@ -7018,11 +7021,11 @@ async function checkEmpTasks(emp){
   if(show) renderEmployeeTasks(emp);
 }
 
-async function renderEmployeeTasks(emp){
+async function renderEmployeeTasks(emp, soft){
   stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog();
   setHeader('משימות', '<button class="btn ghost small" id="tasksBackBtn">חזרה</button>');
   document.getElementById('tasksBackBtn').onclick = () => renderEmployeeDashboard(emp);
-  app.innerHTML = '<div class="empty-state">טוען...</div>';
+  if(!soft) app.innerHTML = '<div class="empty-state">טוען...</div>';
   const items = await loadTasks(emp.id);
   if(items === null){ app.innerHTML = '<div class="card"><p class="hint">לא הצלחנו לטעון את המשימות. נסו שוב בעוד רגע.</p></div>'; return; }
   const today = todayStr();
@@ -7048,8 +7051,8 @@ async function renderEmployeeTasks(emp){
       <h3 style="margin-top:0;">בהמשך</h3>
       ${later.map(t => row(t, t.date, false)).join('')}
     </div>` : ''}`;
-  bindTaskReplies(app, emp.id, 'emp', () => renderEmployeeTasks(emp));
-  watchTaskThreads(emp.id, 'emp', () => renderEmployeeTasks(emp));
+  bindTaskReplies(app, emp.id, 'emp', () => renderEmployeeTasks(emp, true));
+  watchTaskThreads(emp.id, 'emp', () => renderEmployeeTasks(emp, true));
   if(unseenCount(items, 'emp')) markRepliesSeen(emp.id, 'emp');
   app.querySelectorAll('[data-task]').forEach(cb => {
     cb.onchange = async () => {
@@ -7066,14 +7069,14 @@ async function renderEmployeeTasks(emp){
   });
 }
 
-async function renderAdminTasks(){
+async function renderAdminTasks(soft){
   const content = document.getElementById('tabContent');
   const emps = activeEmployees();
   if(!emps.length){ content.innerHTML = '<div class="empty-state">אין עובדים פעילים.</div>'; return; }
   if(!state._taskEmp || !emps.some(e => e.id === state._taskEmp)) state._taskEmp = emps[0].id;
   if(!state._taskDate) state._taskDate = todayStr();
   const date = state._taskDate, empId = state._taskEmp;
-  content.innerHTML = '<div class="empty-state">טוען...</div>';
+  if(!soft) content.innerHTML = '<div class="empty-state">טוען...</div>';
   const all = await Promise.all(emps.map(e => loadTasks(e.id)));
   const byEmp = Object.fromEntries(emps.map((e, i) => [e.id, all[i]]));
   const items = byEmp[empId];
@@ -7108,8 +7111,8 @@ async function renderAdminTasks(){
       </form>
     </div>`;
   content.querySelectorAll('[data-temp]').forEach(b => b.onclick = () => { state._taskEmp = b.dataset.temp; renderAdminTasks(); });
-  bindTaskReplies(content, empId, 'mgr', () => renderAdminTasks());
-  watchTaskThreads(empId, 'mgr', () => renderAdminTasks());
+  bindTaskReplies(content, empId, 'mgr', () => renderAdminTasks(true));
+  watchTaskThreads(empId, 'mgr', () => renderAdminTasks(true));
   if(items && unseenCount(items, 'mgr')) markRepliesSeen(empId, 'mgr').then(refreshTasksNavBadge);
   else refreshTasksNavBadge();
   document.getElementById('taskDate').onchange = e => { if(e.target.value){ state._taskDate = e.target.value; renderAdminTasks(); } };
@@ -7228,7 +7231,9 @@ function signalTyping(empId, taskId, who, kind){
 function watchTaskThreads(empId, viewer, rerender){
   if(state._threadWatch){ try{ state._threadWatch.unsub(); }catch(e){} clearInterval(state._threadWatch.timer); state._threadWatch = null; }
   const countReps = items => (items || []).reduce((n, t) => n + ((t && t.replies) || []).length, 0);
-  let known = null, typing = null;
+  let known = null, typing = null, seenSig = null;
+  // סימני "נקרא" של הצד השני – כשהם משתנים, הווי הכפול הופך לכחול בלי רענון
+  const seenOf = items => (items || []).map(t => ((t && t.replies) || []).map(r => (r.seenMgr ? 'm' : '') + (r.seenEmp ? 'e' : '')).join(',')).join('|');
   const paint = () => {
     if(!document.querySelector('.wa-thread')){ stop(); return; }
     document.querySelectorAll('[data-typing-for]').forEach(el => {
@@ -7248,8 +7253,10 @@ function watchTaskThreads(empId, viewer, rerender){
     unsub = onSnapshot(doc(db, 'tasks', empId), snap => {
       const d = snap.exists() ? snap.data() : {};
       typing = d.typing || null;
-      const n = countReps(d.items);
-      if(known !== null && n !== known){ known = n; keepDraftsAndRerender(rerender); return; }
+      const n = countReps(d.items), sg = seenOf(d.items);
+      const seenChanged = seenSig !== null && sg !== seenSig; seenSig = sg;
+      if(known !== null && n > known && (state._pendingSelf || 0) >= n - known){ state._pendingSelf -= (n - known); known = n; if(seenChanged) keepDraftsAndRerender(rerender); else paint(); return; }
+      if((known !== null && n !== known) || seenChanged){ known = n; keepDraftsAndRerender(rerender); return; }
       known = n; paint();
     }, () => {});
   }catch(e){}
@@ -7259,7 +7266,9 @@ async function keepDraftsAndRerender(rerender){
   const drafts = {}; let focused = null;
   document.querySelectorAll('[data-reply-box]').forEach(b => { const ta = b.querySelector('textarea'); if(ta && ta.value) drafts[b.dataset.replyBox] = ta.value; if(ta && document.activeElement === ta) focused = b.dataset.replyBox; });
   if(document.querySelector('.wa-btn.mic.rec')) return;   // לא מרעננים באמצע הקלטה
+  const y = window.scrollY;
   await rerender();
+  window.scrollTo(0, y);
   Object.entries(drafts).forEach(([id, v]) => { const ta = document.querySelector(`[data-reply-box="${id}"] textarea`); if(ta) ta.value = v; });
   if(focused){ const ta = document.querySelector(`[data-reply-box="${focused}"] textarea`); if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
 }
@@ -7304,18 +7313,36 @@ function bindTaskReplies(root, empId, from, after){
     const box = root.querySelector(`[data-reply-box="${b.dataset.replyOpen}"]`);
     box.hidden = !box.hidden; if(!box.hidden) box.querySelector('textarea').focus();
   });
+  // שליחה כמו בוואטסאפ: הבועה מופיעה מיד בשיחה והשדה מתרוקן, והשמירה נעשית ברקע (בלי לטעון את הדף מחדש)
   const send = async (taskId, reply, btn) => {
-    if(btn) btn.disabled = true;
     signalTyping(empId, taskId, from, null);
+    const r = Object.assign({ id: uid(), from, at: todayStr() + 'T' + nowTimeStr() }, reply);
+    const chat = root.querySelector(`[data-reps-for="${taskId}"] .wa-chat`);
+    let bubble = null;
+    if(chat){
+      const tmp = document.createElement('div');
+      tmp.innerHTML = taskRepliesHtml({ id: taskId, replies: [r] }, empId, from).trim();
+      bubble = tmp.querySelector('.wa-row.out');
+      if(bubble){
+        bubble.classList.add('pending');
+        const typingRow = chat.querySelector('.wa-typing');
+        chat.insertBefore(bubble, typingRow || null);
+        chat.scrollTop = chat.scrollHeight;
+        const ta = root.querySelector(`[data-reply-box="${taskId}"] textarea`); if(ta){ ta.value = ''; ta.style.height = ''; ta.focus(); }
+        const st = root.querySelector(`[data-reply-status="${taskId}"]`); if(st) st.textContent = '';
+      }
+    }
+    if(btn && !bubble) btn.disabled = true;
+    state._pendingSelf = (state._pendingSelf || 0) + 1;
     const fresh = await loadTasks(empId);
     const t = fresh && fresh.find(x => x.id === taskId);
-    if(!t){ showToast('המשימה כבר לא קיימת'); after(); return; }
+    if(!t){ state._pendingSelf--; showToast('המשימה כבר לא קיימת'); after(); return; }
     if(!Array.isArray(t.replies)) t.replies = [];
-    t.replies.push(Object.assign({ id: uid(), from, at: todayStr() + 'T' + nowTimeStr() }, reply));
+    t.replies.push(r);
     const ok = await saveTasks(empId, fresh);
-    if(ok !== true){ showToast('שגיאה בשמירה'); if(btn) btn.disabled = false; return; }
-    showToast(from === 'emp' ? 'התגובה נשלחה למנהל' : 'התשובה נשלחה לעובד');
-    after();
+    if(ok !== true){ state._pendingSelf--; showToast('ההודעה לא נשלחה'); if(bubble) bubble.classList.add('failed'); if(btn) btn.disabled = false; return; }
+    if(bubble){ bubble.classList.remove('pending'); return; }
+    after();   // הודעה ראשונה במשימה – בונים את השיחה
   };
   root.querySelectorAll('.wa-compose textarea').forEach(ta => {
     const tid = ta.parentElement.dataset.replyBox;
