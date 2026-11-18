@@ -587,7 +587,7 @@
 .task-reply-open{ font:inherit; font-size:13px; background:none; border:none; color:var(--brass-dark, #0f766e); cursor:pointer; padding:4px 0; }
 .task-reply-box textarea{ width:100%; font:inherit; font-size:14px; }
 .wa-thread{ margin:4px 32px 6px 0; }
-.wa-chat{ background:#EFEAE2; background-image:radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px); background-size:14px 14px; border-radius:12px; padding:10px 10px 6px; display:flex; flex-direction:column; gap:4px; }
+.wa-chat{ max-height:280px; overflow-y:auto; overscroll-behavior:contain; background:#EFEAE2; background-image:radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px); background-size:14px 14px; border-radius:12px; padding:10px 10px 6px; display:flex; flex-direction:column; gap:4px; }
 .wa-row{ display:flex; }
 .wa-row.out{ justify-content:flex-end; }
 .wa-row.in{ justify-content:flex-start; }
@@ -602,7 +602,7 @@
 .wa-ticks{ color:#8696A0; letter-spacing:-3px; margin-left:2px; }
 .wa-ticks.seen{ color:#53BDEB; }
 .wa-voice{ font:inherit; font-size:14px; border:none; background:rgba(0,0,0,.05); border-radius:16px; padding:5px 12px; cursor:pointer; color:#111B21; }
-.wa-compose{ display:flex; align-items:flex-end; gap:6px; margin-top:6px; background:#F0F2F5; border-radius:24px; padding:5px 6px; flex-wrap:wrap; }
+.wa-compose{ display:flex; align-items:flex-end; gap:6px; margin-top:4px; background:#F0F2F5; border-radius:24px; padding:5px 6px; flex-wrap:wrap; }
 .wa-compose[hidden]{ display:none; }
 .wa-compose textarea{ flex:1 1 160px; border:none !important; background:#fff !important; border-radius:18px; padding:8px 12px; font:inherit; font-size:14.5px; resize:none; outline:none; min-height:20px; max-height:110px; box-shadow:none !important; }
 .wa-btn{ width:38px; height:38px; flex:0 0 38px; border-radius:50%; border:none; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
@@ -7103,8 +7103,8 @@ function taskRepliesHtml(t, empId, viewer){
             </div>
           </div>`).join('')}
       </div>` : ''}
-      <button type="button" class="task-reply-open" data-reply-open="${t.id}">💬 ${viewer === 'emp' ? 'תגובה למנהל' : 'תשובה לעובד'}</button>
-      <div class="wa-compose" data-reply-box="${t.id}" hidden>
+      ${reps.length ? '' : `<button type="button" class="task-reply-open" data-reply-open="${t.id}">💬 ${viewer === 'emp' ? 'תגובה למנהל' : 'תשובה לעובד'}</button>`}
+      <div class="wa-compose" data-reply-box="${t.id}"${reps.length ? '' : ' hidden'}>
         <textarea rows="1" maxlength="500" placeholder="הקלד הודעה"></textarea>
         <button type="button" class="wa-btn send" data-reply-send="${t.id}" title="שליחה" aria-label="שליחה">➤</button>
         <button type="button" class="wa-btn mic" data-reply-rec="${t.id}" title="הקלטה" aria-label="הקלטה">🎙</button>
@@ -7115,6 +7115,8 @@ function taskRepliesHtml(t, empId, viewer){
 // מחבר את כפתורי התגובה. after() – מה לעשות אחרי שליחה (רינדור מחדש)
 function bindTaskReplies(root, empId, from, after){
   const recState = {};
+  // שרשור ארוך נגלל בתוך המסגרת שלו, ומתחיל מההודעה האחרונה – כמו בוואטסאפ
+  root.querySelectorAll('.wa-chat').forEach(c => { c.scrollTop = c.scrollHeight; });
   root.querySelectorAll('[data-reply-open]').forEach(b => b.onclick = ev => {
     ev.preventDefault();
     const box = root.querySelector(`[data-reply-box="${b.dataset.replyOpen}"]`);
