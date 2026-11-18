@@ -799,6 +799,9 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .task-pc{ display:inline-block; min-width:48px; padding:2px 8px; border-radius:10px; font-size:13px; background:linear-gradient(90deg, #D9FDD3 var(--p), #F0F2F5 var(--p)); }
 .install-app[hidden]{ display:none; }
 .clock-warn{ background:#FFF4E5; border:1px solid #F5C77E; color:#7A4B00; border-radius:10px; padding:10px 14px; font-size:14px; margin-bottom:14px; }
+.paste-prev{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-height:55vh; overflow:auto; margin-bottom:12px; }
+.paste-prev img{ max-width:100%; max-height:50vh; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,.15); }
+.paste-file{ padding:10px 14px; background:#F0F2F5; border-radius:8px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7811,6 +7814,14 @@ function bindTaskReplies(root, empId, from, after){
   };
   root.querySelectorAll('.wa-compose textarea').forEach(ta => {
     const tid = ta.parentElement.dataset.replyBox;
+    ta.addEventListener('paste', async e => {
+      const f = [...((e.clipboardData && e.clipboardData.items) || [])].filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean)[0];
+      if(!f) return; e.preventDefault();
+      const file = f.name && f.name !== 'image.png' ? f : new File([f], 'צילום מסך.png', { type: f.type || 'image/png' });
+      if(!(await confirmPaste([file]))) return;
+      const inp = root.querySelector(`[data-reply-file="${tid}"]`); if(!inp) return;
+      const dt = new DataTransfer(); dt.items.add(file); inp.files = dt.files; inp.onchange();
+    });
     ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 110) + 'px'; if(ta.value.trim()) signalTyping(empId, tid, from, 'typing'); });
     ta.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); ta.parentElement.querySelector('[data-reply-send]').click(); } });
   });
@@ -8293,8 +8304,18 @@ async function renderChatRoom(role, otherId){
   input.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); document.getElementById('chatSend').click(); } });
   document.getElementById('chatSend').onclick = () => { const t = input.value.trim(); if(!t) return input.focus(); input.value = ''; input.style.height = ''; input.focus(); send({ text: t }); };
   // כמה קבצים ביחד (עד 10) נשלחים בהודעה אחת, כמו אלבום בוואטסאפ. טקסט שבשדה נשלח ככיתוב
-  document.getElementById('chatFile').onchange = async e => {
-    const picked = [...(e.target.files || [])].slice(0, 10); e.target.value = ''; if(!picked.length) return;
+  document.getElementById('chatFile').onchange = e => { const picked = [...(e.target.files || [])]; e.target.value = ''; sendFiles(picked); };
+  // הדבקה (Ctrl+V, או בחירה מהיסטוריית הלוח ב-Win+V): תמונה או קובץ שבלוח נשלחים מיד, והטקסט שבשדה הופך לכיתוב
+  input.addEventListener('paste', async e => {
+    const files = [...((e.clipboardData && e.clipboardData.items) || [])].filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean);
+    if(!files.length) return;
+    e.preventDefault();
+    const named = files.map((f, i) => f.name && f.name !== 'image.png' ? f : new File([f], 'צילום מסך ' + nowTimeStr().slice(0, 5).replace(':', '-') + (files.length > 1 ? '-' + (i + 1) : '') + '.png', { type: f.type || 'image/png' }));
+    const ok = await confirmPaste(named);
+    if(ok) sendFiles(named);
+  });
+  const sendFiles = async picked0 => {
+    const picked = (picked0 || []).slice(0, 10); if(!picked.length) return;
     const files = [];
     for(let i = 0; i < picked.length; i++){
       const file = picked[i];
@@ -8691,6 +8712,27 @@ function bindInstallApp(){
   };
 }
 function clockWarnTxt(min){ if(min < 60) return min + ' דקות'; const h = Math.floor(min / 60), m = min % 60; return (h === 1 ? 'שעה' : h + ' שעות') + (m ? ' ו-' + m + ' דקות' : ''); }
+
+// חלון אישור לפני שליחת תמונה שהודבקה – עם תצוגה מקדימה, כמו בוואטסאפ
+function confirmPaste(files){
+  return new Promise(resolve => {
+    const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+    ov.innerHTML = `<div class="confirm-box" style="max-width:520px; width:92vw;">
+      <p style="margin:0 0 10px; font-weight:600;">לשלוח ${files.length === 1 ? 'את הקובץ שהודבק' : files.length + ' קבצים שהודבקו'}?</p>
+      <div class="paste-prev">${files.map((f, i) => /^image\//.test(f.type) ? `<img data-pi="${i}" alt="" />` : `<div class="paste-file">📄 ${escapeHtml(f.name)}</div>`).join('')}</div>
+      <div class="actions"><button type="button" class="btn brass" id="pasteOk">שליחה</button><button type="button" class="btn ghost" id="pasteNo">ביטול</button></div></div>`;
+    document.body.appendChild(ov);
+    const urls = [];
+    ov.querySelectorAll('[data-pi]').forEach(img => { const u = URL.createObjectURL(files[+img.dataset.pi]); urls.push(u); img.src = u; });
+    const done = v => { urls.forEach(u => URL.revokeObjectURL(u)); ov.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const onKey = e => { if(e.key === 'Enter'){ e.preventDefault(); done(true); } if(e.key === 'Escape') done(false); };
+    document.addEventListener('keydown', onKey);
+    ov.querySelector('#pasteOk').onclick = () => done(true);
+    ov.querySelector('#pasteNo').onclick = () => done(false);
+    ov.onclick = e => { if(e.target === ov) done(false); };
+    setTimeout(() => ov.querySelector('#pasteOk').focus(), 30);
+  });
+}
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
 async function openMirror(){
