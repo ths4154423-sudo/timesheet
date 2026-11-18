@@ -7434,8 +7434,16 @@ function openLightbox(src, name, gallery){
   img.src = src;
   ov.querySelector('.wa-lb-name').textContent = name || '';
   const a = ov.querySelector('a'); a.href = src; a.download = name || 'image.jpg';
-  let z = 1, x = 0, y = 0;
-  const apply = () => { z = Math.min(8, Math.max(1, z)); if(z === 1){ x = 0; y = 0; } img.style.transform = `translate(${x}px, ${y}px) scale(${z})`; img.style.cursor = z > 1 ? 'grab' : 'zoom-in'; pct.textContent = Math.round(z * 100) + '%'; };
+  let z = 1, x = 0, y = 0, drag = null;
+  // גבולות הגרירה: קצה התמונה המוגדלת לא נכנס פנימה מקצה המסך (כמו בוואטסאפ), וכשהיא קטנה מהמסך היא נשארת במרכז
+  const clamp = () => {
+    const sw = stage.clientWidth, sh = stage.clientHeight, nw = img.naturalWidth || sw, nh = img.naturalHeight || sh;
+    const fit = Math.min(img.clientWidth / nw, img.clientHeight / nh);
+    const pw = nw * fit * z, ph = nh * fit * z;
+    const mx = Math.max(0, (pw - sw) / 2), my = Math.max(0, (ph - sh) / 2);
+    x = Math.min(mx, Math.max(-mx, x)); y = Math.min(my, Math.max(-my, y));
+  };
+  const apply = () => { z = Math.min(8, Math.max(1, z)); if(z === 1){ x = 0; y = 0; } else clamp(); img.style.transform = `translate(${x}px, ${y}px) scale(${z})`; img.style.cursor = z > 1 ? (drag ? 'grabbing' : 'grab') : 'zoom-in'; pct.textContent = Math.round(z * 100) + '%'; };
   const zoomAt = (nz, cx, cy) => { const r = stage.getBoundingClientRect(); const ox = cx - r.left - r.width / 2, oy = cy - r.top - r.height / 2; const k = Math.min(8, Math.max(1, nz)) / z; x = ox - (ox - x) * k; y = oy - (oy - y) * k; z = Math.min(8, Math.max(1, nz)); apply(); };
   const center = () => { const r = stage.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
   ov.querySelector('[data-z=in]').onclick = e => { e.stopPropagation(); zoomAt(z * 1.5, ...center()); };
@@ -7443,10 +7451,10 @@ function openLightbox(src, name, gallery){
   stage.addEventListener('wheel', e => { e.preventDefault(); zoomAt(z * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX, e.clientY); }, { passive: false });
   img.addEventListener('dblclick', e => { e.stopPropagation(); zoomAt(z > 1 ? 1 : 2.5, e.clientX, e.clientY); });
   // גרירה בעכבר
-  let drag = null, moved = false;
+  let moved = false;
   img.addEventListener('mousedown', e => { if(z <= 1) return; e.preventDefault(); drag = { sx: e.clientX - x, sy: e.clientY - y }; moved = false; img.style.cursor = 'grabbing'; });
-  const onMove = e => { if(!drag) return; moved = true; x = e.clientX - drag.sx; y = e.clientY - drag.sy; apply(); };
-  const onUp = () => { if(drag){ drag = null; apply(); } };
+  const onMove = e => { if(!drag) return; moved = true; img.style.transition = 'none'; x = e.clientX - drag.sx; y = e.clientY - drag.sy; apply(); drag.sx = e.clientX - x; drag.sy = e.clientY - y; };
+  const onUp = () => { if(drag){ drag = null; img.style.transition = ''; apply(); } };
   window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
   // מגע: צביטה לזום, אצבע אחת להזזה, הקשה כפולה
   let pinch = null, pan = null, lastTap = 0;
@@ -7460,7 +7468,7 @@ function openLightbox(src, name, gallery){
   }, { passive: true });
   stage.addEventListener('touchmove', e => {
     if(pinch && e.touches.length === 2){ e.preventDefault(); const [t1, t2] = e.touches; const d = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY); zoomAt(pinch.z * d / pinch.d, pinch.cx, pinch.cy); }
-    else if(pan && e.touches.length === 1){ e.preventDefault(); const t = e.touches[0]; x = t.clientX - pan.sx; y = t.clientY - pan.sy; apply(); }
+    else if(pan && e.touches.length === 1){ e.preventDefault(); const t = e.touches[0]; x = t.clientX - pan.sx; y = t.clientY - pan.sy; apply(); pan.sx = t.clientX - x; pan.sy = t.clientY - y; }
   }, { passive: false });
   stage.addEventListener('touchend', e => { if(e.touches.length < 2) pinch = null; if(!e.touches.length) pan = null; });
   const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
