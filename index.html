@@ -8306,7 +8306,12 @@ function flashTitle(who){
 
 // ================= שיחות קוליות בצ'אט (WebRTC, אחד על אחד) =================
 // calls/<id>: from, to, chatId, status (ringing / active / ended / declined / missed), offer, answer, cFrom/cTo (מועמדי ICE)
-const RTC_CFG = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] };
+// STUN לחיבור ישיר, ושרת מתווך (TURN) למקרה שהרשת חוסמת חיבור ישיר – גם דרך פורט 443 ו-TCP, שעוברים ברוב הרשתות המסוננות.
+// הקול והווידאו מוצפנים מקצה לקצה, ולכן השרת המתווך מעביר אותם בלי יכולת לשמוע או לראות.
+const RTC_CFG = { iceServers: [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp', 'turns:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
+] };
 let activeCall = null;
 function callOverlay(html){
   let ov = document.getElementById('callOverlay');
@@ -8362,6 +8367,7 @@ function wirePeer(pc, callRef, myField, otherField){
       activeCall.startedAt = Date.now(); ringStop();
       activeCall.timer = setInterval(() => { const el = document.getElementById('callStatus'); if(el && activeCall) el.textContent = fmtDur(Math.round((Date.now() - activeCall.startedAt) / 1000)); }, 1000);
     }
+    if(pc.connectionState === 'connecting'){ const el = document.getElementById('callStatus'); if(el && !activeCall.startedAt) el.textContent = 'מתחבר...'; setTimeout(() => { const e2 = document.getElementById('callStatus'); if(e2 && activeCall && !activeCall.startedAt && pc.connectionState === 'connecting') e2.textContent = 'מתחבר דרך שרת מתווך...'; }, 6000); }
     if(pc.connectionState === 'failed'){ const el = document.getElementById('callStatus'); if(el) el.textContent = 'החיבור נכשל (ייתכן שהרשת חוסמת שיחות)'; setTimeout(() => endCall('ended'), 2500); }
   };
   const added = new Set();
