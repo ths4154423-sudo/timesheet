@@ -660,6 +660,8 @@
 .wa-pick-list{ max-height:50vh; overflow-y:auto; margin:6px 0; }
 .wa-pick-row{ display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid #F0F2F5; cursor:pointer; font-size:15px; }
 .wa-notif{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:12px 16px; font-size:14px; background:#E7F8F1; border-color:#BDE9D6; }
+.wa-notif-ok{ font-size:13px; color:#3B7A57; margin:0 4px 10px; }
+.linklike{ font:inherit; background:none; border:none; color:#00A884; text-decoration:underline; cursor:pointer; padding:0; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7496,7 +7498,14 @@ async function loadChat(id){
   try{ const snap = await withTimeout(getDoc(doc(db, 'chats', id)), 20000, 'loadChat'); return snap.exists() ? snap.data() : { msgs: [] }; }
   catch(e){ console.error('loadChat', e); return null; }
 }
-function chatUnread(c, me){ return ((c && c.msgs) || []).filter(m => m.from !== me && !(m.seenBy || []).includes(me)).length; }
+// "ניקוי צ'אט" הוא אישי (כמו בוואטסאפ): אצל מי שניקה מוצגות רק הודעות שנשלחו אחרי הניקוי
+function visibleMsgs(c, me){
+  const msgs = (c && c.msgs) || [], cut = c && c.cleared && c.cleared[me];
+  if(!cut) return msgs;
+  const i = msgs.findIndex(m => m.id === cut);
+  return i >= 0 ? msgs.slice(i + 1) : msgs.filter(m => String(m.at || '') > String((c.clearedAt && c.clearedAt[me]) || ''));
+}
+function chatUnread(c, me){ return visibleMsgs(c, me).filter(m => m.from !== me && !(m.seenBy || []).includes(me)).length; }
 async function refreshChatBadge(role){
   const me = chatMe(role); if(!me) return;
   try{
@@ -7527,12 +7536,12 @@ async function renderChatHome(role){
   const contacts = [contacts0[0], ...groups.map(g => ({ id: g.id, name: g.name || 'קבוצה', group: true, custom: true })), ...contacts0.slice(1)];
   const chats = await Promise.all(contacts.map((c, i) => c.custom ? Promise.resolve(groups.find(g => g.id === c.id)) : loadChat(chatIdWith(me, c.id))));
   const rows = contacts.map((c, i) => {
-    const ch = chats[i] || { msgs: [] }, last = (ch.msgs || []).slice(-1)[0], un = chatUnread(ch, me);
+    const ch = chats[i] || { msgs: [] }, last = visibleMsgs(ch, me).slice(-1)[0], un = chatUnread(ch, me);
     const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.audioId ? '🎙 הודעה קולית' : ''))) : 'אין הודעות עדיין';
     return { c, last, un, prev };
   }).sort((a, b) => (a.c.id === 'team' ? -1 : b.c.id === 'team' ? 1 : String(b.last ? b.last.at : '').localeCompare(String(a.last ? a.last.at : ''))));
   target.innerHTML = `
-    ${('Notification' in window) && Notification.permission !== 'granted' ? `<div class="card wa-notif"><span>🔔 רוצים הודעה קופצת בשולחן העבודה כשמגיעה הודעה?</span><button type="button" class="btn brass small" id="chatNotifOn">${Notification.permission === 'denied' ? 'ההתראות חסומות בדפדפן' : 'הפעלת התראות'}</button></div>` : ''}
+    ${!('Notification' in window) ? '' : Notification.permission !== 'granted' ? `<div class="card wa-notif"><span>🔔 רוצים הודעה קופצת בשולחן העבודה כשמגיעה הודעה?</span><button type="button" class="btn brass small" id="chatNotifOn">${Notification.permission === 'denied' ? 'ההתראות חסומות בדפדפן' : 'הפעלת התראות'}</button></div>` : `<div class="wa-notif-ok">🔔 ההתראות פעילות · <button type="button" class="linklike" id="chatNotifTest">שליחת התראת ניסיון</button></div>`}
     <div class="card wa-list">
       <button type="button" class="wa-contact wa-newgroup" id="chatNewGroup"><span class="wa-avatar group">＋</span><span class="wa-c-main"><b>קבוצה חדשה</b><span class="wa-c-prev">בוחרים משתתפים ונותנים שם</span></span></button>
       ${rows.map(r => `
@@ -7543,6 +7552,8 @@ async function renderChatHome(role){
         </button>`).join('')}
     </div>`;
   target.querySelectorAll('[data-chat-open]').forEach(b => b.onclick = () => renderChatRoom(role, b.dataset.chatOpen));
+  const nt = document.getElementById('chatNotifTest');
+  if(nt) nt.onclick = () => { setTimeout(() => showDesktopNote('דירתא – התראת ניסיון', 'אם רואים את זה, ההתראות עובדות ✓', null), 2500); showToast('ההתראה תקפוץ בעוד 2 שניות – אפשר לעבור לחלון אחר'); };
   const nb = document.getElementById('chatNotifOn');
   if(nb) nb.onclick = async () => {
     if(Notification.permission === 'denied'){ showToast('צריך לאפשר התראות בהגדרות האתר בדפדפן (סמל המנעול ליד הכתובת)'); return; }
@@ -7582,7 +7593,7 @@ function chatPickMembers(list, selected, askName, title){
   });
 }
 function chatBubblesHtml(ch, me, isGroup, members){
-  return (ch.msgs || []).map(m => {
+  return visibleMsgs(ch, me).map(m => {
     const mine = m.from === me;
     const others = members.filter(x => x !== m.from);
     const seenAll = others.length && others.every(x => (m.seenBy || []).includes(x));
@@ -7612,7 +7623,8 @@ async function renderChatRoom(role, otherId){
       <div class="wa-room-head"><button type="button" class="wa-back" id="chatRoomBack" aria-label="חזרה">→</button>
         <span class="wa-avatar${isGroup ? ' group' : ''}">${isGroup ? '👥' : escapeHtml(name.charAt(0) || '?')}</span>
         <span style="flex:1;"><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span>
-        ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">👤＋</button>' : ''}</div>
+        ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">👤＋</button>' : ''}
+        <button type="button" class="wa-back" id="chatClear" title="ניקוי הצ׳אט" aria-label="ניקוי הצ׳אט">🗑</button></div>
       <div class="wa-chat wa-room-chat" id="chatBody"></div>
       <div class="wa-compose">
         <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
@@ -7623,6 +7635,16 @@ async function renderChatRoom(role, otherId){
       </div>
     </div>`;
   document.getElementById('chatRoomBack').onclick = () => renderChatHome(role);
+  document.getElementById('chatClear').onclick = async () => {
+    if(!(await showConfirmModal('לנקות את כל ההודעות בשיחה הזו? הן יימחקו רק אצלך – השיחה ואיש הקשר נשארים, וגם הצד השני ממשיך לראות אותן.', { yes: 'ניקוי הצ׳אט', danger: true }))) return;
+    const fresh = await loadChat(id); if(!fresh) return showToast('שגיאה בטעינה');
+    const last = (fresh.msgs || []).slice(-1)[0];
+    if(!last) return showToast('אין הודעות לניקוי');
+    const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), { cleared: { ...(fresh.cleared || {}), [me]: last.id }, clearedAt: { ...(fresh.clearedAt || {}), [me]: last.at || '' } }, { merge: true }), 'chatClear');
+    if(ok !== true) return showToast('הניקוי לא הצליח');
+    cur = { ...cur, cleared: { ...(cur.cleared || {}), [me]: last.id }, clearedAt: { ...(cur.clearedAt || {}), [me]: last.at || '' } };
+    paint.sig = null; paint(); showToast('הצ׳אט נוקה');
+  };
   const addBtn = document.getElementById('chatAddMembers');
   if(addBtn) addBtn.onclick = async () => {
     const pick = await chatPickMembers(allContacts.filter(c => !c.group), members, false, 'הוספת משתתפים');
@@ -7719,7 +7741,7 @@ async function renderChatRoom(role, otherId){
       const d = snap.exists() ? snap.data() : { msgs: [] };
       typing = d.typing || null;
       if(custom && Array.isArray(d.members)) members = d.members;
-      const sig = JSON.stringify((d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted]));
+      const sig = JSON.stringify([(d.cleared || {})[me] || '', (d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted])]);
       if(sig !== paint.sig){ paint.sig = sig; cur = d; paint(); markSeen(); } else paintTyping();
     }, () => {});
   }catch(e){ cur = (await loadChat(id)) || { msgs: [] }; paint(); markSeen(); }
@@ -7810,16 +7832,37 @@ function notifyChat(role, id, d, m){
   const who = state._chatNames[m.from] || 'הודעה חדשה';
   const where = id === 'team' ? 'כל הצוות' : /^g_/.test(id) ? (d.name || 'קבוצה') : '';
   const body = m.text ? m.text.slice(0, 140) : m.fileId ? '📎 קובץ' : m.audioId ? '🎙 הודעה קולית' : '';
-  if(!('Notification' in window) || Notification.permission !== 'granted'){ if(document.visibilityState === 'visible') showToast('💬 ' + who + ': ' + body); return; }
+  chatPing(); flashTitle(who);
+  if(document.visibilityState === 'visible') showToast('💬 ' + who + ': ' + body);
+  showDesktopNote(where ? where + ' · ' + who : who, body, () => {
+    const other = id === 'team' || /^g_/.test(id) ? id : id.split('__').find(x => x !== chatMe(role));
+    if(role === 'mgr'){ renderAdminDashboard('chat'); setTimeout(() => renderChatRoom('mgr', other), 300); }
+    else renderChatRoom('emp', other);
+  });
+}
+// התראת מערכת: קודם דרך Service Worker (אמין יותר ב-Windows), ואם אין – Notification רגיל
+async function showDesktopNote(title, body, onClick){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  const opts = { body, icon: 'logo.jpg', badge: 'logo.jpg', tag: 'dirata-chat', renotify: true };
   try{
-    const n = new Notification(where ? where + ' · ' + who : who, { body, icon: 'logo.jpg', tag: 'chat-' + id, renotify: true });
-    n.onclick = () => {
-      window.focus(); n.close();
-      const other = id === 'team' || /^g_/.test(id) ? id : id.split('__').find(x => x !== chatMe(role));
-      if(role === 'mgr'){ renderAdminDashboard('chat'); setTimeout(() => renderChatRoom('mgr', other), 300); }
-      else renderChatRoom('emp', other);
-    };
+    const n = new Notification(title, opts);
+    n.onclick = () => { window.focus(); n.close(); if(onClick) onClick(); };
+    return;
   }catch(e){}
+  try{ const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if(reg) await reg.showNotification(title, opts); }catch(e){}
+}
+// צליל קצר וכותרת מהבהבת בכרטיסייה – גם כשהתראות המערכת חסומות
+function chatPing(){
+  try{ const ctx = getAudioCtx(); const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.0001, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35); o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.4); }catch(e){}
+}
+let titleFlashT = null;
+function flashTitle(who){
+  if(document.visibilityState === 'visible') return;
+  const base = document.title.replace(/^\(\S+\) /, '');
+  clearInterval(titleFlashT); let on = false;
+  titleFlashT = setInterval(() => { on = !on; document.title = on ? '💬 הודעה מ' + who : base; }, 1000);
+  const stop = () => { clearInterval(titleFlashT); document.title = base; document.removeEventListener('visibilitychange', stop); };
+  document.addEventListener('visibilitychange', stop);
 }
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
