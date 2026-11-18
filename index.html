@@ -6934,7 +6934,7 @@ async function renderEmployeeTasks(emp){
   const row = (t, ds, canCheck) => `
     <label class="task-row${taskDone(t, ds) ? ' done' : ''}${canCheck ? '' : ' admin'}">
       ${canCheck ? `<input type="checkbox" class="task-check" data-task="${t.id}" ${taskDone(t, ds) ? 'checked' : ''} />` : '<span class="task-mark">•</span>'}
-      <span style="flex:1;">${escapeHtml(t.text)}${t.voice ? '<span class="hint" style="display:block; font-size:12.5px;">את ההקלטה שומעים בקו, ברישום הכניסה</span>' : ''}</span>
+      <span style="flex:1;">${escapeHtml(t.text)}</span>${t.voice ? `<button type="button" class="btn ghost small" data-play="${t.id}" data-pemp="${emp.id}">▶ השמעה</button>` : ''}
       ${t.repeat ? '<span class="hint" style="font-size:12px;">כל יום</span>' : t.nodate ? '<span class="hint" style="font-size:12px;">ללא תאריך</span>' : ds !== today ? `<span class="hint mono" style="font-size:12px;">${t.date.split('-').reverse().join('/')}</span>` : ''}
     </label>`;
   const doneN = todays.filter(t => taskDone(t, today)).length;
@@ -6997,6 +6997,7 @@ async function renderAdminTasks(){
         <div class="task-row admin${taskDone(t, date) ? ' done' : ''}">
           <span class="task-mark">${taskDone(t, date) ? '✓' : '○'}</span>
           <span style="flex:1;">${escapeHtml(t.text)}${t.voice ? ' <span class="hint" style="font-size:12px;">· מהקו</span>' : ''}${t.repeat ? ' <span class="hint" style="font-size:12px;">· כל יום</span>' : t.nodate ? ' <span class="hint" style="font-size:12px;">· ללא תאריך</span>' : ''}</span>
+          ${t.voice ? `<button type="button" class="btn ghost small" data-play="${t.id}" data-pemp="${empId}">▶ השמעה</button>` : ''}
           <button type="button" class="btn ghost small" data-tdel="${t.id}">מחיקה</button>
         </div>`).join('') : '<p class="hint" style="margin:4px 0 0;">אין משימות ליום הזה.</p>'}
       <form id="taskAddForm" style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -7030,6 +7031,21 @@ async function renderAdminTasks(){
   };
 }
 
+// השמעת משימה קולית שהוקלטה בקו (הגשר מביא את ההקלטה מימות המשיח)
+let taskAudioEl = null;
+async function playTaskAudio(btn){
+  if(taskAudioEl && !taskAudioEl.paused && taskAudioEl._id === btn.dataset.play){ taskAudioEl.pause(); btn.textContent = '▶ השמעה'; return; }
+  const label = btn.textContent; btn.disabled = true; btn.textContent = 'טוען...';
+  const res = await bridge('task-audio', { idToken: await empIdToken(), empId: btn.dataset.pemp, taskId: btn.dataset.play });
+  btn.disabled = false;
+  if(!res || !res.audio){ btn.textContent = label; showToast(res && res.error === 'unavailable' ? 'אי אפשר להשמיע את ההקלטה באתר כרגע. אפשר לשמוע אותה בקו' : 'לא הצלחנו לטעון את ההקלטה'); return; }
+  if(taskAudioEl) taskAudioEl.pause();
+  taskAudioEl = new Audio(res.audio); taskAudioEl._id = btn.dataset.play;
+  btn.textContent = '⏸ עצירה';
+  taskAudioEl.onended = () => { btn.textContent = '▶ השמעה'; };
+  taskAudioEl.play().catch(() => { btn.textContent = '▶ השמעה'; showToast('לא הצלחנו להשמיע'); });
+}
+
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
 async function openMirror(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ showToast('המכשיר הזה לא תומך במצלמה'); return; }
@@ -7050,6 +7066,8 @@ async function openMirror(){
 document.addEventListener('click', async e => {
   if(!e.target.closest) return;
   if(e.target.closest('#mirrorBtn')) openMirror();
+  const pb = e.target.closest('[data-play]');
+  if(pb){ e.preventDefault(); playTaskAudio(pb); }
   if(e.target.closest('#tasksBtn') && state.currentEmployee) renderEmployeeTasks(state.currentEmployee);
   if(e.target.closest('#hideMirrorBtn')){
     const emp = state.currentEmployee; if(!emp) return;
