@@ -814,6 +814,7 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .wa-typing-inline{ color:#00A884; font-weight:600; }
 .wa-link{ color:#027EB5; text-decoration:underline; word-break:break-all; }
 .wa-row.out .wa-link{ color:#0B6E4F; }
+.wa-avatar.self{ background:#E7F8F1; font-size:20px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7933,8 +7934,11 @@ async function chatContacts(role){
   if(role === 'mgr') list = (state.employees || []).filter(e => !e.frozen).map(e => ({ id: e.id, name: e.name }));
   else { const r = await bridge('emp-list'); list = (r.list || []).filter(e => e.id !== chatMe(role)); }
   if(role !== 'mgr') list.unshift({ id: 'mgr', name: 'המנהל' });
+  // שיחה עם עצמי – לפתקים, תזכורות וקבצים אישיים (כמו "הודעות לעצמי" בוואטסאפ)
+  const meId = chatMe(role);
+  if(meId) list.unshift({ id: meId, name: 'אני · הודעות לעצמי', self: true });
   list.unshift({ id: 'team', name: 'כל הצוות', group: true });
-  state._chatNames = Object.fromEntries([['mgr', 'המנהל'], ...list.map(c => [c.id, c.name])]);
+  state._chatNames = Object.fromEntries([['mgr', 'המנהל'], ...list.filter(c => !c.self).map(c => [c.id, c.name])]);
   if(role !== 'mgr' && state.currentEmployee) state._chatNames[state.currentEmployee.id] = state.currentEmployee.name;
   return list;
 }
@@ -8000,7 +8004,7 @@ async function renderChatHome(role){
       <button type="button" class="wa-contact wa-newgroup" id="chatNewGroup"><span class="wa-avatar group">${WAI.newgroup}</span><span class="wa-c-main"><b>קבוצה חדשה</b><span class="wa-c-prev">בוחרים משתתפים ונותנים שם</span></span></button>
       ${rows.map(r => `
         <button type="button" class="wa-contact" data-chat-open="${r.c.id}">
-          <span class="wa-avatar${r.c.group ? ' group' : ''}">${r.c.group ? WAI.group : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
+          <span class="wa-avatar${r.c.group ? ' group' : ''}${r.c.self ? ' self' : ''}">${r.c.self ? '📝' : r.c.group ? WAI.group : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
           <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(r.c.name)}</b><span class="wa-c-time">${r.last ? chatTime(r.last.at) : ''}</span></span>
             <span class="wa-c-bottom"><span class="wa-c-prev" data-prev-for="${chatIdWith(me, r.c.id)}" data-prev-orig="${escapeHtml(r.prev)}">${getDraft(me, chatIdWith(me, r.c.id)) ? `<span class="wa-draft">טיוטה:</span> ${escapeHtml(getDraft(me, chatIdWith(me, r.c.id)).slice(0, 60))}` : escapeHtml(r.prev)}</span>${r.un ? `<span class="wa-c-unread">${r.un}</span>` : ''}</span></span>
         </button>`).join('')}
@@ -8118,15 +8122,16 @@ async function renderChatRoom(role, otherId){
   const allContacts = await chatContacts(role);
   const target = role === 'mgr' ? document.getElementById('tabContent') : app;
   const g = custom ? await loadChat(id) : null;
-  const name = custom ? ((g && g.name) || 'קבוצה') : (state._chatNames[otherId] || '');
-  let members = custom ? ((g && g.members) || [me]) : otherId === 'team' ? Object.keys(state._chatNames) : [me, otherId];
+  const name = custom ? ((g && g.name) || 'קבוצה') : otherId === me ? 'אני · הודעות לעצמי' : (state._chatNames[otherId] || '');
+  const selfChat = otherId === me;
+  let members = custom ? ((g && g.members) || [me]) : otherId === 'team' ? Object.keys(state._chatNames) : selfChat ? [me] : [me, otherId];
   target.innerHTML = `
     <div class="card wa-room">
       <div class="wa-room-head"><button type="button" class="wa-back" id="chatRoomBack" aria-label="חזרה">${WAI.back}</button>
         <span class="wa-avatar${isGroup ? ' group' : ''}">${isGroup ? WAI.group : escapeHtml(name.charAt(0) || '?')}</span>
         <span style="flex:1;"><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span>
         ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">' + WAI.adduser + '</button>' : ''}
-        ${isGroup ? '' : '<a class="wa-back" id="chatTel" title="התקשרות לטלפון" aria-label="התקשרות לטלפון" hidden>' + WAI.dial + '</a><button type="button" class="wa-back" id="chatVideo" title="שיחת וידאו" aria-label="שיחת וידאו">' + WAI.video + '</button><button type="button" class="wa-back" id="chatCall" title="שיחה קולית" aria-label="שיחה קולית">' + WAI.phone + '</button>'}
+        ${isGroup || selfChat ? '' : '<a class="wa-back" id="chatTel" title="התקשרות לטלפון" aria-label="התקשרות לטלפון" hidden>' + WAI.dial + '</a><button type="button" class="wa-back" id="chatVideo" title="שיחת וידאו" aria-label="שיחת וידאו">' + WAI.video + '</button><button type="button" class="wa-back" id="chatCall" title="שיחה קולית" aria-label="שיחה קולית">' + WAI.phone + '</button>'}
         <button type="button" class="wa-back" id="chatSearchBtn" title="חיפוש בשיחה" aria-label="חיפוש בשיחה">${WAI.search}</button>
         <button type="button" class="wa-back" id="chatClear" title="ניקוי הצ׳אט" aria-label="ניקוי הצ׳אט">${WAI.trash}</button></div>
       <div class="wa-searchbar" id="chatSearchBar" hidden><input type="search" id="chatSearchIn" placeholder="חיפוש בשיחה..." /><span id="chatSearchCnt" class="hint"></span><button type="button" class="wa-back" id="chatSearchUp" aria-label="הקודמת">▲</button><button type="button" class="wa-back" id="chatSearchDown" aria-label="הבאה">▼</button><button type="button" class="wa-back" id="chatSearchX" aria-label="סגירה">✕</button></div>
@@ -8707,7 +8712,7 @@ async function renderChatMonitor(target, myGroupIds){
   try{ const snap = await withTimeout(getDocs(collection(db, 'chats')), 20000, 'chatMonitor'); docs = snap.docs.map(d => ({ id: d.id, ...d.data() })); }catch(e){ return; }
   const others = docs.filter(c => c.id !== 'team' && !myGroupIds.includes(c.id) && !/(^|__)mgr(__|$)/.test(c.id) && (c.msgs || []).length);
   if(!others.length || !target.isConnected) return;
-  const label = c => /^g_/.test(c.id) ? '👥 ' + (c.name || 'קבוצה') : c.id.split('__').map(x => state._chatNames[x] || 'עובד').join(' ↔ ');
+  const label = c => { if(/^g_/.test(c.id)) return '👥 ' + (c.name || 'קבוצה'); const pr = c.id.split('__'); return pr[0] === pr[1] ? '📝 ' + (state._chatNames[pr[0]] || 'עובד') + ' (לעצמו)' : pr.map(x => state._chatNames[x] || 'עובד').join(' ↔ '); };
   others.sort((a, b) => String(((b.msgs || []).slice(-1)[0] || {}).at || '').localeCompare(String(((a.msgs || []).slice(-1)[0] || {}).at || '')));
   const box = document.createElement('div');
   box.className = 'card wa-list';
