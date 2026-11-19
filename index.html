@@ -840,6 +840,16 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .hu-top b{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hu-app{ font-size:12px; color:#667781; white-space:nowrap; }
 .hu-body{ font-size:14px; color:#3B4A54; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px; }
+.wa-inputwrap{ flex:1 1 160px; display:flex; align-items:flex-end; background:#fff; border-radius:22px; padding:0 6px 0 4px; min-width:0; }
+.wa-inputwrap textarea{ flex:1; background:transparent !important; border-radius:0; padding:9px 8px; min-width:0; }
+.wa-in-btn{ flex:0 0 auto; width:38px; height:40px; border:none; background:none; color:#54656F; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
+.wa-in-btn:hover{ color:#111B21; }
+.att-menu{ position:fixed; z-index:10003; background:#fff; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.22); padding:8px; display:flex; flex-direction:column; gap:2px; min-width:190px; }
+.att-menu button{ display:flex; align-items:center; gap:12px; border:none; background:none; font:inherit; font-size:15px; padding:9px 10px; border-radius:10px; cursor:pointer; color:#111B21; text-align:right; }
+.att-menu button:hover{ background:#F5F6F6; }
+.att-ic{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; }
+.cam-shot{ position:absolute; bottom:28px; left:50%; transform:translateX(-50%); width:72px; height:72px; border-radius:50%; border:5px solid #fff; background:rgba(255,255,255,.25); cursor:pointer; z-index:3; }
+.cam-shot:hover{ background:rgba(255,255,255,.45); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7935,7 +7945,7 @@ async function playTaskAudio(btn){
   taskAudioEl.play().catch(() => { btn.textContent = idle; showToast('לא הצלחנו להשמיע'); });
 }
 
-const WAI = {search:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>',dial:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>',attach:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>',send:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.6 20.4 3 12l17.6-8.4V10L8 12l12.6 2z"/></svg>',mic:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V5a3.5 3.5 0 1 0-7 0v6a3.5 3.5 0 0 0 3.5 3.5zm6.3-3.6a.9.9 0 0 0-1.8 0 4.5 4.5 0 0 1-9 0 .9.9 0 0 0-1.8 0 6.3 6.3 0 0 0 5.4 6.2V20H9a.9.9 0 0 0 0 1.8h6a.9.9 0 0 0 0-1.8h-2.1v-2.9a6.3 6.3 0 0 0 5.4-6.2z"/></svg>',stop:'<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',phone:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19.4 15.6l-2.6-.3a2 2 0 0 0-1.7.6l-1.9 1.9a15.1 15.1 0 0 1-6.6-6.6l1.9-1.9a2 2 0 0 0 .6-1.7l-.3-2.6A2 2 0 0 0 6.8 3.2H5A2 2 0 0 0 3 5.3 17.9 17.9 0 0 0 18.7 21a2 2 0 0 0 2.1-2v-1.7a2 2 0 0 0-1.4-1.7z"/></svg>',video:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M15.5 8.6V7a2 2 0 0 0-2-2h-9a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1.6l4.3 3a.8.8 0 0 0 1.2-.7V6.3a.8.8 0 0 0-1.2-.7z"/></svg>',trash:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',adduser:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>',back:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 4l-1.4 1.4 5.6 5.6H4v2h12.2l-5.6 5.6L12 20l8-8z"/></svg>',group:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1a4.2 4.2 0 0 1 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>',newgroup:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4z"/></svg>',chev:'<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.4 9.3 12 13.9l4.6-4.6L18 10.7l-6 6-6-6z"/></svg>',smile:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/></svg>',eye:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 5C7 5 2.7 8.1 1 12.5 2.7 16.9 7 20 12 20s9.3-3.1 11-7.5C21.3 8.1 17 5 12 5zm0 12.5a5 5 0 1 1 5-5 5 5 0 0 1-5 5zm0-8a3 3 0 1 0 3 3 3 3 0 0 0-3-3z"/></svg>',ticks:'<svg viewBox="0 0 18 12" width="16" height="11" fill="currentColor"><path d="M17.4.6a.7.7 0 0 0-1 0L9.6 7.4 8.6 6.4l-1 1 1.5 1.5a.7.7 0 0 0 1 0L17.4 1.6a.7.7 0 0 0 0-1zM12.6.6a.7.7 0 0 0-1 0L4.8 7.4 1.6 4.2a.7.7 0 0 0-1 1l3.7 3.7a.7.7 0 0 0 1 0L12.6 1.6a.7.7 0 0 0 0-1z"/></svg>'};
+const WAI = {cam:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2.2l1.4-2h6.8l1.4 2H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.6"/></svg>',search:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>',dial:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>',attach:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>',send:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.6 20.4 3 12l17.6-8.4V10L8 12l12.6 2z"/></svg>',mic:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V5a3.5 3.5 0 1 0-7 0v6a3.5 3.5 0 0 0 3.5 3.5zm6.3-3.6a.9.9 0 0 0-1.8 0 4.5 4.5 0 0 1-9 0 .9.9 0 0 0-1.8 0 6.3 6.3 0 0 0 5.4 6.2V20H9a.9.9 0 0 0 0 1.8h6a.9.9 0 0 0 0-1.8h-2.1v-2.9a6.3 6.3 0 0 0 5.4-6.2z"/></svg>',stop:'<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',phone:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19.4 15.6l-2.6-.3a2 2 0 0 0-1.7.6l-1.9 1.9a15.1 15.1 0 0 1-6.6-6.6l1.9-1.9a2 2 0 0 0 .6-1.7l-.3-2.6A2 2 0 0 0 6.8 3.2H5A2 2 0 0 0 3 5.3 17.9 17.9 0 0 0 18.7 21a2 2 0 0 0 2.1-2v-1.7a2 2 0 0 0-1.4-1.7z"/></svg>',video:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M15.5 8.6V7a2 2 0 0 0-2-2h-9a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1.6l4.3 3a.8.8 0 0 0 1.2-.7V6.3a.8.8 0 0 0-1.2-.7z"/></svg>',trash:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',adduser:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>',back:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 4l-1.4 1.4 5.6 5.6H4v2h12.2l-5.6 5.6L12 20l8-8z"/></svg>',group:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1a4.2 4.2 0 0 1 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>',newgroup:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4z"/></svg>',chev:'<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.4 9.3 12 13.9l4.6-4.6L18 10.7l-6 6-6-6z"/></svg>',smile:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/></svg>',eye:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 5C7 5 2.7 8.1 1 12.5 2.7 16.9 7 20 12 20s9.3-3.1 11-7.5C21.3 8.1 17 5 12 5zm0 12.5a5 5 0 1 1 5-5 5 5 0 0 1-5 5zm0-8a3 3 0 1 0 3 3 3 3 0 0 0-3-3z"/></svg>',ticks:'<svg viewBox="0 0 18 12" width="16" height="11" fill="currentColor"><path d="M17.4.6a.7.7 0 0 0-1 0L9.6 7.4 8.6 6.4l-1 1 1.5 1.5a.7.7 0 0 0 1 0L17.4 1.6a.7.7 0 0 0 0-1zM12.6.6a.7.7 0 0 0-1 0L4.8 7.4 1.6 4.2a.7.7 0 0 0-1 1l3.7 3.7a.7.7 0 0 0 1 0L12.6 1.6a.7.7 0 0 0 0-1z"/></svg>'};
 
 // טיוטות בצ'אט: מה שהתחלתם לכתוב נשמר לכל שיחה, גם אם יוצאים מהדף או סוגרים את האתר
 function draftKey(me, chatId){ return 'chatDraft:' + me + ':' + chatId; }
@@ -8176,8 +8186,14 @@ async function renderChatRoom(role, otherId){
       <div class="wa-tray" id="chatTray" hidden></div>
       <div class="wa-replybar" id="chatReplyBar" hidden><div class="wa-quote"><b id="chatReplyWho"></b><span id="chatReplySnip"></span></div><button type="button" class="wa-back" id="chatReplyX" aria-label="ביטול">✕</button></div>
       <div class="wa-compose">
-        <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
-        <label class="wa-btn attach" title="צירוף קובץ">${WAI.attach}<input type="file" id="chatFile" multiple hidden /></label>
+        <div class="wa-inputwrap">
+          <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
+          <button type="button" class="wa-in-btn" id="chatAttachBtn" title="צירוף" aria-label="צירוף">${WAI.attach}</button>
+          <button type="button" class="wa-in-btn" id="chatCamBtn" title="מצלמה" aria-label="מצלמה">${WAI.cam}</button>
+          <input type="file" id="chatFile" multiple hidden />
+          <input type="file" id="chatGallery" accept="image/*,video/*" multiple hidden />
+          <input type="file" id="chatCamInput" accept="image/*" capture="environment" hidden />
+        </div>
         <button type="button" class="wa-btn send" id="chatSend" title="שליחה">${WAI.send}</button>
         <button type="button" class="wa-btn mic" id="chatMic" title="הקלטה">${WAI.mic}</button>
         <span class="hint wa-status" id="chatStatus"></span>
@@ -8432,7 +8448,41 @@ async function renderChatRoom(role, otherId){
     const t = input.value.trim(); if(!t) return input.focus(); input.value = ''; input.style.height = ''; setDraft(me, id, ''); input.focus(); send({ text: t });
   };
   // כמה קבצים ביחד (עד 10) נשלחים בהודעה אחת, כמו אלבום בוואטסאפ. טקסט שבשדה נשלח ככיתוב
-  document.getElementById('chatFile').onchange = e => { const picked = [...(e.target.files || [])]; e.target.value = ''; addPending(picked); };
+  ['chatFile', 'chatGallery', 'chatCamInput'].forEach(fid => { document.getElementById(fid).onchange = e => { const picked = [...(e.target.files || [])]; e.target.value = ''; addPending(picked); }; });
+  // מהדק: תפריט קטן – גלריה (תמונות וסרטונים) או קובץ מהתיקייה
+  document.getElementById('chatAttachBtn').onclick = ev => {
+    ev.stopPropagation();
+    document.querySelectorAll('.att-menu').forEach(x => x.remove());
+    const m = document.createElement('div'); m.className = 'att-menu';
+    m.innerHTML = `<button type="button" data-att="gallery"><span class="att-ic" style="background:#BF59CF;">🖼️</span>גלריה</button><button type="button" data-att="file"><span class="att-ic" style="background:#5157AE;">📄</span>קובץ / מסמך</button><button type="button" data-att="camera"><span class="att-ic" style="background:#D3396D;">📷</span>מצלמה</button>`;
+    document.body.appendChild(m);
+    const r0 = ev.currentTarget.getBoundingClientRect();
+    m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r0.left + r0.width / 2 - m.offsetWidth / 2)) + 'px';
+    m.style.top = (r0.top - m.offsetHeight - 10) + 'px';
+    const close = e => { if(!m.contains(e.target)){ m.remove(); document.removeEventListener('click', close, true); } };
+    setTimeout(() => document.addEventListener('click', close, true), 0);
+    m.querySelectorAll('[data-att]').forEach(b => b.onclick = () => { m.remove(); const a = b.dataset.att; if(a === 'gallery') document.getElementById('chatGallery').click(); else if(a === 'file') document.getElementById('chatFile').click(); else openCamera(); });
+  };
+  // מצלמה: בטלפון נפתחת מצלמת המכשיר; במחשב – חלון צילום מהמצלמה
+  const isTouch = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+  const openCamera = async () => {
+    if(isTouch) return document.getElementById('chatCamInput').click();
+    let stream; try{ stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } }, audio: false }); }catch(e){ return showToast('אין גישה למצלמה'); }
+    const ov = document.createElement('div'); ov.className = 'wa-lightbox';
+    ov.innerHTML = `<div class="wa-lb-bar"><button type="button" class="wa-lb-btn" data-lb-close aria-label="סגירה">✕</button><span class="wa-lb-name">מצלמה</span></div>
+      <div class="wa-lb-stage"><video autoplay playsinline muted class="wa-lb-media" style="transform:scaleX(-1);"></video></div>
+      <button type="button" class="cam-shot" aria-label="צילום"></button>`;
+    document.body.appendChild(ov);
+    const v = ov.querySelector('video'); v.srcObject = stream;
+    const close = () => { stream.getTracks().forEach(t => t.stop()); ov.remove(); };
+    ov.querySelector('[data-lb-close]').onclick = close;
+    ov.querySelector('.cam-shot').onclick = () => {
+      const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
+      const g = c.getContext('2d'); g.translate(c.width, 0); g.scale(-1, 1); g.drawImage(v, 0, 0);
+      c.toBlob(bl => { if(bl) addPending([new File([bl], 'צילום ' + nowTimeStr().slice(0, 5).replace(':', '-') + '.jpg', { type: 'image/jpeg' })]); close(); }, 'image/jpeg', .9);
+    };
+  };
+  document.getElementById('chatCamBtn').onclick = () => openCamera();
   // גרירת קבצים לתוך השיחה
   body.addEventListener('dragover', e => { if(e.dataTransfer && [...e.dataTransfer.types].includes('Files')){ e.preventDefault(); body.classList.add('wa-drop'); } });
   body.addEventListener('dragleave', () => body.classList.remove('wa-drop'));
