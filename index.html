@@ -812,6 +812,8 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .wa-chat.wa-drop{ outline:3px dashed #00A884; outline-offset:-10px; }
 .wa-draft{ color:#E53935; font-weight:600; }
 .wa-typing-inline{ color:#00A884; font-weight:600; }
+.wa-link{ color:#027EB5; text-decoration:underline; word-break:break-all; }
+.wa-row.out .wa-link{ color:#0B6E4F; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7486,7 +7488,7 @@ function taskRepliesHtml(t, empId, viewer){
             <div class="wa-bubble">
               ${mine(r) ? '' : `<div class="wa-name">${r.from === 'mgr' ? 'המנהל' : 'העובד'}</div>`}
               ${r.fileId ? (/^image\//.test(r.fileType || '') ? `<img class="wa-img" data-file-img="${r.fileId}" alt="${escapeHtml(r.fileName || 'תמונה')}" />` : `<button type="button" class="wa-file" data-file-open="${r.fileId}" data-file-name="${escapeHtml(r.fileName || 'קובץ')}">📄 ${escapeHtml(r.fileName || 'קובץ')}</button>`) : ''}
-              ${r.text ? `<div class="wa-text">${escapeHtml(r.text)}</div>` : ''}
+              ${r.text ? `<div class="wa-text">${linkify(r.text)}</div>` : ''}
               ${(r.voice || r.audioId) ? `<button type="button" class="wa-voice" data-play="${t.id}" data-pemp="${empId}" data-reply="${r.id}"${r.audioId ? ` data-audio="${r.audioId}"` : ''}>▶ הודעה קולית</button>` : ''}
               <span class="wa-time">${when(r)}${mine(r) ? ` <span class="wa-ticks${r[viewer === 'emp' ? 'seenMgr' : 'seenEmp'] ? ' seen' : ''}">✓✓</span>` : ''}</span>
             </div>
@@ -8103,7 +8105,7 @@ function chatBubblesHtml(ch, me, isGroup, members){
         return (imgs.length ? `<div class="wa-album n${Math.min(imgs.length, 4)}">${imgs.slice(0, 4).map((x, k) => `<div class="wa-album-cell"><img class="wa-img" data-file-img="${x.fileId}" alt="" />${k === 3 && imgs.length > 4 ? `<span class="wa-album-more" data-album-more="${m.id}">+${imgs.length - 4}</span>` : ''}</div>`).join('')}</div>` : '')
           + docs.map(x => `<button type="button" class="wa-file" data-file-open="${x.fileId}" data-file-name="${escapeHtml(x.fileName || 'קובץ')}">📄 ${escapeHtml(x.fileName || 'קובץ')}</button>`).join(''); })() : ''}
       ${m.audioId ? `<button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button>` : ''}
-      ${m.text ? `<div class="wa-text">${escapeHtml(m.text)}</div>` : ''}
+      ${m.text ? `<div class="wa-text">${linkify(m.text)}</div>` : ''}
       <span class="wa-time">${m.edited ? '<i class="wa-edited">נערכה</i>' : ''}${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
     </div>${reactHtml}</div>`;
   }).join('');
@@ -8825,6 +8827,24 @@ function openFromLink(link){
     else if(u.searchParams.get('tasks') && state.currentEmployee) renderEmployeeTasks(state.currentEmployee);
   }catch(e){}
 }
+
+// קישורים בהודעות: אתרים (http, https, www), אימייל, מספרי טלפון (חיוג), וואטסאפ וכל קישור אחר – הופכים ללחיצים
+function linkify(text){
+  const src = String(text || '');
+  const re = /((?:https?:\/\/|www\.)[^\s<]+[^\s<.,;:!?)\]'"״׳])|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})|((?:\+972[-\s]?|0)(?:[2-9]\d?)[-\s]?\d{3}[-\s]?\d{4}|\*\d{3,5})/g;
+  let out = '', last = 0, m;
+  while((m = re.exec(src))){
+    out += escapeHtml(src.slice(last, m.index));
+    const t = m[0];
+    if(m[1]){ const href = /^www\./i.test(t) ? 'https://' + t : t; out += `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="wa-link">${escapeHtml(t)}</a>`; }
+    else if(m[2]) out += `<a href="mailto:${escapeHtml(t)}" class="wa-link">${escapeHtml(t)}</a>`;
+    else out += `<a href="tel:${escapeHtml(t.replace(/[-\s]/g, ''))}" class="wa-link">${escapeHtml(t)}</a>`;
+    last = m.index + t.length;
+  }
+  return out + escapeHtml(src.slice(last));
+}
+// לחיצה על קישור לא פותחת את תפריט ההודעה
+document.addEventListener('contextmenu', e => { if(e.target.closest && e.target.closest('.wa-link')) e.stopPropagation(); }, true);
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
 async function openMirror(){
