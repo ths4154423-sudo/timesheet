@@ -8831,13 +8831,15 @@ function openFromLink(link){
 // קישורים בהודעות: אתרים (http, https, www), אימייל, מספרי טלפון (חיוג), וואטסאפ וכל קישור אחר – הופכים ללחיצים
 function linkify(text){
   const src = String(text || '');
-  const re = /((?:https?:\/\/|www\.)[^\s<]+[^\s<.,;:!?)\]'"״׳])|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})|((?:\+972[-\s]?|0)(?:[2-9]\d?)[-\s]?\d{3}[-\s]?\d{4}|\*\d{3,5})/g;
+  // גם כתובת בלי http ובלי www, כמו dirata.co.il או GOOGLE.COM/abc (באותיות גדולות או קטנות)
+  const re = /((?:https?:\/\/|www\.)[^\s<]+[^\s<.,;:!?)\]'"״׳])|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})|((?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+(?:co\.il|org\.il|net\.il|ac\.il|gov\.il|muni\.il|k12\.il|co\.uk|com|net|org|il|info|io|app|me|biz|edu|gov|co|us|uk|de|fr|eu|online|site|store|shop|tech|dev|ai|tv|ly)(?![A-Za-z0-9-])(?:\/[^\s<]*[^\s<.,;:!?)\]'"״׳])?)|((?:\+972[-\s]?|0)(?:[2-9]\d?)[-\s]?\d{3}[-\s]?\d{4}|\*\d{3,5})/gi;
   let out = '', last = 0, m;
   while((m = re.exec(src))){
     out += escapeHtml(src.slice(last, m.index));
     const t = m[0];
     if(m[1]){ const href = /^www\./i.test(t) ? 'https://' + t : t; out += `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="wa-link">${escapeHtml(t)}</a>`; }
     else if(m[2]) out += `<a href="mailto:${escapeHtml(t)}" class="wa-link">${escapeHtml(t)}</a>`;
+    else if(m[3]) out += `<a href="https://${escapeHtml(t.replace(/^[^/]+/, h => h.toLowerCase()))}" target="_blank" rel="noopener noreferrer" class="wa-link">${escapeHtml(t)}</a>`;
     else out += `<a href="tel:${escapeHtml(t.replace(/[-\s]/g, ''))}" class="wa-link">${escapeHtml(t)}</a>`;
     last = m.index + t.length;
   }
