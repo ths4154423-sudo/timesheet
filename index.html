@@ -815,6 +815,11 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .wa-link{ color:#027EB5; text-decoration:underline; word-break:break-all; }
 .wa-row.out .wa-link{ color:#0B6E4F; }
 .wa-avatar.self{ background:#E7F8F1; font-size:20px; }
+.wa-full{ position:fixed; }
+.wa-fab{ position:absolute; left:22px; bottom:22px; width:58px; height:58px; border-radius:16px; border:none; background:#00A884; color:#fff; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.25); display:flex; align-items:center; justify-content:center; z-index:5; }
+.wa-fab svg{ width:30px; height:30px; }
+.wa-fab:hover{ background:#06CF9C; }
+.wa-full-body{ padding-bottom:90px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7987,7 +7992,7 @@ async function renderChatHome(role){
     const ch = chats[i] || { msgs: [] }, last = visibleMsgs(ch, me).slice(-1)[0], un = chatUnread(ch, me);
     const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : ''))) : 'אין הודעות עדיין';
     return { c, last, un, prev };
-  }).sort((a, b) => (a.c.id === 'team' ? -1 : b.c.id === 'team' ? 1 : String(b.last ? b.last.at : '').localeCompare(String(a.last ? a.last.at : ''))));
+  }).sort((a, b) => (a.c.self ? -1 : b.c.self ? 1 : a.c.id === 'team' ? -1 : b.c.id === 'team' ? 1 : String(b.last ? b.last.at : '').localeCompare(String(a.last ? a.last.at : ''))));
   const coUser = role !== 'mgr' && state.currentEmployee && state.currentEmployee.chatOnly;
   target.innerHTML = `<div class="wa-full" id="waFull">
     <div class="wa-full-head">
@@ -8001,7 +8006,7 @@ async function renderChatHome(role){
     <div class="wa-home-search"><input type="search" id="chatHomeSearch" placeholder="🔍 חיפוש שיחה או הודעה..." /></div>
     <div id="chatSearchResults"></div>
     <div class="card wa-list" id="chatListCard">
-      <button type="button" class="wa-contact wa-newgroup" id="chatNewGroup"><span class="wa-avatar group">${WAI.newgroup}</span><span class="wa-c-main"><b>קבוצה חדשה</b><span class="wa-c-prev">בוחרים משתתפים ונותנים שם</span></span></button>
+
       ${rows.map(r => `
         <button type="button" class="wa-contact" data-chat-open="${r.c.id}">
           <span class="wa-avatar${r.c.group ? ' group' : ''}${r.c.self ? ' self' : ''}">${r.c.self ? '📝' : r.c.group ? WAI.group : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
@@ -8010,7 +8015,9 @@ async function renderChatHome(role){
         </button>`).join('')}
     </div>
     <div id="waMonitorSlot"></div>
-    </div></div>`;
+    </div>
+    <button type="button" class="wa-fab" id="chatNewGroup" title="קבוצה חדשה" aria-label="קבוצה חדשה">${WAI.newgroup}</button>
+    </div>`;
   const fc = document.getElementById('waFullClose');
   if(fc) fc.onclick = () => role === 'mgr' ? renderAdminDashboard('dashboard') : renderEmployeeDashboard(state.currentEmployee);
   const fl = document.getElementById('waFullLogout');
@@ -8038,7 +8045,6 @@ async function renderChatHome(role){
   hs.addEventListener('input', () => {
     const q = hs.value.trim().toLowerCase();
     target.querySelectorAll('#chatListCard [data-chat-open]').forEach(b => { b.style.display = !q || b.textContent.toLowerCase().includes(q) ? '' : 'none'; });
-    document.getElementById('chatNewGroup').style.display = q ? 'none' : '';
     if(!q){ hres.innerHTML = ''; return; }
     const found = [];
     contacts.forEach((c, i) => visibleMsgs(chats[i] || {}, me).forEach(m => { if(!m.deleted && m.text && m.text.toLowerCase().includes(q)) found.push({ c, m }); }));
