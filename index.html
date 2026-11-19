@@ -823,6 +823,10 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .wa-list-ticks{ flex:0 0 auto; display:inline-flex; align-items:center; margin-left:-4px; }
 .wa-c-bottom{ justify-content:flex-start; }
 .wa-c-bottom .wa-c-prev{ flex:1; min-width:0; }
+.msginfo{ max-width:420px; width:92vw; text-align:right; }
+.msginfo-row{ display:flex; flex-direction:column; gap:2px; padding:9px 2px; border-bottom:1px solid #F0F2F5; font-size:14px; }
+.msginfo-row span{ color:#54656F; display:inline-flex; align-items:center; gap:4px; }
+.msginfo-row .wa-ticks{ position:static; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8239,13 +8243,42 @@ async function renderChatRoom(role, otherId){
   const markSeen = async () => {
     if(!chatUnread(cur, me)) return;
     const fresh = await loadChat(id); if(!fresh) return;
-    let ch = false; (fresh.msgs || []).forEach(m => { if(m.from !== me && !(m.seenBy || []).includes(me)){ m.seenBy = [...(m.seenBy || []), me]; ch = true; } });
+    const at = todayStr() + 'T' + nowTimeStr();
+    let ch = false; (fresh.msgs || []).forEach(m => { if(m.from !== me && !(m.seenBy || []).includes(me)){ m.seenBy = [...(m.seenBy || []), me]; m.seenAt = { ...(m.seenAt || {}), [me]: at }; ch = true; } });
     if(ch) await saveDoc(() => setDoc(doc(db, 'chats', id), { msgs: fresh.msgs }, { merge: true }), 'chatSeen');
   };
   let lastT = 0;
   const sigTyping = kind => { const now = Date.now(); if(kind && now - lastT < 2500) return; lastT = kind ? now : 0;
     setDoc(doc(db, 'chats', id), { typing: kind ? { who: me, kind, at: trueNow().getTime() } : null }, { merge: true }).catch(() => {}); };
 
+  // מתי הודעה קולית נשמעה: נרשם כשמישהו (לא השולח) לוחץ השמעה
+  body.addEventListener('click', e => {
+    const v = e.target.closest && e.target.closest('.wa-voice'); if(!v) return;
+    const mid = (v.closest('[data-row]') || {}).dataset ? v.closest('[data-row]').dataset.row : null;
+    const m = mid && (cur.msgs || []).find(x => x.id === mid);
+    if(!m || m.from === me || (m.playedAt || {})[me]) return;
+    const at = todayStr() + 'T' + nowTimeStr();
+    m.playedAt = { ...(m.playedAt || {}), [me]: at };
+    saveMsgs(msgs => { const t = msgs.find(y => y.id === mid); if(!t || (t.playedAt || {})[me]) return false; t.playedAt = { ...(t.playedAt || {}), [me]: at }; }, 'chatPlayed');
+  });
+  // פרטי הודעה (כמו בוואטסאפ): מתי כל אחד ראה, ובהודעה קולית – גם מתי שמע
+  const msgInfo = m => {
+    const others = members.filter(x => x !== me);
+    const fmt = t => { if(!t) return ''; const d = String(t).slice(0, 10); return (d === todayStr() ? 'היום' : d.split('-').reverse().slice(0, 2).join('/')) + ' ' + String(t).slice(11, 16); };
+    const voice = !!m.audioId || /^audio\//.test(m.fileType || '');
+    const rows = others.map(x => {
+      const seen = (m.seenBy || []).includes(x), seenAt = (m.seenAt || {})[x], played = (m.playedAt || {})[x];
+      return `<div class="msginfo-row"><b>${escapeHtml(state._chatNames[x] || '')}</b>
+        <span>${seen ? `<span class="wa-ticks seen">${WAI.ticks}</span> קרא${seenAt ? ' · ' + fmt(seenAt) : ''}` : `<span class="wa-ticks">${WAI.ticks}</span> עוד לא קרא`}</span>
+        ${voice ? `<span>${played ? '🎧 שמע · ' + fmt(played) : '🎧 עוד לא שמע'}</span>` : ''}</div>`;
+    }).join('') || '<p class="hint">אין נמענים.</p>';
+    const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+    ov.innerHTML = `<div class="confirm-box msginfo"><h3 style="margin:0 0 4px;">פרטי הודעה</h3><p class="hint" style="margin:0 0 10px; font-size:13px;">נשלחה ${fmt(m.at)}</p>${rows}
+      <div class="actions"><button type="button" class="btn brass" id="miClose">סגירה</button></div></div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove();
+    ov.querySelector('#miClose').onclick = close; ov.onclick = e => { if(e.target === ov) close(); };
+  };
   // תפריט הודעה כמו בוואטסאפ: תגובה באימוג'י, השב, העתקה, העברה, מחיקה
   const snipOf = m => m.text ? m.text.slice(0, 90) : m.fileId ? '📎 ' + (m.fileName || 'קובץ') : m.files ? '📷 ' + m.files.length + ' קבצים' : m.audioId ? '🎙 הודעה קולית' : '';
   let replyTo = null;
@@ -8274,6 +8307,7 @@ async function renderChatRoom(role, otherId){
         <button type="button" data-act="pin">📌&nbsp; ${(cur.pinned && cur.pinned.id === m.id) ? 'ביטול הצמדה' : 'הצמדה'}</button>
         ${m.text ? '<button type="button" data-act="copy">📋&nbsp; העתקה</button>' : ''}
         <button type="button" data-act="fwd">↪&nbsp; העברה</button>
+        ${m.from === me && !selfChat ? '<button type="button" data-act="info">ℹ️&nbsp; פרטי הודעה</button>' : ''}
         ${canDel ? '<button type="button" data-act="del" class="danger">🗑&nbsp; מחיקה</button>' : ''}</div>`);
     document.body.appendChild(pop);
     const r0 = anchor.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
@@ -8293,6 +8327,7 @@ async function renderChatRoom(role, otherId){
       }
       else if(act === 'copy'){ try{ await navigator.clipboard.writeText(m.text); showToast('הועתק'); }catch(e){ showToast('לא הצלחנו להעתיק'); } }
       else if(act === 'fwd') forwardMsg(m);
+      else if(act === 'info') msgInfo(m);
       else if(act === 'del'){
         if(!(await showConfirmModal('למחוק את ההודעה? היא תימחק אצל כולם.', { yes: 'מחיקה', danger: true }))) return;
         saveMsgs(msgs => { const t = msgs.find(y => y.id === mid); if(!t || (t.from !== me && me !== 'mgr')) return false; ['text', 'fileId', 'fileName', 'fileType', 'files', 'audioId', 'reply', 'reactions'].forEach(k => delete t[k]); t.deleted = true; }, 'chatDelete');
