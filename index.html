@@ -827,6 +827,7 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .msginfo-row{ display:flex; flex-direction:column; gap:2px; padding:9px 2px; border-bottom:1px solid #F0F2F5; font-size:14px; }
 .msginfo-row span{ color:#54656F; display:inline-flex; align-items:center; gap:4px; }
 .msginfo-row .wa-ticks{ position:static; }
+#installAppBtn[hidden]{ display:none; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8812,18 +8813,31 @@ async function chatPhoneOf(role, otherId){
 
 // ---------- התקנה כאפליקציה (מסך הבית / שולחן העבודה) ----------
 let deferredInstall = null;
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; document.querySelectorAll('.install-app').forEach(el => el.hidden = false); });
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; const b = document.getElementById('installAppBtn'); if(b) b.hidden = false; });
 window.addEventListener('appinstalled', () => { deferredInstall = null; document.querySelectorAll('.install-app').forEach(el => el.hidden = true); showToast('האפליקציה הותקנה ✓'); });
 function isStandalone(){ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
 function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
 function installAppHtml(){
   if(isStandalone()) return '';
   const mobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
-  return `<div class="install-app" ${deferredInstall || mobile ? '' : 'hidden'} style="margin-top:14px;">
-    <button type="button" class="btn ghost" id="installAppBtn">📲 התקנה כאפליקציה</button>
+  return `<div class="install-app" style="margin-top:14px;">
+    <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+      <button type="button" class="btn ghost" id="installAppBtn" ${deferredInstall || mobile ? '' : 'hidden'}>📲 התקנה כאפליקציה</button>
+      <button type="button" class="btn ghost" id="shortcutBtn">🔗 קיצור דרך במסך הבית</button>
+    </div>
     <p class="hint" style="font-size:12.5px; margin:6px 0 0;">סמל במסך הבית, נפתח בחלון משלו כמו אפליקציה</p></div>`;
 }
 function bindInstallApp(){
+  // קיצור דרך רגיל (לא אפליקציה): הדפדפן לא מאפשר לאתר ליצור אותו בעצמו, לכן מסבירים איך עושים את זה בכמה לחיצות
+  const sc = document.getElementById('shortcutBtn');
+  if(sc) sc.onclick = () => {
+    const msg = isIOS()
+      ? 'באייפון (ספארי): לוחצים על כפתור השיתוף (ריבוע עם חץ למעלה) ← "הוספה למסך הבית" ← "הוספה".'
+      : /android/i.test(navigator.userAgent)
+        ? 'בכרום: לוחצים על שלוש הנקודות ⋮ למעלה ← "הוספה למסך הבית". אם מופיעה בחירה, בוחרים "יצירת קיצור דרך" (ולא "התקנה") ← "הוספה". אם אין בחירה – לוחצים "הוספה", והסמל יופיע במסך הבית.'
+        : 'במחשב (כרום): לוחצים על שלוש הנקודות ⋮ למעלה ← "שמירה ושיתוף" (או "כלים נוספים") ← "יצירת קיצור דרך…" ← מסמנים "פתיחה כחלון" אם רוצים ← "יצירה". הקיצור יופיע בשולחן העבודה.';
+    showConfirmModal(msg, { yes: 'הבנתי', info: true, danger: false });
+  };
   const b = document.getElementById('installAppBtn'); if(!b) return;
   b.onclick = async () => {
     if(deferredInstall){ deferredInstall.prompt(); const r = await deferredInstall.userChoice.catch(() => null); if(r && r.outcome === 'accepted') deferredInstall = null; return; }
