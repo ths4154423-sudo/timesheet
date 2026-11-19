@@ -8710,7 +8710,8 @@ function incomingCall(role, id, d){
 async function renderChatMonitor(target, myGroupIds){
   let docs = [];
   try{ const snap = await withTimeout(getDocs(collection(db, 'chats')), 20000, 'chatMonitor'); docs = snap.docs.map(d => ({ id: d.id, ...d.data() })); }catch(e){ return; }
-  const others = docs.filter(c => c.id !== 'team' && !myGroupIds.includes(c.id) && !/(^|__)mgr(__|$)/.test(c.id) && (c.msgs || []).length);
+  // הודעות שעובד שולח לעצמו פרטיות – לא מוצגות במעקב
+  const others = docs.filter(c => c.id !== 'team' && !myGroupIds.includes(c.id) && !/(^|__)mgr(__|$)/.test(c.id) && !(c.id.split('__').length === 2 && c.id.split('__')[0] === c.id.split('__')[1]) && (c.msgs || []).length);
   if(!others.length || !target.isConnected) return;
   const label = c => { if(/^g_/.test(c.id)) return '👥 ' + (c.name || 'קבוצה'); const pr = c.id.split('__'); return pr[0] === pr[1] ? '📝 ' + (state._chatNames[pr[0]] || 'עובד') + ' (לעצמו)' : pr.map(x => state._chatNames[x] || 'עובד').join(' ↔ '); };
   others.sort((a, b) => String(((b.msgs || []).slice(-1)[0] || {}).at || '').localeCompare(String(((a.msgs || []).slice(-1)[0] || {}).at || '')));
