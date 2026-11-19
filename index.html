@@ -828,6 +828,18 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .msginfo-row span{ color:#54656F; display:inline-flex; align-items:center; gap:4px; }
 .msginfo-row .wa-ticks{ position:static; }
 #installAppBtn[hidden]{ display:none; }
+.sound-pop{ position:fixed; z-index:10003; width:280px; max-height:70vh; overflow:auto; background:#fff; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,.25); padding:6px 0; }
+.sound-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:9px 14px; border:none; background:none; font:inherit; font-size:14.5px; text-align:right; cursor:pointer; color:#111B21; margin:0; }
+.sound-row:hover{ background:#F5F6F6; } .sound-row.on{ color:#008069; font-weight:600; }
+.sound-mute{ border-bottom:1px solid #E9EDEF; }
+.headsup{ position:fixed; top:8px; left:50%; transform:translate(-50%, -140%); z-index:10004; width:min(440px, 94vw); display:flex; gap:12px; align-items:center; background:rgba(255,255,255,.97); border-radius:18px; padding:12px 14px; box-shadow:0 8px 30px rgba(0,0,0,.22); cursor:pointer; transition:transform .32s cubic-bezier(.2,.9,.3,1.2); }
+.headsup.in{ transform:translate(-50%, 0); }
+.hu-av{ width:42px; height:42px; flex:0 0 42px; border-radius:50%; background:#25D366; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; }
+.hu-main{ flex:1; min-width:0; }
+.hu-top{ display:flex; justify-content:space-between; gap:8px; font-size:14.5px; }
+.hu-top b{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hu-app{ font-size:12px; color:#667781; white-space:nowrap; }
+.hu-body{ font-size:14px; color:#3B4A54; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8034,12 +8046,8 @@ async function renderChatHome(role){
     </div>
     <button type="button" class="wa-fab" id="chatNewGroup" title="קבוצה חדשה" aria-label="קבוצה חדשה">${WAI.newgroup}</button>
     </div>`;
-  document.getElementById('msgSoundBtn').onclick = async e => {
-    const muted = !state._msgSoundMuted; await setMsgSoundPref(role, muted);
-    e.currentTarget.textContent = muted ? '🔕' : '🔔'; e.currentTarget.title = muted ? 'הפעלת צליל הודעות' : 'השתקת צליל הודעות';
-    if(!muted) chatPing(true);
-    showToast(muted ? 'צליל ההודעות הושתק בחשבון שלך' : 'צליל ההודעות הופעל');
-  };
+  const sBtn = document.getElementById('msgSoundBtn');
+  sBtn.onclick = () => openSoundPicker(role, sBtn);
   const fc = document.getElementById('waFullClose');
   if(fc) fc.onclick = () => role === 'mgr' ? renderAdminDashboard('dashboard') : renderEmployeeDashboard(state.currentEmployee);
   const fl = document.getElementById('waFullLogout');
@@ -8580,7 +8588,10 @@ function notifyChat(role, id, d, m){
   const where = id === 'team' ? 'כל הצוות' : /^g_/.test(id) ? (d.name || 'קבוצה') : '';
   const body = m.text ? m.text.slice(0, 140) : m.files ? '📷 ' + m.files.length + ' קבצים' : m.fileId ? '📎 קובץ' : m.audioId ? '🎙 הודעה קולית' : '';
   chatPing(); flashTitle(who);
-  if(document.visibilityState === 'visible') showToast('💬 ' + who + ': ' + body);
+  if(document.visibilityState === 'visible') headsUp(who, where, body, () => {
+    const other = id === 'team' || /^g_/.test(id) ? id : id.split('__').find(x => x !== chatMe(role));
+    if(role === 'mgr'){ renderAdminDashboard('chat'); setTimeout(() => renderChatRoom('mgr', other), 300); } else renderChatRoom('emp', other);
+  });
   showDesktopNote(where ? where + ' · ' + who : who, body, () => {
     const other = id === 'team' || /^g_/.test(id) ? id : id.split('__').find(x => x !== chatMe(role));
     if(role === 'mgr'){ renderAdminDashboard('chat'); setTimeout(() => renderChatRoom('mgr', other), 300); }
@@ -8603,16 +8614,81 @@ async function showDesktopNote(title, body, onClick){
 function chatPing(force){
   if(!force && state._msgSoundMuted) return;
   const now = Date.now(); if(!force && now - (state._lastPing || 0) < 1500) return; state._lastPing = now;
-  try{ const ctx = getAudioCtx(); [[988, 0], [1319, 0.13]].forEach(([f, dt]) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, ctx.currentTime + dt); g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + dt + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dt + 0.28); o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + dt); o.stop(ctx.currentTime + dt + 0.3); }); }catch(e){}
+  playMsgSound(state._msgSound || 0);
+}
+// 25 צלילי הודעה (נוצרים בדפדפן, בלי קבצים). כל צליל: [תדר, התחלה, משך, סוג גל, עוצמה]
+const MSG_SOUNDS = [
+  { n: 'פופ בועה (ברירת מחדל)', t: [[1040, 0, .07, 'sine', .3], [1560, .05, .09, 'sine', .25]], slide: 1.35 },
+  { n: 'צליל כפול', t: [[988, 0, .25, 'sine'], [1319, .13, .28, 'sine']] },
+  { n: 'טיפה', t: [[1800, 0, .12, 'sine', .25]], slide: .45 },
+  { n: 'פעמון', t: [[1318, 0, .9, 'triangle', .2], [2636, 0, .5, 'sine', .06]] },
+  { n: 'צפצוף קצר', t: [[1200, 0, .09, 'square', .07]] },
+  { n: 'שלושה עולים', t: [[784, 0, .12, 'sine'], [988, .1, .12, 'sine'], [1319, .2, .2, 'sine']] },
+  { n: 'שלושה יורדים', t: [[1319, 0, .12, 'sine'], [988, .1, .12, 'sine'], [784, .2, .2, 'sine']] },
+  { n: 'קריסטל', t: [[2093, 0, .5, 'sine', .14], [2637, .06, .5, 'sine', .1], [3136, .12, .6, 'sine', .08]] },
+  { n: 'מרימבה', t: [[880, 0, .35, 'triangle', .25], [1320, .12, .4, 'triangle', .2]] },
+  { n: 'נקישה', t: [[2400, 0, .03, 'square', .08], [1800, .06, .03, 'square', .06]] },
+  { n: 'צליל עדין', t: [[660, 0, .5, 'sine', .15]] },
+  { n: 'דינג', t: [[1567, 0, .6, 'sine', .2], [3134, 0, .3, 'sine', .05]] },
+  { n: 'דינג-דונג', t: [[1046, 0, .4, 'sine'], [784, .3, .55, 'sine']] },
+  { n: 'ציוץ', t: [[2600, 0, .06, 'sine', .15], [3100, .08, .06, 'sine', .15], [2800, .16, .08, 'sine', .15]], slide: 1.2 },
+  { n: 'גל', t: [[440, 0, .35, 'sine', .2]], slide: 2.2 },
+  { n: 'רטט קולי', t: [[180, 0, .12, 'sawtooth', .07], [180, .18, .12, 'sawtooth', .07]] },
+  { n: 'ארקייד', t: [[523, 0, .06, 'square', .06], [659, .06, .06, 'square', .06], [784, .12, .06, 'square', .06], [1046, .18, .1, 'square', .06]] },
+  { n: 'הודעה מהירה', t: [[1480, 0, .05, 'sine', .25], [1480, .09, .05, 'sine', .25]] },
+  { n: 'פעמון כפול', t: [[1175, 0, .6, 'triangle', .18], [1568, .18, .7, 'triangle', .15]] },
+  { n: 'אקורד', t: [[523, 0, .7, 'sine', .12], [659, 0, .7, 'sine', .1], [784, 0, .7, 'sine', .1]] },
+  { n: 'בס עמוק', t: [[220, 0, .3, 'sine', .3], [330, .12, .3, 'sine', .2]] },
+  { n: 'זמזום קצר', t: [[740, 0, .18, 'sawtooth', .05]] },
+  { n: 'כוכב', t: [[1760, 0, .1, 'sine', .15], [2349, .08, .1, 'sine', .15], [2794, .16, .25, 'sine', .12]] },
+  { n: 'טיק-טק', t: [[3000, 0, .02, 'square', .07], [2000, .15, .02, 'square', .07]] },
+  { n: 'מנגינה קצרה', t: [[659, 0, .12, 'triangle'], [784, .12, .12, 'triangle'], [1046, .24, .12, 'triangle'], [880, .36, .25, 'triangle']] },
+];
+function playMsgSound(i){
+  const snd = MSG_SOUNDS[i] || MSG_SOUNDS[0];
+  try{
+    const ctx = getAudioCtx(), t0 = ctx.currentTime + .01;
+    snd.t.forEach(([f, dt, dur, type, vol]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type || 'sine'; o.frequency.setValueAtTime(f, t0 + dt);
+      if(snd.slide) o.frequency.exponentialRampToValueAtTime(f * snd.slide, t0 + dt + dur);
+      g.gain.setValueAtTime(0.0001, t0 + dt); g.gain.exponentialRampToValueAtTime(vol || .18, t0 + dt + .012); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + dur);
+      o.connect(g); g.connect(ctx.destination); o.start(t0 + dt); o.stop(t0 + dt + dur + .02);
+    });
+  }catch(e){}
+}
+function openSoundPicker(role, btn){
+  document.querySelectorAll('.sound-pop').forEach(x => x.remove());
+  const pop = document.createElement('div'); pop.className = 'sound-pop';
+  const cur = state._msgSound || 0;
+  pop.innerHTML = `<label class="sound-row sound-mute"><span>🔕 השתקת צליל ההודעות</span><input type="checkbox" class="toggle" id="sndMute" ${state._msgSoundMuted ? 'checked' : ''} /></label>
+    <div class="sound-list">${MSG_SOUNDS.map((x, i) => `<button type="button" class="sound-row${i === cur ? ' on' : ''}" data-snd="${i}"><span>${i === cur ? '✓ ' : ''}${escapeHtml(x.n)}</span><span class="hint">▶</span></button>`).join('')}</div>`;
+  document.body.appendChild(pop);
+  const r0 = btn.getBoundingClientRect();
+  pop.style.top = (r0.bottom + 6) + 'px'; pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r0.left)) + 'px';
+  const close = e => { if(!pop.contains(e.target) && e.target !== btn){ pop.remove(); document.removeEventListener('click', close, true); } };
+  setTimeout(() => document.addEventListener('click', close, true), 0);
+  pop.querySelector('#sndMute').onchange = async e => {
+    const muted = e.target.checked; btn.textContent = muted ? '🔕' : '🔔';
+    await setMsgSoundPref(role, { muteMsgSound: muted });
+    showToast(muted ? 'צליל ההודעות הושתק בחשבון שלך' : 'צליל ההודעות הופעל');
+  };
+  pop.querySelectorAll('[data-snd]').forEach(b => b.onclick = async () => {
+    const i = +b.dataset.snd; playMsgSound(i);
+    pop.querySelectorAll('[data-snd]').forEach(x => { const k = +x.dataset.snd; x.classList.toggle('on', k === i); x.firstElementChild.textContent = (k === i ? '✓ ' : '') + MSG_SOUNDS[k].n; });
+    await setMsgSoundPref(role, { msgSound: i });
+  });
 }
 function soundKeyDoc(role){ return role === 'mgr' ? 'mgr-prefs' : (state.currentEmployee && state.currentEmployee.id); }
 async function loadMsgSoundPref(role){
-  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); state._msgSoundMuted = !!(snap.exists() && snap.data().muteMsgSound); }catch(e){}
+  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0;
+    const b = document.getElementById('msgSoundBtn'); if(b) b.textContent = state._msgSoundMuted ? '🔕' : '🔔'; }catch(e){}
 }
-async function setMsgSoundPref(role, muted){
-  state._msgSoundMuted = muted;
+async function setMsgSoundPref(role, patch){
+  if('muteMsgSound' in patch) state._msgSoundMuted = patch.muteMsgSound;
+  if('msgSound' in patch) state._msgSound = patch.msgSound;
   const id = soundKeyDoc(role); if(!id) return;
-  await saveDoc(() => setDoc(doc(db, 'settings', id), { muteMsgSound: muted }, { merge: true }), 'msgSound');
+  await saveDoc(() => setDoc(doc(db, 'settings', id), patch, { merge: true }), 'msgSound');
   if(state._settingsCache && state._settingsCache.empId === id) state._settingsCache = null;
 }
 let titleFlashT = null;
@@ -8955,6 +9031,24 @@ function startTaskSoundWatch(role){
       base = now;
     }, () => {})); }catch(e){}
   });
+}
+
+// התראה קופצת בתוך האתר כמו בטלפון: פס שיורד מלמעלה עם שם וטקסט; נגיעה פותחת, החלקה למעלה סוגרת
+function headsUp(who, where, body, onOpen){
+  document.querySelectorAll('.headsup').forEach(x => x.remove());
+  const el = document.createElement('div'); el.className = 'headsup';
+  el.innerHTML = `<div class="hu-av"></div><div class="hu-main"><div class="hu-top"><b></b><span class="hu-app">דירתא · עכשיו</span></div><div class="hu-body"></div></div>`;
+  el.querySelector('.hu-av').textContent = (who || '?').charAt(0);
+  el.querySelector('b').textContent = where ? where + ' · ' + who : who;
+  el.querySelector('.hu-body').textContent = body || '';
+  document.body.appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
+  const hide = () => { el.classList.remove('in'); setTimeout(() => el.remove(), 350); };
+  const t = setTimeout(hide, 4500);
+  el.onclick = () => { clearTimeout(t); hide(); if(onOpen) onOpen(); };
+  let sy = null;
+  el.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener('touchmove', e => { if(sy !== null && e.touches[0].clientY - sy < -25){ sy = null; clearTimeout(t); hide(); } }, { passive: true });
 }
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
