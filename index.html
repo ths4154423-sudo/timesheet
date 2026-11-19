@@ -8813,36 +8813,28 @@ async function chatPhoneOf(role, otherId){
 
 // ---------- התקנה כאפליקציה (מסך הבית / שולחן העבודה) ----------
 let deferredInstall = null;
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; const b = document.getElementById('installAppBtn'); if(b) b.hidden = false; });
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; });
 window.addEventListener('appinstalled', () => { deferredInstall = null; document.querySelectorAll('.install-app').forEach(el => el.hidden = true); showToast('האפליקציה הותקנה ✓'); });
 function isStandalone(){ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
 function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
 function installAppHtml(){
   if(isStandalone()) return '';
-  const mobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
   return `<div class="install-app" style="margin-top:14px;">
-    <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
-      <button type="button" class="btn ghost" id="installAppBtn" ${deferredInstall || mobile ? '' : 'hidden'}>📲 התקנה כאפליקציה</button>
-      <button type="button" class="btn ghost" id="shortcutBtn">🔗 קיצור דרך במסך הבית</button>
-    </div>
-    <p class="hint" style="font-size:12.5px; margin:6px 0 0;">סמל במסך הבית, נפתח בחלון משלו כמו אפליקציה</p></div>`;
+    <button type="button" class="btn ghost" id="installAppBtn">📲 הוספה למסך הבית</button></div>`;
 }
+// לחיצה אחת: מבקשים מהדפדפן להוסיף את האתר למסך הבית (בלי הוראות). אם הדפדפן במכשיר לא מאפשר – הודעה קצרה בלבד
 function bindInstallApp(){
-  // קיצור דרך רגיל (לא אפליקציה): הדפדפן לא מאפשר לאתר ליצור אותו בעצמו, לכן מסבירים איך עושים את זה בכמה לחיצות
-  const sc = document.getElementById('shortcutBtn');
-  if(sc) sc.onclick = () => {
-    const msg = isIOS()
-      ? 'באייפון (ספארי): לוחצים על כפתור השיתוף (ריבוע עם חץ למעלה) ← "הוספה למסך הבית" ← "הוספה".'
-      : /android/i.test(navigator.userAgent)
-        ? 'בכרום: לוחצים על שלוש הנקודות ⋮ למעלה ← "הוספה למסך הבית". אם מופיעה בחירה, בוחרים "יצירת קיצור דרך" (ולא "התקנה") ← "הוספה". אם אין בחירה – לוחצים "הוספה", והסמל יופיע במסך הבית.'
-        : 'במחשב (כרום): לוחצים על שלוש הנקודות ⋮ למעלה ← "שמירה ושיתוף" (או "כלים נוספים") ← "יצירת קיצור דרך…" ← מסמנים "פתיחה כחלון" אם רוצים ← "יצירה". הקיצור יופיע בשולחן העבודה.';
-    showConfirmModal(msg, { yes: 'הבנתי', info: true, danger: false });
-  };
   const b = document.getElementById('installAppBtn'); if(!b) return;
   b.onclick = async () => {
-    if(deferredInstall){ deferredInstall.prompt(); const r = await deferredInstall.userChoice.catch(() => null); if(r && r.outcome === 'accepted') deferredInstall = null; return; }
-    if(isIOS()) return showConfirmModal('באייפון: לוחצים על כפתור השיתוף (ריבוע עם חץ למעלה) בתחתית המסך, ובוחרים "הוספה למסך הבית".', { yes: 'הבנתי', info: true, danger: false });
-    showConfirmModal('בכרום: לוחצים על שלוש הנקודות ⋮ למעלה, ובוחרים "הוספה למסך הבית" (או "התקנת האפליקציה"), ואז "הוספה". סמל של שעון הנוכחות יופיע במסך הבית.', { yes: 'הבנתי', info: true, danger: false });
+    if(!deferredInstall){
+      b.disabled = true; b.textContent = 'רגע...';
+      for(let i = 0; i < 12 && !deferredInstall; i++) await new Promise(r => setTimeout(r, 250));   // לפעמים הדפדפן מוכן רק אחרי כמה שניות
+      b.disabled = false; b.textContent = '📲 הוספה למסך הבית';
+    }
+    if(!deferredInstall){ showToast('הדפדפן במכשיר הזה לא מאפשר הוספה אוטומטית למסך הבית'); return; }
+    deferredInstall.prompt();
+    const r = await deferredInstall.userChoice.catch(() => null);
+    if(r && r.outcome === 'accepted'){ deferredInstall = null; showToast('נוסף למסך הבית ✓'); }
   };
 }
 function clockWarnTxt(min){ if(min < 60) return min + ' דקות'; const h = Math.floor(min / 60), m = min % 60; return (h === 1 ? 'שעה' : h + ' שעות') + (m ? ' ו-' + m + ' דקות' : ''); }
