@@ -850,6 +850,36 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .att-ic{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; }
 .cam-shot{ position:absolute; bottom:28px; left:50%; transform:translateX(-50%); width:72px; height:72px; border-radius:50%; border:5px solid #fff; background:rgba(255,255,255,.25); cursor:pointer; z-index:3; }
 .cam-shot:hover{ background:rgba(255,255,255,.45); }
+.st-strip{ display:flex; gap:14px; overflow-x:auto; padding:4px 6px 12px; }
+.st-item{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:4px; border:none; background:none; cursor:pointer; font:inherit; width:68px; padding:0; }
+.st-ring{ position:relative; width:60px; height:60px; border-radius:50%; padding:3px; border:2.5px solid transparent; display:flex; align-items:center; justify-content:center; }
+.st-ring.unseen{ border-color:#25D366; } .st-ring.seen{ border-color:#C8CDD0; }
+.st-ring img, .st-txt, .st-init{ width:100%; height:100%; border-radius:50%; object-fit:cover; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.st-txt{ color:#fff; font-size:9px; text-align:center; padding:4px; line-height:1.1; }
+.st-init{ background:#DFE5E7; color:#54656F; font-weight:700; font-size:20px; }
+.st-plus{ position:absolute; bottom:-2px; left:-2px; width:22px; height:22px; border-radius:50%; background:#00A884; color:#fff; font-size:14px; display:flex; align-items:center; justify-content:center; border:2px solid #fff; }
+.st-name{ font-size:12px; color:#3B4A54; max-width:68px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.st-compose{ max-width:420px; width:94vw; text-align:center; }
+.st-preview{ height:240px; border-radius:12px; display:flex; align-items:center; justify-content:center; padding:16px; transition:background .2s; }
+.st-preview textarea{ width:100%; background:transparent !important; border:none !important; color:#fff; font:inherit; font-size:22px; text-align:center; resize:none; outline:none; box-shadow:none !important; height:100%; }
+.st-preview textarea::placeholder{ color:rgba(255,255,255,.75); }
+.st-colors{ display:flex; gap:8px; justify-content:center; margin-top:10px; }
+.st-colors button{ width:28px; height:28px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #ccc; cursor:pointer; }
+.st-view{ position:fixed; inset:0; z-index:10005; background:#111; color:#fff; display:flex; flex-direction:column; }
+.st-bars{ display:flex; gap:4px; padding:10px 12px 4px; z-index:3; }
+.st-bars span{ flex:1; height:3px; background:rgba(255,255,255,.35); border-radius:2px; overflow:hidden; }
+.st-bars i{ display:block; height:100%; width:0; background:#fff; }
+.st-head{ display:flex; align-items:center; gap:10px; padding:6px 14px; z-index:3; }
+.st-hname{ font-weight:600; } .st-htime{ font-size:12.5px; opacity:.75; flex:1; }
+.st-head button{ border:none; background:none; color:#fff; font-size:20px; cursor:pointer; }
+.st-body{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+.st-body img{ max-width:100%; max-height:100%; object-fit:contain; }
+.st-bigtxt{ font-size:clamp(22px, 5vw, 40px); text-align:center; padding:30px; white-space:pre-wrap; word-break:break-word; max-width:900px; }
+.st-cap{ position:absolute; bottom:70px; left:0; right:0; text-align:center; background:rgba(0,0,0,.45); padding:10px; font-size:16px; }
+.st-tap{ position:absolute; top:70px; bottom:70px; width:35%; z-index:2; cursor:pointer; }
+.st-tap.next{ left:0; } .st-tap.prev{ right:0; }
+.st-views{ position:absolute; bottom:22px; left:50%; transform:translateX(-50%); z-index:3; border:none; background:rgba(255,255,255,.15); color:#fff; border-radius:18px; padding:8px 16px; font:inherit; cursor:pointer; }
+.confirm-msg{ white-space:pre-line; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8041,6 +8071,7 @@ async function renderChatHome(role){
     <div class="wa-full-body">
     ${!('Notification' in window) ? '' : Notification.permission !== 'granted' ? `<div class="card wa-notif"><span>🔔 רוצים הודעה קופצת בשולחן העבודה כשמגיעה הודעה?</span><button type="button" class="btn brass small" id="chatNotifOn">${Notification.permission === 'denied' ? 'ההתראות חסומות בדפדפן' : 'הפעלת התראות'}</button></div>` : `<div class="wa-notif-ok">🔔 ההתראות פעילות · <button type="button" class="linklike" id="chatNotifTest">שליחת התראת ניסיון</button></div>`}
     ${role === 'mgr' ? '' : '<div class="wa-notice">💼 הצ׳אט הוא כלי עבודה. השיחות והקבוצות גלויות גם למנהל.</div>'}
+    <div class="st-strip" id="statusStrip"></div>
     <div class="wa-home-search"><input type="search" id="chatHomeSearch" placeholder="🔍 חיפוש שיחה או הודעה..." /></div>
     <div id="chatSearchResults"></div>
     <div class="card wa-list" id="chatListCard">
@@ -8056,6 +8087,7 @@ async function renderChatHome(role){
     </div>
     <button type="button" class="wa-fab" id="chatNewGroup" title="קבוצה חדשה" aria-label="קבוצה חדשה">${WAI.newgroup}</button>
     </div>`;
+  renderStatusStrip(role);
   const sBtn = document.getElementById('msgSoundBtn');
   sBtn.onclick = () => openSoundPicker(role, sBtn);
   const fc = document.getElementById('waFullClose');
@@ -8450,18 +8482,21 @@ async function renderChatRoom(role, otherId){
   // כמה קבצים ביחד (עד 10) נשלחים בהודעה אחת, כמו אלבום בוואטסאפ. טקסט שבשדה נשלח ככיתוב
   ['chatFile', 'chatGallery', 'chatCamInput'].forEach(fid => { document.getElementById(fid).onchange = e => { const picked = [...(e.target.files || [])]; e.target.value = ''; addPending(picked); }; });
   // מהדק: תפריט קטן – גלריה (תמונות וסרטונים) או קובץ מהתיקייה
-  document.getElementById('chatAttachBtn').onclick = ev => {
+  // מהדק: קובץ מהתיקייה (כל סוג)
+  document.getElementById('chatAttachBtn').onclick = () => document.getElementById('chatFile').click();
+  // מצלמה: תפריט קטן – צילום עכשיו או בחירה מהגלריה
+  document.getElementById('chatCamBtn').onclick = ev => {
     ev.stopPropagation();
     document.querySelectorAll('.att-menu').forEach(x => x.remove());
-    const m = document.createElement('div'); m.className = 'att-menu';
-    m.innerHTML = `<button type="button" data-att="gallery"><span class="att-ic" style="background:#BF59CF;">🖼️</span>גלריה</button><button type="button" data-att="file"><span class="att-ic" style="background:#5157AE;">📄</span>קובץ / מסמך</button><button type="button" data-att="camera"><span class="att-ic" style="background:#D3396D;">📷</span>מצלמה</button>`;
+    const btn = ev.currentTarget, m = document.createElement('div'); m.className = 'att-menu';
+    m.innerHTML = `<button type="button" data-att="camera"><span class="att-ic" style="background:#D3396D;">📷</span>צילום</button><button type="button" data-att="gallery"><span class="att-ic" style="background:#BF59CF;">🖼️</span>גלריה</button>`;
     document.body.appendChild(m);
-    const r0 = ev.currentTarget.getBoundingClientRect();
+    const r0 = btn.getBoundingClientRect();
     m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r0.left + r0.width / 2 - m.offsetWidth / 2)) + 'px';
     m.style.top = (r0.top - m.offsetHeight - 10) + 'px';
     const close = e => { if(!m.contains(e.target)){ m.remove(); document.removeEventListener('click', close, true); } };
     setTimeout(() => document.addEventListener('click', close, true), 0);
-    m.querySelectorAll('[data-att]').forEach(b => b.onclick = () => { m.remove(); const a = b.dataset.att; if(a === 'gallery') document.getElementById('chatGallery').click(); else if(a === 'file') document.getElementById('chatFile').click(); else openCamera(); });
+    m.querySelectorAll('[data-att]').forEach(b => b.onclick = () => { m.remove(); if(b.dataset.att === 'gallery') document.getElementById('chatGallery').click(); else openCamera(); });
   };
   // מצלמה: בטלפון נפתחת מצלמת המכשיר; במחשב – חלון צילום מהמצלמה
   const isTouch = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
@@ -8482,7 +8517,6 @@ async function renderChatRoom(role, otherId){
       c.toBlob(bl => { if(bl) addPending([new File([bl], 'צילום ' + nowTimeStr().slice(0, 5).replace(':', '-') + '.jpg', { type: 'image/jpeg' })]); close(); }, 'image/jpeg', .9);
     };
   };
-  document.getElementById('chatCamBtn').onclick = () => openCamera();
   // גרירת קבצים לתוך השיחה
   body.addEventListener('dragover', e => { if(e.dataTransfer && [...e.dataTransfer.types].includes('Files')){ e.preventDefault(); body.classList.add('wa-drop'); } });
   body.addEventListener('dragleave', () => body.classList.remove('wa-drop'));
@@ -9099,6 +9133,142 @@ function headsUp(who, where, body, onOpen){
   let sy = null;
   el.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
   el.addEventListener('touchmove', e => { if(sy !== null && e.touches[0].clientY - sy < -25){ sy = null; clearTimeout(t); hide(); } }, { passive: true });
+}
+
+// ================= סטטוסים: טקסט על רקע צבעוני או תמונה, נמחקים אחרי 24 שעות =================
+// statuses/<בעלים>: items[{id, type, text, bg, fileId, at}] · statusViews/<צופה>: seen{statusId: זמן}
+const ST_TTL = 24 * 3600 * 1000;
+const ST_COLORS = ['#008069', '#5157AE', '#C2185B', '#E65100', '#00838F', '#6A1B9A', '#2E7D32', '#37474F'];
+function stLive(items){ const now = trueNow().getTime(); return (items || []).filter(x => x && now - Date.parse(String(x.at).replace(' ', 'T')) < ST_TTL); }
+function stNowIso(){ return trueNow().toISOString(); }
+async function loadStatuses(ids){
+  const out = {};
+  await Promise.all(ids.map(async id => { try{ const sn = await getDoc(doc(db, 'statuses', id)); out[id] = stLive(sn.exists() ? sn.data().items : []); }catch(e){ out[id] = []; } }));
+  return out;
+}
+async function loadMyStatusSeen(me){ try{ const sn = await getDoc(doc(db, 'statusViews', me)); return (sn.exists() && sn.data().seen) || {}; }catch(e){ return {}; } }
+async function renderStatusStrip(role){
+  const strip = document.getElementById('statusStrip'); if(!strip) return;
+  const me = chatMe(role);
+  const people = [me, ...Object.keys(state._chatNames || {}).filter(x => x !== me)];
+  const [all, seen] = await Promise.all([loadStatuses(people), loadMyStatusSeen(me)]);
+  if(!document.body.contains(strip)) return;
+  state._stAll = all; state._stSeen = seen;
+  const mine = all[me] || [];
+  const others = people.filter(x => x !== me && (all[x] || []).length)
+    .sort((a, b) => { const ua = all[a].some(z => !seen[z.id]), ub = all[b].some(z => !seen[z.id]); return ua === ub ? String(all[b].slice(-1)[0].at).localeCompare(String(all[a].slice(-1)[0].at)) : ua ? -1 : 1; });
+  const circle = (id, label, isMe) => {
+    const items = all[id] || [], last = items[items.length - 1];
+    const unseen = !isMe && items.some(z => !seen[z.id]);
+    const inner = last ? (last.type === 'image' ? `<img data-st-thumb="${last.fileId}" alt="" />` : `<span class="st-txt" style="background:${last.bg}">${escapeHtml((last.text || '').slice(0, 14))}</span>`) : `<span class="st-init">${escapeHtml((label || '?').charAt(0))}</span>`;
+    return `<button type="button" class="st-item" data-st-open="${id}"><span class="st-ring${unseen ? ' unseen' : items.length ? ' seen' : ''}">${inner}${isMe ? '<span class="st-plus">＋</span>' : ''}</span><span class="st-name">${escapeHtml(isMe ? 'הסטטוס שלי' : label)}</span></button>`;
+  };
+  strip.innerHTML = circle(me, 'אני', true) + others.map(id => circle(id, state._chatNames[id] || '', false)).join('');
+  strip.querySelectorAll('[data-st-thumb]').forEach(async img => { const f = await loadTaskFile(img.dataset.stThumb); if(f) img.src = f.data; });
+  strip.querySelectorAll('[data-st-open]').forEach(b => b.onclick = e => {
+    const id = b.dataset.stOpen;
+    if(id === me && (e.target.closest('.st-plus') || !mine.length)) return statusCompose(role);
+    openStatusViewer(role, id, all[id] || []);
+  });
+}
+function statusCompose(role){
+  const me = chatMe(role);
+  const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+  let bg = ST_COLORS[0];
+  ov.innerHTML = `<div class="confirm-box st-compose">
+    <h3 style="margin:0 0 10px;">סטטוס חדש</h3>
+    <div class="st-preview" id="stPrev" style="background:${bg}"><textarea id="stText" maxlength="300" placeholder="מה רוצים לשתף?"></textarea></div>
+    <div class="st-colors">${ST_COLORS.map(c => `<button type="button" data-c="${c}" style="background:${c}"></button>`).join('')}</div>
+    <div style="display:flex; gap:8px; justify-content:center; margin:10px 0;">
+      <label class="btn ghost small" style="margin:0; cursor:pointer;">🖼️ תמונה מהגלריה<input type="file" id="stImg" accept="image/*" hidden /></label>
+      <label class="btn ghost small" style="margin:0; cursor:pointer;">📷 צילום<input type="file" id="stCam" accept="image/*" capture="environment" hidden /></label>
+    </div>
+    <div class="error-msg" id="stErr"></div>
+    <div class="actions"><button type="button" class="btn brass" id="stPost">פרסום</button><button type="button" class="btn ghost" id="stCancel">ביטול</button></div></div>`;
+  document.body.appendChild(ov);
+  const prev = ov.querySelector('#stPrev'), ta = ov.querySelector('#stText'), err = ov.querySelector('#stErr');
+  let imgFile = null;
+  ov.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { bg = b.dataset.c; prev.style.background = bg; });
+  const onImg = e => { const f = e.target.files && e.target.files[0]; if(!f) return; imgFile = f; prev.style.background = `#000 url(${URL.createObjectURL(f)}) center/contain no-repeat`; ta.placeholder = 'כיתוב (לא חובה)'; };
+  ov.querySelector('#stImg').onchange = onImg; ov.querySelector('#stCam').onchange = onImg;
+  ov.querySelector('#stCancel').onclick = () => ov.remove();
+  ov.querySelector('#stPost').onclick = async e => {
+    const btn = e.currentTarget, text = ta.value.trim();
+    if(!text && !imgFile){ err.textContent = 'כותבים משהו או בוחרים תמונה'; return; }
+    btn.disabled = true; btn.textContent = 'מפרסם...';
+    let item = { id: uid() + uid(), at: stNowIso(), type: 'text', text, bg };
+    if(imgFile){
+      let data; try{ data = await shrinkImage(imgFile); }catch(x){ btn.disabled = false; btn.textContent = 'פרסום'; err.textContent = 'לא הצלחנו לקרוא את התמונה'; return; }
+      const fileId = uid() + uid();
+      const ok = await saveDoc(() => setDoc(doc(db, 'voiceMessages', fileId), { file: data, name: 'status.jpg', type: 'image/jpeg', createdAt: new Date().toISOString() }), 'statusImg');
+      if(ok !== true){ btn.disabled = false; btn.textContent = 'פרסום'; err.textContent = 'שגיאה בהעלאת התמונה'; return; }
+      item = { id: item.id, at: item.at, type: 'image', fileId, text };
+    }
+    let cur = []; try{ const sn = await getDoc(doc(db, 'statuses', me)); cur = stLive(sn.exists() ? sn.data().items : []); }catch(x){}
+    const ok = await saveDoc(() => setDoc(doc(db, 'statuses', me), { items: [...cur, item].slice(-30) }), 'statusPost');
+    if(ok !== true){ btn.disabled = false; btn.textContent = 'פרסום'; err.textContent = 'שגיאה בפרסום: ' + ok; return; }
+    ov.remove(); showToast('הסטטוס פורסם · יוצג 24 שעות'); renderStatusStrip(role);
+  };
+  setTimeout(() => ta.focus(), 50);
+}
+function openStatusViewer(role, owner, items){
+  if(!items.length) return;
+  const me = chatMe(role), mineOwn = owner === me;
+  let idx = mineOwn ? 0 : Math.max(0, items.findIndex(z => !(state._stSeen || {})[z.id]));
+  const ov = document.createElement('div'); ov.className = 'st-view';
+  ov.innerHTML = `<div class="st-bars">${items.map(() => '<span><i></i></span>').join('')}</div>
+    <div class="st-head"><span class="st-hname">${escapeHtml(mineOwn ? 'הסטטוס שלי' : (state._chatNames[owner] || ''))}</span><span class="st-htime"></span>
+      ${mineOwn ? '<button type="button" class="st-del" title="מחיקה">🗑</button>' : ''}<button type="button" class="st-close" aria-label="סגירה">✕</button></div>
+    <div class="st-body"></div>
+    <div class="st-tap prev"></div><div class="st-tap next"></div>
+    ${mineOwn ? '<button type="button" class="st-views"></button>' : ''}`;
+  document.body.appendChild(ov);
+  const body = ov.querySelector('.st-body'), bars = ov.querySelectorAll('.st-bars i');
+  let timer = null, t0 = 0, paused = false, DUR = 5000;
+  const fmt = at => { const d = new Date(at); return d.toLocaleTimeString('he-IL', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit' }); };
+  const markSeen = async it => {
+    if(mineOwn || (state._stSeen || {})[it.id]) return;
+    state._stSeen = { ...(state._stSeen || {}), [it.id]: stNowIso() };
+    setDoc(doc(db, 'statusViews', me), { seen: { [it.id]: state._stSeen[it.id] } }, { merge: true }).catch(() => {});
+  };
+  const show = async () => {
+    clearInterval(timer);
+    const it = items[idx]; if(!it){ return close(); }
+    bars.forEach((b, k) => { b.style.width = k < idx ? '100%' : '0%'; });
+    ov.querySelector('.st-htime').textContent = fmt(it.at);
+    if(it.type === 'image'){ body.innerHTML = `<img alt="" />${it.text ? `<div class="st-cap"></div>` : ''}`; if(it.text) body.querySelector('.st-cap').textContent = it.text; const f = await loadTaskFile(it.fileId); if(f) body.querySelector('img').src = f.data; body.style.background = '#000'; }
+    else { body.innerHTML = '<div class="st-bigtxt"></div>'; body.querySelector('.st-bigtxt').textContent = it.text; body.style.background = it.bg; }
+    markSeen(it);
+    if(mineOwn) updateViews(it);
+    t0 = Date.now();
+    timer = setInterval(() => { if(paused){ t0 += 100; return; } const p = Math.min(1, (Date.now() - t0) / DUR); bars[idx].style.width = (p * 100) + '%'; if(p >= 1){ idx++; show(); } }, 100);
+  };
+  const updateViews = async it => {
+    const vb = ov.querySelector('.st-views'); if(!vb) return;
+    const viewers = [];
+    await Promise.all(Object.keys(state._chatNames || {}).filter(x => x !== me).map(async x => { try{ const sn = await getDoc(doc(db, 'statusViews', x)); const at = sn.exists() && (sn.data().seen || {})[it.id]; if(at) viewers.push({ x, at }); }catch(e){} }));
+    vb.textContent = '👁 ' + viewers.length + ' צפיות';
+    vb.onclick = () => { paused = true; showConfirmModal(viewers.length ? viewers.sort((a, b) => String(b.at).localeCompare(String(a.at))).map(v => (state._chatNames[v.x] || '') + ' · ' + fmt(v.at)).join('\n') : 'עוד אף אחד לא צפה', { yes: 'סגירה', info: true, danger: false }).then(() => { paused = false; }); };
+  };
+  const close = () => { clearInterval(timer); ov.remove(); document.removeEventListener('keydown', onKey); renderStatusStrip(role); };
+  const onKey = e => { if(e.key === 'Escape') close(); if(e.key === 'ArrowLeft'){ idx++; show(); } if(e.key === 'ArrowRight'){ idx = Math.max(0, idx - 1); show(); } };
+  document.addEventListener('keydown', onKey);
+  ov.querySelector('.st-close').onclick = close;
+  ov.querySelector('.st-tap.next').onclick = () => { idx++; show(); };
+  ov.querySelector('.st-tap.prev').onclick = () => { idx = Math.max(0, idx - 1); show(); };
+  ['pointerdown'].forEach(ev => body.addEventListener(ev, () => { paused = true; }));
+  ['pointerup', 'pointerleave'].forEach(ev => body.addEventListener(ev, () => { paused = false; }));
+  const del = ov.querySelector('.st-del');
+  if(del) del.onclick = async () => {
+    paused = true;
+    if(!(await showConfirmModal('למחוק את הסטטוס הזה?', { yes: 'מחיקה', danger: true }))){ paused = false; return; }
+    const it = items[idx]; items.splice(idx, 1);
+    await saveDoc(() => setDoc(doc(db, 'statuses', me), { items: items.slice() }), 'statusDel');
+    if(!items.length) return close();
+    ov.querySelector('.st-bars').innerHTML = items.map(() => '<span><i></i></span>').join('');
+    idx = Math.min(idx, items.length - 1); paused = false; show();
+  };
+  show();
 }
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------

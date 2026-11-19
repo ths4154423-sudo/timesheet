@@ -66,6 +66,14 @@ service cloud.firestore {
       allow read, update: if isEmployee() && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
       allow create: if isEmployee() && request.auth.uid == request.resource.data.from;
     }
+    match /statuses/{owner} {
+      allow read: if isAdmin() || isEmployee();
+      allow write: if isEmployeeId(owner) || (owner == 'mgr' && isAdmin());
+    }
+    match /statusViews/{viewer} {
+      allow read: if isAdmin() || isEmployee();
+      allow write: if isEmployeeId(viewer) || (viewer == 'mgr' && isAdmin());
+    }
     match /tasks/{empId} {
       allow write: if can('employees');
       allow read, write: if isEmployeeId(empId);
