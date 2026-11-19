@@ -8013,6 +8013,7 @@ async function renderChatHome(role){
     <div class="wa-full-head">
       ${coUser ? '' : `<button type="button" class="wa-back" id="waFullClose" aria-label="חזרה">${WAI.back}</button>`}
       <b>צ׳אט</b>
+      <button type="button" class="wa-back" id="msgSoundBtn" title="${state._msgSoundMuted ? 'הפעלת צליל הודעות' : 'השתקת צליל הודעות'}" aria-label="צליל הודעות" style="margin-inline-start:auto; color:#fff; font-size:19px;">${state._msgSoundMuted ? '🔕' : '🔔'}</button>
       ${coUser ? `<button type="button" class="logout-link" id="waFullLogout" style="margin-inline-start:auto;">התנתקות</button>` : ''}
     </div>
     <div class="wa-full-body">
@@ -8033,6 +8034,12 @@ async function renderChatHome(role){
     </div>
     <button type="button" class="wa-fab" id="chatNewGroup" title="קבוצה חדשה" aria-label="קבוצה חדשה">${WAI.newgroup}</button>
     </div>`;
+  document.getElementById('msgSoundBtn').onclick = async e => {
+    const muted = !state._msgSoundMuted; await setMsgSoundPref(role, muted);
+    e.currentTarget.textContent = muted ? '🔕' : '🔔'; e.currentTarget.title = muted ? 'הפעלת צליל הודעות' : 'השתקת צליל הודעות';
+    if(!muted) chatPing(true);
+    showToast(muted ? 'צליל ההודעות הושתק בחשבון שלך' : 'צליל ההודעות הופעל');
+  };
   const fc = document.getElementById('waFullClose');
   if(fc) fc.onclick = () => role === 'mgr' ? renderAdminDashboard('dashboard') : renderEmployeeDashboard(state.currentEmployee);
   const fl = document.getElementById('waFullLogout');
@@ -8535,6 +8542,8 @@ function renderChatOnlyForm(id){
 async function startChatNotifier(role){
   const me = chatMe(role); if(!me) return;
   startCallListener(role);
+  loadMsgSoundPref(role);
+  startTaskSoundWatch(role);
   registerPush();
   { const lp = new URLSearchParams(location.search); if(lp.get('chat') || lp.get('tasks')){ const l = location.href; history.replaceState(null, '', location.pathname); setTimeout(() => openFromLink(l), 800); } }
   if(state._chatNotif && state._chatNotif.me === me) return;
@@ -8560,7 +8569,7 @@ async function startChatNotifier(role){
         if(!fresh.length) return;
         refreshChatBadge(role);
         const inRoomNow = document.getElementById('chatBody') && state._chatOpenId === id && document.visibilityState === 'visible';
-        if(inRoomNow) return;
+        if(inRoomNow){ chatPing(); return; }
         notifyChat(role, id, d, fresh[fresh.length - 1]);
       }, () => {}));
     }catch(e){}
@@ -8590,8 +8599,21 @@ async function showDesktopNote(title, body, onClick){
   try{ const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if(reg) await reg.showNotification(title, opts); }catch(e){}
 }
 // צליל קצר וכותרת מהבהבת בכרטיסייה – גם כשהתראות המערכת חסומות
-function chatPing(){
-  try{ const ctx = getAudioCtx(); const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.0001, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35); o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.4); }catch(e){}
+// צליל הודעה (שני צלילים קצרים). ההשתקה שמורה בחשבון – בכל מחשב וטלפון שבו החשבון פתוח
+function chatPing(force){
+  if(!force && state._msgSoundMuted) return;
+  const now = Date.now(); if(!force && now - (state._lastPing || 0) < 1500) return; state._lastPing = now;
+  try{ const ctx = getAudioCtx(); [[988, 0], [1319, 0.13]].forEach(([f, dt]) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, ctx.currentTime + dt); g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + dt + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dt + 0.28); o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + dt); o.stop(ctx.currentTime + dt + 0.3); }); }catch(e){}
+}
+function soundKeyDoc(role){ return role === 'mgr' ? 'mgr-prefs' : (state.currentEmployee && state.currentEmployee.id); }
+async function loadMsgSoundPref(role){
+  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); state._msgSoundMuted = !!(snap.exists() && snap.data().muteMsgSound); }catch(e){}
+}
+async function setMsgSoundPref(role, muted){
+  state._msgSoundMuted = muted;
+  const id = soundKeyDoc(role); if(!id) return;
+  await saveDoc(() => setDoc(doc(db, 'settings', id), { muteMsgSound: muted }, { merge: true }), 'msgSound');
+  if(state._settingsCache && state._settingsCache.empId === id) state._settingsCache = null;
 }
 let titleFlashT = null;
 function flashTitle(who){
@@ -8910,6 +8932,30 @@ function linkify(text){
 }
 // לחיצה על קישור לא פותחת את תפריט ההודעה
 document.addEventListener('contextmenu', e => { if(e.target.closest && e.target.closest('.wa-link')) e.stopPropagation(); }, true);
+
+// צליל גם על משימות: לעובד – משימה חדשה או תשובה מהמנהל; למנהל – תגובה חדשה של עובד על משימה
+function startTaskSoundWatch(role){
+  if(state._taskSoundUnsubs) state._taskSoundUnsubs.forEach(u => { try{ u(); }catch(e){} });
+  state._taskSoundUnsubs = [];
+  const ids = role === 'mgr' ? activeEmployees().map(e => e.id) : [state.currentEmployee && state.currentEmployee.id].filter(Boolean);
+  ids.forEach(empId => {
+    let base = null;
+    const sig = items => { const t = {}; (items || []).forEach(x => { if(!x) return; t['t' + x.id] = 1; (x.replies || []).forEach(r => { t['r' + r.id] = r.from; }); }); return t; };
+    try{ state._taskSoundUnsubs.push(onSnapshot(doc(db, 'tasks', empId), snap => {
+      const now = sig((snap.data() || {}).items);
+      if(base){
+        const fresh = Object.keys(now).filter(k => !(k in base));
+        const relevant = fresh.filter(k => role === 'mgr' ? (k[0] === 'r' && now[k] === 'emp') : (k[0] === 't' || now[k] === 'mgr'));
+        if(relevant.length){
+          chatPing();
+          if(role !== 'mgr' && document.visibilityState === 'visible') showToast(relevant.some(k => k[0] === 't') ? '✔ נוספה לך משימה חדשה' : '💬 תשובה חדשה מהמנהל על משימה');
+          if(role === 'mgr' && document.visibilityState === 'visible') showToast('💬 תגובה חדשה של עובד על משימה');
+        }
+      }
+      base = now;
+    }, () => {})); }catch(e){}
+  });
+}
 
 // ---------- מראה: המצלמה הקדמית במסך מלא (שום דבר לא נשמר ולא נשלח) ----------
 async function openMirror(){
