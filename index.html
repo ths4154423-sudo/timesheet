@@ -8759,7 +8759,8 @@ function isStandalone(){ return window.matchMedia('(display-mode: standalone)').
 function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
 function installAppHtml(){
   if(isStandalone()) return '';
-  return `<div class="install-app" ${deferredInstall || isIOS() ? '' : 'hidden'} style="margin-top:14px;">
+  const mobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+  return `<div class="install-app" ${deferredInstall || mobile ? '' : 'hidden'} style="margin-top:14px;">
     <button type="button" class="btn ghost" id="installAppBtn">📲 התקנה כאפליקציה</button>
     <p class="hint" style="font-size:12.5px; margin:6px 0 0;">סמל במסך הבית, נפתח בחלון משלו כמו אפליקציה</p></div>`;
 }
@@ -8768,7 +8769,7 @@ function bindInstallApp(){
   b.onclick = async () => {
     if(deferredInstall){ deferredInstall.prompt(); const r = await deferredInstall.userChoice.catch(() => null); if(r && r.outcome === 'accepted') deferredInstall = null; return; }
     if(isIOS()) return showConfirmModal('באייפון: לוחצים על כפתור השיתוף (ריבוע עם חץ למעלה) בתחתית המסך, ובוחרים "הוספה למסך הבית".', { yes: 'הבנתי', info: true, danger: false });
-    showConfirmModal('בתפריט הדפדפן (שלוש הנקודות למעלה) בוחרים "התקנת האפליקציה" או "הוספה למסך הבית".', { yes: 'הבנתי', info: true, danger: false });
+    showConfirmModal('בכרום: לוחצים על שלוש הנקודות ⋮ למעלה, ובוחרים "הוספה למסך הבית" (או "התקנת האפליקציה"), ואז "הוספה". סמל של שעון הנוכחות יופיע במסך הבית.', { yes: 'הבנתי', info: true, danger: false });
   };
 }
 function clockWarnTxt(min){ if(min < 60) return min + ' דקות'; const h = Math.floor(min / 60), m = min % 60; return (h === 1 ? 'שעה' : h + ' שעות') + (m ? ' ו-' + m + ' דקות' : ''); }
