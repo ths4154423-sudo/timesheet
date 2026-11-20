@@ -929,6 +929,13 @@ body.wa-dark .wa-notif-ok{ color:#7FD1AE; }
 body.wa-dark .wa-schedbar{ background:#1B2B3A; color:#8CC4F5; border-color:#22384B; }
 body.wa-dark .wa-poll-who{ color:#53BDEB; }
 body.wa-dark .wa-deleted{ color:#8696A0 !important; }
+.wa-loc{ display:flex; gap:10px; align-items:flex-start; background:rgba(0,0,0,.04); border-radius:8px; padding:8px 10px; margin-bottom:4px; min-width:220px; }
+.wa-loc-pin{ font-size:28px; line-height:1; }
+.wa-loc-main{ display:flex; flex-direction:column; gap:2px; font-size:13px; }
+.wa-loc-main span{ color:#667781; }
+.wa-loc-btns{ display:flex; gap:12px; margin-top:4px; direction:rtl !important; }
+.wa-loc-btns a{ color:#008069; font-weight:600; text-decoration:none; }
+body.wa-dark .wa-loc{ background:rgba(255,255,255,.07); } body.wa-dark .wa-loc-main span{ color:#AEBAC1; } body.wa-dark .wa-loc-btns a{ color:#53BDEB; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8099,7 +8106,7 @@ async function renderChatHome(role){
   const chats = await Promise.all(contacts.map((c, i) => c.custom ? Promise.resolve(groups.find(g => g.id === c.id)) : loadChat(chatIdWith(me, c.id))));
   const rows = contacts.map((c, i) => {
     const ch = chats[i] || { msgs: [] }, last = visibleMsgs(ch, me).slice(-1)[0], un = chatUnread(ch, me);
-    const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : last.poll ? '📊 ' + last.poll.q : ''))) : 'אין הודעות עדיין';
+    const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : last.poll ? '📊 ' + last.poll.q : last.loc ? '📍 מיקום' : ''))) : 'אין הודעות עדיין';
     // וי כפול ליד ההודעה האחרונה שלי: אפור = נשלחה, כחול = כל הצד השני קרא
     let ticks = '';
     if(last && last.from === me && !last.deleted && !c.self){
@@ -8248,6 +8255,8 @@ function chatBubblesHtml(ch, me, isGroup, members){
           + docs.map(x => `<button type="button" class="wa-file" data-file-open="${x.fileId}" data-file-name="${escapeHtml(x.fileName || 'קובץ')}">📄 ${escapeHtml(x.fileName || 'קובץ')}</button>`).join(''); })() : ''}
       ${m.audioId ? `<button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button>` : ''}
       ${m.poll ? pollHtml(m, me) : ''}
+      ${m.loc ? `<div class="wa-loc"><div class="wa-loc-pin">📍</div><div class="wa-loc-main"><b>מיקום</b><span><bdi>${m.loc.lat.toFixed(5)}, ${m.loc.lng.toFixed(5)}</bdi>${m.loc.acc ? ' · דיוק ' + Math.round(m.loc.acc) + ' מ׳' : ''}</span>
+        <span class="wa-loc-btns"><a href="https://waze.com/ul?ll=${m.loc.lat},${m.loc.lng}&navigate=yes" target="_blank" rel="noopener">🚗 Waze</a><a href="https://www.google.com/maps?q=${m.loc.lat},${m.loc.lng}" target="_blank" rel="noopener">🗺️ גוגל מפות</a></span></div></div>` : ''}
       ${m.text ? `<div class="wa-text">${linkify(m.text)}</div>` : ''}
       <span class="wa-time">${m.scheduled ? '<i class="wa-edited">⏰</i>' : ''}${m.edited ? '<i class="wa-edited">נערכה</i>' : ''}${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
     </div>${reactHtml}</div>`;
@@ -8409,7 +8418,7 @@ async function renderChatRoom(role, otherId){
     ov.querySelector('#miClose').onclick = close; ov.onclick = e => { if(e.target === ov) close(); };
   };
   // תפריט הודעה כמו בוואטסאפ: תגובה באימוג'י, השב, העתקה, העברה, מחיקה
-  const snipOf = m => m.text ? m.text.slice(0, 90) : m.fileId ? '📎 ' + (m.fileName || 'קובץ') : m.files ? '📷 ' + m.files.length + ' קבצים' : m.audioId ? '🎙 הודעה קולית' : m.poll ? '📊 ' + m.poll.q : '';
+  const snipOf = m => m.text ? m.text.slice(0, 90) : m.fileId ? '📎 ' + (m.fileName || 'קובץ') : m.files ? '📷 ' + m.files.length + ' קבצים' : m.audioId ? '🎙 הודעה קולית' : m.poll ? '📊 ' + m.poll.q : m.loc ? '📍 מיקום' : '';
   let replyTo = null;
   const setReply = m => {
     replyTo = m ? { id: m.id, from: m.from, snip: snipOf(m) } : null;
@@ -8471,7 +8480,7 @@ async function renderChatRoom(role, otherId){
     const opts = [...list.map(c => ({ id: c.id, name: c.name })), ...groups.filter(g => g.id !== id).map(g => ({ id: g.id, name: '👥 ' + (g.name || 'קבוצה') }))];
     const pick = await chatPickMembers(opts, [], false, 'העברה אל...');
     if(!pick) return;
-    const copy = { text: m.text, fileId: m.fileId, fileName: m.fileName, fileType: m.fileType, files: m.files, audioId: m.audioId };
+    const copy = { loc: m.loc, text: m.text, fileId: m.fileId, fileName: m.fileName, fileType: m.fileType, files: m.files, audioId: m.audioId };
     Object.keys(copy).forEach(k => copy[k] === undefined && delete copy[k]);
     for(const target of pick.ids){
       const cid = chatIdWith(me, target);
@@ -8659,14 +8668,24 @@ async function renderChatRoom(role, otherId){
     ev.stopPropagation();
     document.querySelectorAll('.att-menu').forEach(x => x.remove());
     const btn = ev.currentTarget, mm = document.createElement('div'); mm.className = 'att-menu';
-    mm.innerHTML = `<button type="button" data-more="poll"><span class="att-ic" style="background:#FFB300;">📊</span>סקר</button><button type="button" data-more="sched"><span class="att-ic" style="background:#0795DC;">⏰</span>הודעה מתוזמנת</button>`;
+    mm.innerHTML = `<button type="button" data-more="poll"><span class="att-ic" style="background:#FFB300;">📊</span>סקר</button><button type="button" data-more="sched"><span class="att-ic" style="background:#0795DC;">⏰</span>הודעה מתוזמנת</button><button type="button" data-more="loc"><span class="att-ic" style="background:#1FA855;">📍</span>מיקום</button>`;
     document.body.appendChild(mm);
     const r0 = btn.getBoundingClientRect();
     mm.style.left = Math.max(8, Math.min(window.innerWidth - mm.offsetWidth - 8, r0.left + r0.width / 2 - mm.offsetWidth / 2)) + 'px';
     mm.style.top = (r0.top - mm.offsetHeight - 10) + 'px';
     const close = e => { if(!mm.contains(e.target)){ mm.remove(); document.removeEventListener('click', close, true); } };
     setTimeout(() => document.addEventListener('click', close, true), 0);
-    mm.querySelectorAll('[data-more]').forEach(b => b.onclick = () => { mm.remove(); b.dataset.more === 'poll' ? newPoll() : newSched(); });
+    mm.querySelectorAll('[data-more]').forEach(b => b.onclick = () => { mm.remove(); b.dataset.more === 'poll' ? newPoll() : b.dataset.more === 'loc' ? sendLocation() : newSched(); });
+  };
+  const sendLocation = () => {
+    if(!navigator.geolocation) return showToast('המכשיר לא תומך במיקום');
+    stEl.textContent = '📍 מאתר מיקום...';
+    navigator.geolocation.getCurrentPosition(async pos => {
+      stEl.textContent = '';
+      const loc = { lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6), acc: Math.round(pos.coords.accuracy || 0) };
+      if(!(await showConfirmModal('לשלוח את המיקום הנוכחי שלך' + (loc.acc ? ' (דיוק כ-' + loc.acc + ' מ׳)' : '') + '?', { yes: 'שליחה', danger: false }))) return;
+      send({ loc });
+    }, err => { stEl.textContent = ''; showToast(err.code === 1 ? 'אין הרשאת מיקום – יש לאשר בדפדפן' : 'לא הצלחנו לאתר מיקום'); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
   };
   const newPoll = () => {
     const ov = document.createElement('div'); ov.className = 'confirm-overlay';
@@ -8867,7 +8886,7 @@ async function startChatNotifier(role){
 function notifyChat(role, id, d, m){
   const who = state._chatNames[m.from] || 'הודעה חדשה';
   const where = id === 'team' ? 'כל הצוות' : /^g_/.test(id) ? (d.name || 'קבוצה') : '';
-  const body = m.text ? m.text.slice(0, 140) : m.files ? '📷 ' + m.files.length + ' קבצים' : m.fileId ? '📎 קובץ' : m.audioId ? '🎙 הודעה קולית' : m.poll ? '📊 ' + m.poll.q : '';
+  const body = m.text ? m.text.slice(0, 140) : m.files ? '📷 ' + m.files.length + ' קבצים' : m.fileId ? '📎 קובץ' : m.audioId ? '🎙 הודעה קולית' : m.poll ? '📊 ' + m.poll.q : m.loc ? '📍 מיקום' : '';
   chatPing(); flashTitle(who);
   if(document.visibilityState === 'visible') headsUp(who, where, body, () => {
     const other = id === 'team' || /^g_/.test(id) ? id : id.split('__').find(x => x !== chatMe(role));
@@ -9154,7 +9173,7 @@ async function renderChatMonitor(target, myGroupIds){
     return `<button type="button" class="wa-contact" data-mon-open="${c.id}">
       <span class="wa-avatar group">${WAI.eye}</span>
       <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(label(c))}</b><span class="wa-c-time">${chatTime(last.at)}</span></span>
-      <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml((state._chatNames[last.from] || '') + ': ' + (last.deleted ? '🚫 נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : last.poll ? '📊 ' + last.poll.q : ''))))}</span></span></span></button>`;
+      <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml((state._chatNames[last.from] || '') + ': ' + (last.deleted ? '🚫 נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : last.poll ? '📊 ' + last.poll.q : last.loc ? '📍 מיקום' : ''))))}</span></span></span></button>`;
   }).join('');
   target.appendChild(box);
   box.querySelectorAll('[data-mon-open]').forEach(b => b.onclick = () => renderChatMonitorRoom(others.find(c => c.id === b.dataset.monOpen), label));
