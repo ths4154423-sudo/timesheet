@@ -8584,6 +8584,8 @@ async function renderChatRoom(role, otherId){
     const m = Object.assign({ id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [] }, extra);
     if(replyTo){ m.reply = replyTo; setReply(null); }
     pinned = true; cur = { ...cur, msgs: [...(cur.msgs || []), m] }; paint();
+    const toEnd = () => { pinned = true; body.scrollTop = body.scrollHeight; }; toEnd(); requestAnimationFrame(toEnd); [80, 300, 800].forEach(ms => setTimeout(toEnd, ms));
+    input.style.height = '';
     const fresh = await loadChat(id); if(!fresh){ showToast('ההודעה לא נשלחה'); return; }
     const msgs = [...(fresh.msgs || []), m].slice(-CHAT_MAX);
     const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), custom ? { msgs } : { msgs, members }, { merge: true }), 'chatSend');
