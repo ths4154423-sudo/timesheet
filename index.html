@@ -8088,6 +8088,12 @@ async function renderChatHome(role){
     <button type="button" class="wa-fab" id="chatNewGroup" title="קבוצה חדשה" aria-label="קבוצה חדשה">${WAI.newgroup}</button>
     </div>`;
   renderStatusStrip(role);
+  clearInterval(state._stTimer);
+  state._stTimer = setInterval(() => {
+    if(!document.getElementById('statusStrip')){ clearInterval(state._stTimer); return; }
+    if(document.querySelector('.st-view, .st-compose') || document.hidden) return;
+    renderStatusStrip(role);
+  }, 20000);
   const sBtn = document.getElementById('msgSoundBtn');
   sBtn.onclick = () => openSoundPicker(role, sBtn);
   const fc = document.getElementById('waFullClose');
