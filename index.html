@@ -936,6 +936,17 @@ body.wa-dark .wa-deleted{ color:#8696A0 !important; }
 .wa-loc-btns{ display:flex; gap:12px; margin-top:4px; direction:rtl !important; }
 .wa-loc-btns a{ color:#008069; font-weight:600; text-decoration:none; }
 body.wa-dark .wa-loc{ background:rgba(255,255,255,.07); } body.wa-dark .wa-loc-main span{ color:#AEBAC1; } body.wa-dark .wa-loc-btns a{ color:#53BDEB; }
+.wa-row.wa-sel{ background:rgba(0,168,132,.22); }
+.wa-chat.selecting .wa-row{ cursor:pointer; margin-left:-10px; margin-right:-10px; padding-left:10px; padding-right:10px; }
+.wa-chat.selecting .wa-rx-btn, .wa-chat.selecting .wa-del{ display:none; }
+.wa-selbar{ display:flex; align-items:center; gap:6px; padding:8px 12px; background:#008069; color:#fff; flex:0 0 auto; font-size:17px; }
+.wa-selbar .wa-back{ color:#fff; font-size:19px; }
+.wa-selbar [hidden]{ display:none !important; }
+.wa-room.selecting .wa-room-head{ display:none; }
+.wa-archived{ display:none !important; }
+.show-arch .wa-archived{ display:flex !important; opacity:.8; }
+body.wa-dark .wa-selbar{ background:#202C33; }
+body.wa-dark .wa-row.wa-sel{ background:rgba(0,168,132,.28); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8069,7 +8080,7 @@ async function loadChat(id){
 }
 // "ניקוי צ'אט" הוא אישי (כמו בוואטסאפ): אצל מי שניקה מוצגות רק הודעות שנשלחו אחרי הניקוי
 function visibleMsgs(c, me){
-  const msgs = (c && c.msgs) || [], cut = c && c.cleared && c.cleared[me];
+  const msgs = ((c && c.msgs) || []).filter(m => m && !(m.hiddenFor || []).includes(me)), cut = c && c.cleared && c.cleared[me];
   if(!cut) return msgs;
   const i = msgs.findIndex(m => m.id === cut);
   return i >= 0 ? msgs.slice(i + 1) : msgs.filter(m => String(m.at || '') > String((c.clearedAt && c.clearedAt[me]) || ''));
@@ -8100,6 +8111,7 @@ async function renderChatHome(role){
       ? () => { state.currentEmployee = null; clearSession(); signOut(auth).catch(() => {}); renderLanding(); }
       : () => renderEmployeeDashboard(state.currentEmployee); }
   target.innerHTML = '<div class="empty-state">טוען...</div>';
+  if(!state._chatArchive) await loadMsgSoundPref(role);
   const contacts0 = await chatContacts(role);
   const groups = await myChatGroups(me);
   const contacts = [contacts0[0], ...groups.map(g => ({ id: g.id, name: g.name || 'קבוצה', group: true, custom: true })), ...contacts0.slice(1)];
@@ -8134,8 +8146,9 @@ async function renderChatHome(role){
     <div id="chatSearchResults"></div>
     <div class="card wa-list" id="chatListCard">
 
+      ${(() => { const n = rows.filter(r => chatArchived(chatIdWith(me, r.c.id))).length; return n ? `<button type="button" class="wa-contact wa-arch-row" id="chatArchToggle"><span class="wa-avatar" style="background:none; font-size:22px;">🗄</span><span class="wa-c-main"><b>בארכיון</b></span><span class="wa-c-unread" style="background:#8696A0;">${n}</span></button>` : ''; })()}
       ${rows.map(r => `
-        <button type="button" class="wa-contact" data-chat-open="${r.c.id}">
+        <button type="button" class="wa-contact${chatArchived(chatIdWith(me, r.c.id)) ? ' wa-archived' : ''}" data-chat-open="${r.c.id}" data-cid="${chatIdWith(me, r.c.id)}">
           <span class="wa-avatar${r.c.group ? ' group' : ''}${r.c.self ? ' self' : ''}"${r.c.group || r.c.self ? '' : ` data-av="${r.c.id}"`}>${r.c.self ? '📝' : r.c.group ? WAI.group : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
           <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(r.c.name)}</b><span class="wa-c-time">${chatMuted(chatIdWith(me, r.c.id)) ? '<span class="wa-mute-ic">🔕</span> ' : ''}${r.last ? chatTime(r.last.at) : ''}</span></span>
             <span class="wa-c-bottom">${r.ticks}<span class="wa-c-prev" data-prev-for="${chatIdWith(me, r.c.id)}" data-prev-orig="${escapeHtml(r.prev)}">${getDraft(me, chatIdWith(me, r.c.id)) ? `<span class="wa-draft">טיוטה:</span> ${escapeHtml(getDraft(me, chatIdWith(me, r.c.id)).slice(0, 60))}` : escapeHtml(r.prev)}</span>${r.un ? `<span class="wa-c-unread">${r.un}</span>` : ''}</span></span>
@@ -8161,7 +8174,33 @@ async function renderChatHome(role){
   if(fc) fc.onclick = () => role === 'mgr' ? renderAdminDashboard('dashboard') : renderEmployeeDashboard(state.currentEmployee);
   const fl = document.getElementById('waFullLogout');
   if(fl) fl.onclick = () => { state.currentEmployee = null; clearSession(); signOut(auth).catch(() => {}); renderLanding(); };
-  target.querySelectorAll('[data-chat-open]').forEach(b => b.onclick = () => renderChatRoom(role, b.dataset.chatOpen));
+  target.querySelectorAll('[data-chat-open]').forEach(b => b.onclick = () => { if(b._lp){ b._lp = false; return; } renderChatRoom(role, b.dataset.chatOpen); });
+  // ארכיון: לחיצה ארוכה (טלפון) או קליק ימני (מחשב) על שיחה ברשימה
+  const archT = document.getElementById('chatArchToggle');
+  if(archT) archT.onclick = () => { const on = !document.getElementById('chatListCard').classList.toggle('show-arch'); archT.querySelector('b').textContent = on ? 'בארכיון' : 'הסתרת הארכיון'; };
+  target.querySelectorAll('#chatListCard [data-cid]').forEach(b => {
+    const menu = () => {
+      document.querySelectorAll('.att-menu').forEach(x => x.remove());
+      const cid = b.dataset.cid, arch = chatArchived(cid), mm = document.createElement('div'); mm.className = 'att-menu';
+      mm.innerHTML = `<button type="button">${arch ? '📤&nbsp; הוצאה מהארכיון' : '🗄&nbsp; העברה לארכיון'}</button>`;
+      document.body.appendChild(mm);
+      const r0 = b.getBoundingClientRect();
+      mm.style.top = Math.min(window.innerHeight - mm.offsetHeight - 8, r0.top + r0.height / 2) + 'px'; mm.style.left = Math.max(8, r0.left + r0.width / 2 - mm.offsetWidth / 2) + 'px';
+      const close = e => { if(!mm.contains(e.target)){ mm.remove(); document.removeEventListener('click', close, true); } };
+      setTimeout(() => document.addEventListener('click', close, true), 0);
+      mm.querySelector('button').onclick = async () => {
+        mm.remove();
+        const list = (state._chatArchive || []).filter(x => x !== cid);
+        if(!arch) list.push(cid);
+        await setMsgSoundPref(role, { chatArchive: list });
+        showToast(arch ? 'השיחה הוצאה מהארכיון' : 'השיחה הועברה לארכיון'); renderChatHome(role);
+      };
+    };
+    b.addEventListener('contextmenu', e => { e.preventDefault(); menu(); });
+    let t = null;
+    b.addEventListener('touchstart', () => { t = setTimeout(() => { t = null; b._lp = true; if(navigator.vibrate) navigator.vibrate(15); menu(); }, 500); }, { passive: true });
+    ['touchend', 'touchmove', 'touchcancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(t), { passive: true }));
+  });
   // "מקליד..." גם ברשימת השיחות: מאזינים לכל שיחה, ומחליפים את שורת התצוגה כל עוד מישהו כותב או מקליט
   stopChatHomeWatch();
   const typingMap = {};
@@ -8238,7 +8277,7 @@ function chatBubblesHtml(ch, me, isGroup, members){
     const mine = m.from === me;
     const others = members.filter(x => x !== m.from);
     const seenAll = others.length && others.every(x => (m.seenBy || []).includes(x));
-    if(m.deleted) return `<div class="wa-row ${mine ? 'out' : 'in'}"><div class="wa-bubble wa-deleted">🚫 ${mine ? 'מחקת את ההודעה' : 'ההודעה נמחקה'}<span class="wa-time">${chatTime(m.at)}</span></div></div>`;
+    if(m.deleted) return `<div class="wa-row ${mine ? 'out' : 'in'}" data-row="${m.id}"><div class="wa-bubble wa-deleted" data-mid="${m.id}">${me === '__viewer__' ? '' : `<button type="button" class="wa-del" data-msg-menu="${m.id}" title="אפשרויות" aria-label="אפשרויות">${WAI.chev}</button>`}🚫 ${mine ? 'מחקת את ההודעה' : 'ההודעה נמחקה'}<span class="wa-time">${chatTime(m.at)}</span></div></div>`;
     const canDel = mine || me === 'mgr';
     const rx = m.reactions || {}, counts = {};
     Object.values(rx).forEach(e => { counts[e] = (counts[e] || 0) + 1; });
@@ -8283,6 +8322,8 @@ async function renderChatRoom(role, otherId){
         <button type="button" class="wa-back" id="chatMuteBtn" title="השתקת השיחה" aria-label="השתקת השיחה" style="font-size:18px;">${chatMuted(id) ? '🔕' : '🔔'}</button>
         <button type="button" class="wa-back" id="chatSearchBtn" title="חיפוש בשיחה" aria-label="חיפוש בשיחה">${WAI.search}</button>
         <button type="button" class="wa-back" id="chatClear" title="ניקוי הצ׳אט" aria-label="ניקוי הצ׳אט">${WAI.trash}</button></div>
+      <div class="wa-selbar" id="chatSelBar" hidden><button type="button" class="wa-back" data-sel="x" aria-label="ביטול הבחירה">✕</button><b id="chatSelCnt"></b><span style="flex:1;"></span>
+        <button type="button" class="wa-back" data-sel="reply" title="השב" aria-label="השב">↩</button><button type="button" class="wa-back" data-sel="copy" title="העתקה" aria-label="העתקה">📋</button><button type="button" class="wa-back" data-sel="fwd" title="העברה" aria-label="העברה">↪</button><button type="button" class="wa-back" data-sel="del" title="מחיקה" aria-label="מחיקה">${WAI.trash}</button><button type="button" class="wa-back" data-sel="more" title="עוד" aria-label="עוד">⋮</button></div>
       <div class="wa-searchbar" id="chatSearchBar" hidden><input type="search" id="chatSearchIn" placeholder="חיפוש בשיחה..." /><span id="chatSearchCnt" class="hint"></span><button type="button" class="wa-back" id="chatSearchUp" aria-label="הקודמת">▲</button><button type="button" class="wa-back" id="chatSearchDown" aria-label="הבאה">▼</button><button type="button" class="wa-back" id="chatSearchX" aria-label="סגירה">✕</button></div>
       <div class="wa-pinbar" id="chatPinBar" hidden><span>📌</span><span class="wa-pin-txt" id="chatPinTxt"></span><button type="button" class="wa-back" id="chatPinX" title="ביטול ההצמדה" aria-label="ביטול ההצמדה">✕</button></div>
       <div class="wa-schedbar" id="chatSchedBar" hidden></div>
@@ -8360,13 +8401,13 @@ async function renderChatRoom(role, otherId){
     body.querySelectorAll('[data-file-open]').forEach(b => b.onclick = async () => { const f = await loadTaskFile(b.dataset.fileOpen); if(!f) return showToast('לא הצלחנו לטעון את הקובץ'); openChatFile(f, b.dataset.fileName); });
     body.querySelectorAll('[data-react-open], [data-msg-menu]').forEach(b => b.onclick = ev => { ev.stopPropagation(); openMsgMenu(b, b.dataset.reactOpen || b.dataset.msgMenu, !!b.dataset.reactOpen); });
     body.querySelectorAll('[data-mid]').forEach(el => {
-      el.addEventListener('contextmenu', ev => { ev.preventDefault(); openMsgMenu(el, el.dataset.mid); });
+      el.addEventListener('contextmenu', ev => { ev.preventDefault(); if(sel || lpFired) return; openMsgMenu(el, el.dataset.mid); });
       let lp = null;
-      el.addEventListener('touchstart', () => { lp = setTimeout(() => { lp = null; if(navigator.vibrate) navigator.vibrate(15); openMsgMenu(el, el.dataset.mid); }, 480); }, { passive: true });
+      el.addEventListener('touchstart', () => { lpFired = false; lp = setTimeout(() => { lp = null; lpFired = true; if(navigator.vibrate) navigator.vibrate(15); sel ? toggleSel(el.dataset.mid) : startSel(el.dataset.mid); }, 480); }, { passive: true });
       ['touchend', 'touchmove', 'touchcancel'].forEach(t => el.addEventListener(t, () => { clearTimeout(lp); }, { passive: true }));
     });
     body.querySelectorAll('[data-jump]').forEach(q => q.onclick = () => { const t = body.querySelector(`[data-row="${q.dataset.jump}"]`); if(t){ t.scrollIntoView({ block: 'center', behavior: 'smooth' }); t.classList.add('wa-flash'); setTimeout(() => t.classList.remove('wa-flash'), 1200); } });
-    paintTyping();
+    paintTyping(); paintSel();
     if(atBottom || !paint.done){ pinned = true; body.scrollTop = body.scrollHeight; requestAnimationFrame(pinBottom); setTimeout(pinBottom, 120); }
     paint.done = true;
   };
@@ -8435,12 +8476,26 @@ async function renderChatRoom(role, otherId){
   };
   const openMsgMenu = (anchor, mid, onlyReacts) => {
     document.querySelectorAll('.wa-rx-pop, .wa-menu').forEach(x => x.remove());
-    const m = (cur.msgs || []).find(x => x.id === mid); if(!m || m.deleted) return;
+    const m = (cur.msgs || []).find(x => x.id === mid); if(!m) return;
     const canDel = m.from === me || me === 'mgr';
+    if(m.deleted){
+      const pop = document.createElement('div'); pop.className = 'wa-menu';
+      pop.innerHTML = `<div class="wa-menu-list"><button type="button" data-d="sel">☑&nbsp; בחירה</button><button type="button" data-d="wipe" class="danger">🗑&nbsp; מחיקה לגמרי</button></div>`;
+      document.body.appendChild(pop);
+      const r0 = anchor.getBoundingClientRect();
+      pop.style.top = Math.max(8, Math.min(window.innerHeight - pop.offsetHeight - 8, r0.bottom + 6)) + 'px';
+      pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r0.left)) + 'px';
+      const close = e => { if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('click', close, true); } };
+      setTimeout(() => document.addEventListener('click', close, true), 0);
+      pop.querySelector('[data-d=sel]').onclick = () => { pop.remove(); startSel(mid); };
+      pop.querySelector('[data-d=wipe]').onclick = () => { pop.remove(); wipeMsgs([mid]); };
+      return;
+    }
     const pop = document.createElement('div'); pop.className = 'wa-menu';
     pop.innerHTML = `<div class="wa-menu-rx">${['👍', '❤️', '😂', '😮', '🙏', '👏'].map(e => `<button type="button" data-rx="${e}"${(m.reactions || {})[me] === e ? ' class="on"' : ''}>${e}</button>`).join('')}</div>`
       + (onlyReacts ? '' : `<div class="wa-menu-list">
         <button type="button" data-act="reply">↩&nbsp; השב</button>
+        <button type="button" data-act="sel">☑&nbsp; בחירה</button>
         ${m.from === me && m.text && !m.call ? '<button type="button" data-act="edit">✏️&nbsp; עריכה</button>' : ''}
         <button type="button" data-act="pin">📌&nbsp; ${(cur.pinned && cur.pinned.id === m.id) ? 'ביטול הצמדה' : 'הצמדה'}</button>
         ${m.text ? '<button type="button" data-act="copy">📋&nbsp; העתקה</button>' : ''}
@@ -8459,35 +8514,36 @@ async function renderChatRoom(role, otherId){
       pop.remove();
       const act = x.dataset.act;
       if(act === 'reply') setReply(m);
+      else if(act === 'sel') startSel(m.id);
       else if(act === 'edit'){ setReply(null); editing = m.id; input.value = m.text; input.focus(); input.dispatchEvent(new Event('input')); stEl.textContent = '✏️ עורכים הודעה · Esc לביטול'; }
       else if(act === 'pin'){
         const unpin = cur.pinned && cur.pinned.id === m.id;
         await saveDoc(() => setDoc(doc(db, 'chats', id), { pinned: unpin ? null : { id: m.id, snip: snipOf(m), by: me } }, { merge: true }), 'chatPin');
       }
       else if(act === 'copy'){ try{ await navigator.clipboard.writeText(m.text); showToast('הועתק'); }catch(e){ showToast('לא הצלחנו להעתיק'); } }
-      else if(act === 'fwd') forwardMsg(m);
+      else if(act === 'fwd') forwardMsgs([m]);
       else if(act === 'task') msgToTask(role, m, otherId);
       else if(act === 'info') msgInfo(m);
       else if(act === 'del'){
         if(!(await showConfirmModal('למחוק את ההודעה? היא תימחק אצל כולם.', { yes: 'מחיקה', danger: true }))) return;
-        saveMsgs(msgs => { const t = msgs.find(y => y.id === mid); if(!t || (t.from !== me && me !== 'mgr')) return false; ['text', 'fileId', 'fileName', 'fileType', 'files', 'audioId', 'reply', 'reactions'].forEach(k => delete t[k]); t.deleted = true; }, 'chatDelete');
+        saveMsgs(msgs => { const t = msgs.find(y => y.id === mid); if(!t || (t.from !== me && me !== 'mgr')) return false; ['text', 'fileId', 'fileName', 'fileType', 'files', 'audioId', 'reply', 'reactions', 'poll', 'loc'].forEach(k => delete t[k]); t.deleted = true; }, 'chatDelete');
       }
     });
   };
-  const forwardMsg = async m => {
+  const forwardMsgs = async arr => {
     const list = allContacts.filter(c => c.id !== otherId);
     const groups = await myChatGroups(me);
     const opts = [...list.map(c => ({ id: c.id, name: c.name })), ...groups.filter(g => g.id !== id).map(g => ({ id: g.id, name: '👥 ' + (g.name || 'קבוצה') }))];
     const pick = await chatPickMembers(opts, [], false, 'העברה אל...');
     if(!pick) return;
-    const copy = { loc: m.loc, text: m.text, fileId: m.fileId, fileName: m.fileName, fileType: m.fileType, files: m.files, audioId: m.audioId };
-    Object.keys(copy).forEach(k => copy[k] === undefined && delete copy[k]);
+    const copies = arr.filter(m => m && !m.deleted && !m.poll).map(m => { const c = { loc: m.loc, text: m.text, fileId: m.fileId, fileName: m.fileName, fileType: m.fileType, files: m.files, audioId: m.audioId }; Object.keys(c).forEach(k => c[k] === undefined && delete c[k]); return c; });
+    if(!copies.length) return showToast('אין מה להעביר');
     for(const target of pick.ids){
       const cid = chatIdWith(me, target);
       const fresh = await loadChat(cid) || { msgs: [] };
-      const nm = Object.assign({ id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [], fwd: true }, copy);
+      const nms = copies.map(copy => Object.assign({ id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [], fwd: true }, copy));
       const extra = /^g_/.test(cid) || cid === 'team' ? {} : { members: [me, target] };
-      await saveDoc(() => setDoc(doc(db, 'chats', cid), { msgs: [...(fresh.msgs || []), nm].slice(-CHAT_MAX), ...extra }, { merge: true }), 'chatFwd');
+      await saveDoc(() => setDoc(doc(db, 'chats', cid), { msgs: [...(fresh.msgs || []), ...nms].slice(-CHAT_MAX), ...extra }, { merge: true }), 'chatFwd');
     }
     showToast(pick.ids.length > 1 ? 'ההודעה הועברה ל-' + pick.ids.length + ' שיחות' : 'ההודעה הועברה');
   };
@@ -8535,7 +8591,10 @@ async function renderChatRoom(role, otherId){
     if(ok !== true) showToast('ההודעה לא נשלחה');
   };
   input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; if(input.value.trim()) sigTyping('typing'); });
-  input.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); document.getElementById('chatSend').click(); } });
+  // בטלפון: מקש ↵ במקלדת יורד שורה (שולחים בכפתור השליחה). במחשב: Enter שולח, Shift+Enter יורד שורה
+  const touchKb = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || (window.matchMedia && matchMedia('(pointer:coarse)').matches && !matchMedia('(pointer:fine)').matches);
+  if(touchKb) input.setAttribute('enterkeyhint', 'enter');
+  input.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey && !touchKb){ e.preventDefault(); document.getElementById('chatSend').click(); } });
   { const dr = getDraft(me, id); if(dr){ input.value = dr; setTimeout(() => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; input.setSelectionRange(dr.length, dr.length); }, 0); } }
   input.addEventListener('input', () => { if(!editing) setDraft(me, id, input.value); });
   // קבצים שממתינים לשליחה (נבחרו או הודבקו): מוצגים מעל שדה הכתיבה, ונשלחים רק בלחיצה על Enter או על כפתור השליחה
@@ -8643,6 +8702,55 @@ async function renderChatRoom(role, otherId){
       rec.start(); mic.innerHTML = WAI.stop; mic.classList.add('rec'); sigTyping('recording');
     }catch(err){ stEl.textContent = 'אין גישה למיקרופון. יש לאשר הרשאה בדפדפן.'; }
   };
+  // ---- בחירת כמה הודעות: לחיצה ארוכה בטלפון, או "בחירה" בתפריט ההודעה במחשב
+  let sel = null, lpFired = false;
+  const selBar = document.getElementById('chatSelBar'), roomEl = body.closest('.wa-room');
+  const paintSel = () => {
+    if(sel) [...sel].forEach(x => { if(!(cur.msgs || []).some(m => m.id === x)) sel.delete(x); });
+    if(sel && !sel.size) sel = null;
+    body.querySelectorAll('[data-row]').forEach(r => r.classList.toggle('wa-sel', !!sel && sel.has(r.dataset.row)));
+    selBar.hidden = !sel; if(roomEl) roomEl.classList.toggle('selecting', !!sel); body.classList.toggle('selecting', !!sel);
+    if(!sel) return;
+    const list = [...sel].map(x => (cur.msgs || []).find(m => m.id === x)).filter(Boolean), live = list.filter(m => !m.deleted);
+    document.getElementById('chatSelCnt').textContent = sel.size;
+    selBar.querySelector('[data-sel=reply]').hidden = !(sel.size === 1 && live.length === 1);
+    selBar.querySelector('[data-sel=more]').hidden = sel.size !== 1;
+    selBar.querySelector('[data-sel=copy]').hidden = !live.some(m => m.text);
+    selBar.querySelector('[data-sel=fwd]').hidden = !live.length;
+  };
+  const startSel = mid => { sel = new Set([mid]); document.querySelectorAll('.wa-menu, .wa-rx-pop').forEach(x => x.remove()); paintSel(); };
+  const toggleSel = mid => { if(!sel) return startSel(mid); sel.has(mid) ? sel.delete(mid) : sel.add(mid); paintSel(); };
+  body.addEventListener('click', e => {
+    if(!sel) return;
+    const row = e.target.closest && e.target.closest('[data-row]');
+    e.preventDefault(); e.stopPropagation();
+    if(lpFired){ lpFired = false; return; }
+    if(row) toggleSel(row.dataset.row);
+  }, true);
+  // מחיקה לגמרי: הודעה שלי (או מנהל) – נעלמת אצל כולם; הודעה של אחר – נעלמת רק אצלי
+  const wipeMsgs = async ids => {
+    const n = ids.length;
+    if(!(await showConfirmModal(n > 1 ? 'למחוק לגמרי ' + n + ' הודעות?' : 'למחוק את ההודעה לגמרי?', { yes: 'מחיקה', danger: true }))) return;
+    await saveMsgs(msgs => { ids.forEach(x => { const k = msgs.findIndex(y => y.id === x); if(k < 0) return; const t = msgs[k]; if(t.from === me || me === 'mgr') msgs.splice(k, 1); else t.hiddenFor = [...new Set([...(t.hiddenFor || []), me])]; }); }, 'chatWipe');
+  };
+  selBar.querySelectorAll('[data-sel]').forEach(b => b.onclick = async ev => {
+    ev.stopPropagation();
+    const act = b.dataset.sel, ids = sel ? [...sel] : [], list = ids.map(x => (cur.msgs || []).find(m => m.id === x)).filter(Boolean).sort((a, z) => String(a.at).localeCompare(String(z.at)));
+    if(act === 'x'){ sel = null; return paintSel(); }
+    if(act === 'more'){ const el = body.querySelector(`[data-mid="${ids[0]}"]`); const one = ids[0]; sel = null; paintSel(); if(el) openMsgMenu(el, one); return; }
+    if(act === 'reply'){ sel = null; paintSel(); return setReply(list[0]); }
+    if(act === 'copy'){ const t = list.filter(m => m.text && !m.deleted).map(m => list.length > 1 ? '[' + chatTime(m.at) + '] ' + (m.from === me ? 'אני' : (state._chatNames[m.from] || '')) + ': ' + m.text : m.text).join('\n'); try{ await navigator.clipboard.writeText(t); showToast('הועתק'); }catch(e){ showToast('לא הצלחנו להעתיק'); } sel = null; return paintSel(); }
+    if(act === 'fwd'){ sel = null; paintSel(); return forwardMsgs(list); }
+    if(act === 'del'){
+      const live = list.filter(m => !m.deleted), mineLive = live.filter(m => m.from === me || me === 'mgr');
+      if(mineLive.length && mineLive.length === live.length && live.length){
+        const ch = await showConfirmModal('למחוק ' + (list.length > 1 ? list.length + ' הודעות' : 'את ההודעה') + ' אצל כולם?', { yes: 'מחיקה אצל כולם', danger: true });
+        if(!ch) return;
+        await saveMsgs(msgs => { list.forEach(m => { const k = msgs.findIndex(y => y.id === m.id); if(k < 0) return; if(msgs[k].deleted) msgs.splice(k, 1); else { const t = msgs[k]; ['text', 'fileId', 'fileName', 'fileType', 'files', 'audioId', 'reply', 'reactions', 'poll', 'loc'].forEach(q => delete t[q]); t.deleted = true; } }); }, 'chatDelMany');
+      } else await wipeMsgs(ids);
+      sel = null; paintSel();
+    }
+  });
   // ---- סקר: הצבעה (לחיצה שנייה מבטלת). בסקר של בחירה אחת – ההצבעה עוברת לאפשרות החדשה
   body.addEventListener('click', e => {
     const w = e.target.closest && e.target.closest('[data-poll-who]');
@@ -8788,7 +8896,7 @@ async function renderChatRoom(role, otherId){
       const d = snap.exists() ? snap.data() : { msgs: [] };
       typing = d.typing || null;
       if(custom && Array.isArray(d.members)) members = d.members;
-      const sig = JSON.stringify([(d.cleared || {})[me] || '', (d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted, m.reactions || null, m.edited ? m.text : 0, m.poll ? m.poll.votes || {} : 0])]);
+      const sig = JSON.stringify([(d.cleared || {})[me] || '', (d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted, m.reactions || null, m.edited ? m.text : 0, m.poll ? m.poll.votes || {} : 0, (m.hiddenFor || []).length])]);
       if(sig !== paint.sig){ paint.sig = sig; cur = d; paint(); markSeen(); } else { cur = { ...cur, pinned: d.pinned }; paintTyping(); }
       paintPin(); paintSched(d.sched || []); deliverDueSched(id, d);
     }, () => {});
@@ -8981,13 +9089,14 @@ function openSoundPicker(role, btn){
 }
 function soundKeyDoc(role){ return role === 'mgr' ? 'mgr-prefs' : (state.currentEmployee && state.currentEmployee.id); }
 async function loadMsgSoundPref(role){
-  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0; state._chatMutes = d.chatMutes || {};
+  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0; state._chatMutes = d.chatMutes || {}; state._chatArchive = d.chatArchive || [];
     const b = document.getElementById('msgSoundBtn'); if(b) b.textContent = state._msgSoundMuted ? '🔕' : '🔔'; }catch(e){}
 }
 async function setMsgSoundPref(role, patch){
   if('muteMsgSound' in patch) state._msgSoundMuted = patch.muteMsgSound;
   if('msgSound' in patch) state._msgSound = patch.msgSound;
   if('chatMutes' in patch) state._chatMutes = patch.chatMutes;
+  if('chatArchive' in patch) state._chatArchive = patch.chatArchive;
   const id = soundKeyDoc(role); if(!id) return;
   await saveDoc(() => setDoc(doc(db, 'settings', id), patch, { merge: true }), 'msgSound');
   if(state._settingsCache && state._settingsCache.empId === id) state._settingsCache = null;
@@ -9353,6 +9462,7 @@ function headsUp(who, where, body, onOpen){
 }
 
 // ================= עזרי צ׳אט: השתקה, הודעות מתוזמנות, סקרים, הודעה ← משימה =================
+function chatArchived(id){ return (state._chatArchive || []).includes(id); }
 function chatMuted(id){ const v = (state._chatMutes || {})[id]; return v === 'forever' || (!!v && v > todayStr() + 'T' + nowTimeStr().slice(0, 5)); }
 // הודעה מתוזמנת שהגיע זמנה עוברת להודעות. כל משתתף מחובר יכול לעשות את זה (וגם הגשר כל דקה) – בלי כפילויות
 async function deliverDueSched(id, d){
@@ -9519,6 +9629,7 @@ function statusCompose(role){
       <label class="btn ghost small" style="margin:0; cursor:pointer;">🖼️ תמונה מהגלריה<input type="file" id="stImg" accept="image/*" hidden /></label>
       <label class="btn ghost small" style="margin:0; cursor:pointer;">📷 צילום<input type="file" id="stCam" accept="image/*" capture="environment" hidden /></label>
     </div>
+    <p class="hint" style="font-size:12.5px; margin:0;">אפשר גם להדביק תמונה: Ctrl+V או Win+V</p>
     <div class="error-msg" id="stErr"></div>
     <div class="actions"><button type="button" class="btn brass" id="stPost">פרסום</button><button type="button" class="btn ghost" id="stCancel">ביטול</button></div></div>`;
   document.body.appendChild(ov);
@@ -9527,6 +9638,13 @@ function statusCompose(role){
   ov.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { bg = b.dataset.c; prev.style.background = bg; });
   const onImg = e => { const f = e.target.files && e.target.files[0]; if(!f) return; imgFile = f; prev.style.background = `#000 url(${URL.createObjectURL(f)}) center/contain no-repeat`; ta.placeholder = 'כיתוב (לא חובה)'; };
   ov.querySelector('#stImg').onchange = onImg; ov.querySelector('#stCam').onchange = onImg;
+  // הדבקת תמונה (Ctrl+V או בחירה מהיסטוריית הלוח ב-Win+V)
+  const onPaste = e => {
+    if(!document.body.contains(ov)){ document.removeEventListener('paste', onPaste); return; }
+    const f = [...((e.clipboardData && e.clipboardData.items) || [])].filter(it => it.kind === 'file' && /^image\//.test(it.type)).map(it => it.getAsFile()).filter(Boolean)[0];
+    if(!f) return; e.preventDefault(); onImg({ target: { files: [f] } });
+  };
+  document.addEventListener('paste', onPaste);
   ov.querySelector('#stCancel').onclick = () => ov.remove();
   ov.querySelector('#stPost').onclick = async e => {
     const btn = e.currentTarget, text = ta.value.trim();
