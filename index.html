@@ -882,6 +882,53 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .confirm-msg{ white-space:pre-line; }
 .wa-avatar{ overflow:hidden; }
 .wa-avatar img{ width:100%; height:100%; object-fit:cover; display:block; border-radius:50%; }
+.wa-schedbar{ flex:0 0 auto; background:#E7F3FF; color:#0B5394; font-size:13.5px; padding:7px 14px; cursor:pointer; border-bottom:1px solid #D0E4F7; }
+.wa-mute-ic{ font-size:12px; opacity:.75; }
+.wa-poll{ min-width:230px; margin:2px 0 4px; }
+.wa-poll-q{ font-weight:700; margin-bottom:2px; }
+.wa-poll-hint{ font-size:12px; color:#667781; margin-bottom:6px; }
+.wa-poll-opt{ position:relative; display:flex; align-items:center; gap:8px; width:100%; border:none; background:rgba(0,0,0,.04); border-radius:8px; padding:8px 10px; margin-bottom:5px; font:inherit; font-size:14px; color:inherit; cursor:pointer; text-align:right; overflow:hidden; }
+.wa-poll-opt:disabled{ cursor:default; }
+.wa-poll-box{ flex:0 0 18px; height:18px; border-radius:50%; border:2px solid #8696A0; display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; position:relative; z-index:1; }
+.wa-poll-opt.on .wa-poll-box{ background:#00A884; border-color:#00A884; }
+.wa-poll-txt{ flex:1; position:relative; z-index:1; }
+.wa-poll-n{ font-size:13px; color:#667781; position:relative; z-index:1; }
+.wa-poll-bar{ position:absolute; right:0; top:0; bottom:0; background:rgba(0,168,132,.18); transition:width .3s; }
+.wa-poll-who{ border:none; background:none; color:#008069; font:inherit; font-size:13px; cursor:pointer; padding:2px 0; }
+/* ---- מצב כהה לצ׳אט ---- */
+body.wa-dark .wa-full, body.wa-dark .wa-full-body, body.wa-dark .wa-room{ background:#111B21; color:#E9EDEF; }
+body.wa-dark .wa-full-head, body.wa-dark .wa-room .wa-room-head{ background:#202C33; }
+body.wa-dark .wa-full-body .card{ background:#111B21; color:#E9EDEF; }
+body.wa-dark .wa-contact{ color:#E9EDEF; } body.wa-dark .wa-contact b{ color:#E9EDEF; }
+body.wa-dark .wa-contact:hover{ background:#202C33; }
+body.wa-dark .wa-c-prev, body.wa-dark .wa-c-time, body.wa-dark .st-name, body.wa-dark .wa-mon-title{ color:#8696A0; }
+body.wa-dark .wa-home-search input{ background:#202C33 !important; color:#E9EDEF; }
+body.wa-dark .wa-avatar{ background:#2A3942; color:#AEBAC1; }
+body.wa-dark .wa-chat{ background-color:#0B141A; background-image:radial-gradient(rgba(255,255,255,.03) 1px, transparent 1px); }
+body.wa-dark .wa-bubble{ color:#E9EDEF; }
+body.wa-dark .wa-row.in .wa-bubble{ background:#202C33; }
+body.wa-dark .wa-row.out .wa-bubble{ background:#005C4B; }
+body.wa-dark .wa-row.in .wa-bubble::before{ border-bottom-color:#202C33; border-color:transparent transparent #202C33 transparent; }
+body.wa-dark .wa-row.out .wa-bubble::before{ border-color:transparent #005C4B transparent transparent; }
+body.wa-dark .wa-time, body.wa-dark .wa-fwd, body.wa-dark .wa-poll-hint, body.wa-dark .wa-poll-n{ color:rgba(233,237,239,.6); }
+body.wa-dark .wa-compose, body.wa-dark .wa-replybar, body.wa-dark .wa-tray, body.wa-dark .wa-pinbar, body.wa-dark .wa-searchbar{ background:#202C33; color:#E9EDEF; }
+body.wa-dark .wa-inputwrap, body.wa-dark .wa-btn.mic{ background:#2A3942; }
+body.wa-dark .wa-inputwrap textarea, body.wa-dark .wa-searchbar input{ color:#E9EDEF; background:transparent !important; }
+body.wa-dark .wa-in-btn, body.wa-dark .wa-btn.mic, body.wa-dark .wa-back{ color:#AEBAC1; }
+body.wa-dark .wa-full-head .wa-back, body.wa-dark .wa-room-head .wa-back{ color:#E9EDEF; }
+body.wa-dark .wa-voice, body.wa-dark .wa-file, body.wa-dark .wa-poll-opt, body.wa-dark .wa-quote{ background:rgba(255,255,255,.07); color:#E9EDEF; }
+body.wa-dark .wa-quote span{ color:#AEBAC1; }
+body.wa-dark .wa-replybar .wa-quote{ background:#2A3942; }
+body.wa-dark .wa-menu, body.wa-dark .att-menu, body.wa-dark .wa-rx-pop{ background:#233138; }
+body.wa-dark .wa-menu-list button, body.wa-dark .att-menu button{ color:#E9EDEF; }
+body.wa-dark .wa-menu-list button:hover, body.wa-dark .att-menu button:hover{ background:#182229; }
+body.wa-dark .wa-rx-show span{ background:#202C33; }
+body.wa-dark .wa-notice{ background:#2B2A1F; color:#D9CF9F; border-color:#4A4425; }
+body.wa-dark .wa-notif{ background:#1F2C33; color:#E9EDEF; border-color:#2A3942; }
+body.wa-dark .wa-notif-ok{ color:#7FD1AE; }
+body.wa-dark .wa-schedbar{ background:#1B2B3A; color:#8CC4F5; border-color:#22384B; }
+body.wa-dark .wa-poll-who{ color:#53BDEB; }
+body.wa-dark .wa-deleted{ color:#8696A0 !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7977,7 +8024,7 @@ async function playTaskAudio(btn){
   taskAudioEl.play().catch(() => { btn.textContent = idle; showToast('לא הצלחנו להשמיע'); });
 }
 
-const WAI = {cam:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2.2l1.4-2h6.8l1.4 2H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.6"/></svg>',search:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>',dial:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>',attach:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>',send:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.6 20.4 3 12l17.6-8.4V10L8 12l12.6 2z"/></svg>',mic:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V5a3.5 3.5 0 1 0-7 0v6a3.5 3.5 0 0 0 3.5 3.5zm6.3-3.6a.9.9 0 0 0-1.8 0 4.5 4.5 0 0 1-9 0 .9.9 0 0 0-1.8 0 6.3 6.3 0 0 0 5.4 6.2V20H9a.9.9 0 0 0 0 1.8h6a.9.9 0 0 0 0-1.8h-2.1v-2.9a6.3 6.3 0 0 0 5.4-6.2z"/></svg>',stop:'<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',phone:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19.4 15.6l-2.6-.3a2 2 0 0 0-1.7.6l-1.9 1.9a15.1 15.1 0 0 1-6.6-6.6l1.9-1.9a2 2 0 0 0 .6-1.7l-.3-2.6A2 2 0 0 0 6.8 3.2H5A2 2 0 0 0 3 5.3 17.9 17.9 0 0 0 18.7 21a2 2 0 0 0 2.1-2v-1.7a2 2 0 0 0-1.4-1.7z"/></svg>',video:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M15.5 8.6V7a2 2 0 0 0-2-2h-9a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1.6l4.3 3a.8.8 0 0 0 1.2-.7V6.3a.8.8 0 0 0-1.2-.7z"/></svg>',trash:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',adduser:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>',back:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 4l-1.4 1.4 5.6 5.6H4v2h12.2l-5.6 5.6L12 20l8-8z"/></svg>',group:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1a4.2 4.2 0 0 1 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>',newgroup:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4z"/></svg>',chev:'<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.4 9.3 12 13.9l4.6-4.6L18 10.7l-6 6-6-6z"/></svg>',smile:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/></svg>',eye:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 5C7 5 2.7 8.1 1 12.5 2.7 16.9 7 20 12 20s9.3-3.1 11-7.5C21.3 8.1 17 5 12 5zm0 12.5a5 5 0 1 1 5-5 5 5 0 0 1-5 5zm0-8a3 3 0 1 0 3 3 3 3 0 0 0-3-3z"/></svg>',ticks:'<svg viewBox="0 0 18 12" width="16" height="11" fill="currentColor"><path d="M17.4.6a.7.7 0 0 0-1 0L9.6 7.4 8.6 6.4l-1 1 1.5 1.5a.7.7 0 0 0 1 0L17.4 1.6a.7.7 0 0 0 0-1zM12.6.6a.7.7 0 0 0-1 0L4.8 7.4 1.6 4.2a.7.7 0 0 0-1 1l3.7 3.7a.7.7 0 0 0 1 0L12.6 1.6a.7.7 0 0 0 0-1z"/></svg>'};
+const WAI = {plus:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',cam:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2.2l1.4-2h6.8l1.4 2H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.6"/></svg>',search:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>',dial:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>',attach:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>',send:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.6 20.4 3 12l17.6-8.4V10L8 12l12.6 2z"/></svg>',mic:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V5a3.5 3.5 0 1 0-7 0v6a3.5 3.5 0 0 0 3.5 3.5zm6.3-3.6a.9.9 0 0 0-1.8 0 4.5 4.5 0 0 1-9 0 .9.9 0 0 0-1.8 0 6.3 6.3 0 0 0 5.4 6.2V20H9a.9.9 0 0 0 0 1.8h6a.9.9 0 0 0 0-1.8h-2.1v-2.9a6.3 6.3 0 0 0 5.4-6.2z"/></svg>',stop:'<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',phone:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19.4 15.6l-2.6-.3a2 2 0 0 0-1.7.6l-1.9 1.9a15.1 15.1 0 0 1-6.6-6.6l1.9-1.9a2 2 0 0 0 .6-1.7l-.3-2.6A2 2 0 0 0 6.8 3.2H5A2 2 0 0 0 3 5.3 17.9 17.9 0 0 0 18.7 21a2 2 0 0 0 2.1-2v-1.7a2 2 0 0 0-1.4-1.7z"/></svg>',video:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M15.5 8.6V7a2 2 0 0 0-2-2h-9a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1.6l4.3 3a.8.8 0 0 0 1.2-.7V6.3a.8.8 0 0 0-1.2-.7z"/></svg>',trash:'<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',adduser:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>',back:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 4l-1.4 1.4 5.6 5.6H4v2h12.2l-5.6 5.6L12 20l8-8z"/></svg>',group:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1a4.2 4.2 0 0 1 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>',newgroup:'<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4z"/></svg>',chev:'<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7.4 9.3 12 13.9l4.6-4.6L18 10.7l-6 6-6-6z"/></svg>',smile:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/></svg>',eye:'<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 5C7 5 2.7 8.1 1 12.5 2.7 16.9 7 20 12 20s9.3-3.1 11-7.5C21.3 8.1 17 5 12 5zm0 12.5a5 5 0 1 1 5-5 5 5 0 0 1-5 5zm0-8a3 3 0 1 0 3 3 3 3 0 0 0-3-3z"/></svg>',ticks:'<svg viewBox="0 0 18 12" width="16" height="11" fill="currentColor"><path d="M17.4.6a.7.7 0 0 0-1 0L9.6 7.4 8.6 6.4l-1 1 1.5 1.5a.7.7 0 0 0 1 0L17.4 1.6a.7.7 0 0 0 0-1zM12.6.6a.7.7 0 0 0-1 0L4.8 7.4 1.6 4.2a.7.7 0 0 0-1 1l3.7 3.7a.7.7 0 0 0 1 0L12.6 1.6a.7.7 0 0 0 0-1z"/></svg>'};
 
 // טיוטות בצ'אט: מה שהתחלתם לכתוב נשמר לכל שיחה, גם אם יוצאים מהדף או סוגרים את האתר
 function draftKey(me, chatId){ return 'chatDraft:' + me + ':' + chatId; }
@@ -8052,7 +8099,7 @@ async function renderChatHome(role){
   const chats = await Promise.all(contacts.map((c, i) => c.custom ? Promise.resolve(groups.find(g => g.id === c.id)) : loadChat(chatIdWith(me, c.id))));
   const rows = contacts.map((c, i) => {
     const ch = chats[i] || { msgs: [] }, last = visibleMsgs(ch, me).slice(-1)[0], un = chatUnread(ch, me);
-    const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : ''))) : 'אין הודעות עדיין';
+    const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : last.poll ? '📊 ' + last.poll.q : ''))) : 'אין הודעות עדיין';
     // וי כפול ליד ההודעה האחרונה שלי: אפור = נשלחה, כחול = כל הצד השני קרא
     let ticks = '';
     if(last && last.from === me && !last.deleted && !c.self){
@@ -8067,7 +8114,8 @@ async function renderChatHome(role){
     <div class="wa-full-head">
       ${coUser ? '' : `<button type="button" class="wa-back" id="waFullClose" aria-label="חזרה">${WAI.back}</button>`}
       <b>צ׳אט</b>
-      <button type="button" class="wa-back" id="myProfileBtn" title="תמונת הפרופיל שלי" aria-label="תמונת פרופיל" style="margin-inline-start:auto; padding:0;"><span class="wa-avatar" data-av="${me}" style="width:32px; height:32px; flex-basis:32px; font-size:14px;">${escapeHtml((state._chatNames[me] || 'אני').charAt(0))}</span></button>
+      <button type="button" class="wa-back" id="chatDarkBtn" title="מצב כהה" aria-label="מצב כהה" style="margin-inline-start:auto; color:#fff; font-size:18px;">${document.body.classList.contains('wa-dark') ? '☀️' : '🌙'}</button>
+      <button type="button" class="wa-back" id="myProfileBtn" title="תמונת הפרופיל שלי" aria-label="תמונת פרופיל" style="padding:0;"><span class="wa-avatar" data-av="${me}" style="width:32px; height:32px; flex-basis:32px; font-size:14px;">${escapeHtml((state._chatNames[me] || 'אני').charAt(0))}</span></button>
       <button type="button" class="wa-back" id="msgSoundBtn" title="${state._msgSoundMuted ? 'הפעלת צליל הודעות' : 'השתקת צליל הודעות'}" aria-label="צליל הודעות" style="color:#fff; font-size:19px;">${state._msgSoundMuted ? '🔕' : '🔔'}</button>
       ${coUser ? `<button type="button" class="logout-link" id="waFullLogout" style="margin-inline-start:auto;">התנתקות</button>` : ''}
     </div>
@@ -8082,7 +8130,7 @@ async function renderChatHome(role){
       ${rows.map(r => `
         <button type="button" class="wa-contact" data-chat-open="${r.c.id}">
           <span class="wa-avatar${r.c.group ? ' group' : ''}${r.c.self ? ' self' : ''}"${r.c.group || r.c.self ? '' : ` data-av="${r.c.id}"`}>${r.c.self ? '📝' : r.c.group ? WAI.group : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
-          <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(r.c.name)}</b><span class="wa-c-time">${r.last ? chatTime(r.last.at) : ''}</span></span>
+          <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(r.c.name)}</b><span class="wa-c-time">${chatMuted(chatIdWith(me, r.c.id)) ? '<span class="wa-mute-ic">🔕</span> ' : ''}${r.last ? chatTime(r.last.at) : ''}</span></span>
             <span class="wa-c-bottom">${r.ticks}<span class="wa-c-prev" data-prev-for="${chatIdWith(me, r.c.id)}" data-prev-orig="${escapeHtml(r.prev)}">${getDraft(me, chatIdWith(me, r.c.id)) ? `<span class="wa-draft">טיוטה:</span> ${escapeHtml(getDraft(me, chatIdWith(me, r.c.id)).slice(0, 60))}` : escapeHtml(r.prev)}</span>${r.un ? `<span class="wa-c-unread">${r.un}</span>` : ''}</span></span>
         </button>`).join('')}
     </div>
@@ -8093,6 +8141,7 @@ async function renderChatHome(role){
   renderStatusStrip(role);
   fillAvatars(target);
   document.getElementById('myProfileBtn').onclick = () => editChatPhoto(role);
+  document.getElementById('chatDarkBtn').onclick = e => { const on = document.body.classList.toggle('wa-dark'); try{ localStorage.setItem('waDark', on ? '1' : ''); }catch(x){} e.currentTarget.textContent = on ? '☀️' : '🌙'; };
   clearInterval(state._stTimer);
   state._stTimer = setInterval(() => {
     if(!document.getElementById('statusStrip')){ clearInterval(state._stTimer); return; }
@@ -8198,8 +8247,9 @@ function chatBubblesHtml(ch, me, isGroup, members){
         return (imgs.length ? `<div class="wa-album n${Math.min(imgs.length, 4)}">${imgs.slice(0, 4).map((x, k) => `<div class="wa-album-cell"><img class="wa-img" data-file-img="${x.fileId}" alt="" />${k === 3 && imgs.length > 4 ? `<span class="wa-album-more" data-album-more="${m.id}">+${imgs.length - 4}</span>` : ''}</div>`).join('')}</div>` : '')
           + docs.map(x => `<button type="button" class="wa-file" data-file-open="${x.fileId}" data-file-name="${escapeHtml(x.fileName || 'קובץ')}">📄 ${escapeHtml(x.fileName || 'קובץ')}</button>`).join(''); })() : ''}
       ${m.audioId ? `<button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button>` : ''}
+      ${m.poll ? pollHtml(m, me) : ''}
       ${m.text ? `<div class="wa-text">${linkify(m.text)}</div>` : ''}
-      <span class="wa-time">${m.edited ? '<i class="wa-edited">נערכה</i>' : ''}${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
+      <span class="wa-time">${m.scheduled ? '<i class="wa-edited">⏰</i>' : ''}${m.edited ? '<i class="wa-edited">נערכה</i>' : ''}${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
     </div>${reactHtml}</div>`;
   }).join('');
 }
@@ -8221,16 +8271,19 @@ async function renderChatRoom(role, otherId){
         <span style="flex:1;"><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span>
         ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">' + WAI.adduser + '</button>' : ''}
         ${isGroup || selfChat ? '' : '<a class="wa-back" id="chatTel" title="התקשרות לטלפון" aria-label="התקשרות לטלפון" hidden>' + WAI.dial + '</a><button type="button" class="wa-back" id="chatVideo" title="שיחת וידאו" aria-label="שיחת וידאו">' + WAI.video + '</button><button type="button" class="wa-back" id="chatCall" title="שיחה קולית" aria-label="שיחה קולית">' + WAI.phone + '</button>'}
+        <button type="button" class="wa-back" id="chatMuteBtn" title="השתקת השיחה" aria-label="השתקת השיחה" style="font-size:18px;">${chatMuted(id) ? '🔕' : '🔔'}</button>
         <button type="button" class="wa-back" id="chatSearchBtn" title="חיפוש בשיחה" aria-label="חיפוש בשיחה">${WAI.search}</button>
         <button type="button" class="wa-back" id="chatClear" title="ניקוי הצ׳אט" aria-label="ניקוי הצ׳אט">${WAI.trash}</button></div>
       <div class="wa-searchbar" id="chatSearchBar" hidden><input type="search" id="chatSearchIn" placeholder="חיפוש בשיחה..." /><span id="chatSearchCnt" class="hint"></span><button type="button" class="wa-back" id="chatSearchUp" aria-label="הקודמת">▲</button><button type="button" class="wa-back" id="chatSearchDown" aria-label="הבאה">▼</button><button type="button" class="wa-back" id="chatSearchX" aria-label="סגירה">✕</button></div>
       <div class="wa-pinbar" id="chatPinBar" hidden><span>📌</span><span class="wa-pin-txt" id="chatPinTxt"></span><button type="button" class="wa-back" id="chatPinX" title="ביטול ההצמדה" aria-label="ביטול ההצמדה">✕</button></div>
+      <div class="wa-schedbar" id="chatSchedBar" hidden></div>
       <div class="wa-chat wa-room-chat" id="chatBody"></div>
       <div class="wa-tray" id="chatTray" hidden></div>
       <div class="wa-replybar" id="chatReplyBar" hidden><div class="wa-quote"><b id="chatReplyWho"></b><span id="chatReplySnip"></span></div><button type="button" class="wa-back" id="chatReplyX" aria-label="ביטול">✕</button></div>
       <div class="wa-compose">
         <div class="wa-inputwrap">
           <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
+          <button type="button" class="wa-in-btn" id="chatMoreBtn" title="סקר / הודעה מתוזמנת" aria-label="עוד">${WAI.plus}</button>
           <button type="button" class="wa-in-btn" id="chatAttachBtn" title="צירוף" aria-label="צירוף">${WAI.attach}</button>
           <button type="button" class="wa-in-btn" id="chatCamBtn" title="מצלמה" aria-label="מצלמה">${WAI.cam}</button>
           <input type="file" id="chatFile" multiple hidden />
@@ -8356,7 +8409,7 @@ async function renderChatRoom(role, otherId){
     ov.querySelector('#miClose').onclick = close; ov.onclick = e => { if(e.target === ov) close(); };
   };
   // תפריט הודעה כמו בוואטסאפ: תגובה באימוג'י, השב, העתקה, העברה, מחיקה
-  const snipOf = m => m.text ? m.text.slice(0, 90) : m.fileId ? '📎 ' + (m.fileName || 'קובץ') : m.files ? '📷 ' + m.files.length + ' קבצים' : m.audioId ? '🎙 הודעה קולית' : '';
+  const snipOf = m => m.text ? m.text.slice(0, 90) : m.fileId ? '📎 ' + (m.fileName || 'קובץ') : m.files ? '📷 ' + m.files.length + ' קבצים' : m.audioId ? '🎙 הודעה קולית' : m.poll ? '📊 ' + m.poll.q : '';
   let replyTo = null;
   const setReply = m => {
     replyTo = m ? { id: m.id, from: m.from, snip: snipOf(m) } : null;
@@ -8383,6 +8436,7 @@ async function renderChatRoom(role, otherId){
         <button type="button" data-act="pin">📌&nbsp; ${(cur.pinned && cur.pinned.id === m.id) ? 'ביטול הצמדה' : 'הצמדה'}</button>
         ${m.text ? '<button type="button" data-act="copy">📋&nbsp; העתקה</button>' : ''}
         <button type="button" data-act="fwd">↪&nbsp; העברה</button>
+        ${(m.text || m.fileId) && !m.call ? '<button type="button" data-act="task">✔&nbsp; הפוך למשימה</button>' : ''}
         ${m.from === me && !selfChat ? '<button type="button" data-act="info">ℹ️&nbsp; פרטי הודעה</button>' : ''}
         ${canDel ? '<button type="button" data-act="del" class="danger">🗑&nbsp; מחיקה</button>' : ''}</div>`);
     document.body.appendChild(pop);
@@ -8403,6 +8457,7 @@ async function renderChatRoom(role, otherId){
       }
       else if(act === 'copy'){ try{ await navigator.clipboard.writeText(m.text); showToast('הועתק'); }catch(e){ showToast('לא הצלחנו להעתיק'); } }
       else if(act === 'fwd') forwardMsg(m);
+      else if(act === 'task') msgToTask(role, m, otherId);
       else if(act === 'info') msgInfo(m);
       else if(act === 'del'){
         if(!(await showConfirmModal('למחוק את ההודעה? היא תימחק אצל כולם.', { yes: 'מחיקה', danger: true }))) return;
@@ -8579,6 +8634,134 @@ async function renderChatRoom(role, otherId){
       rec.start(); mic.innerHTML = WAI.stop; mic.classList.add('rec'); sigTyping('recording');
     }catch(err){ stEl.textContent = 'אין גישה למיקרופון. יש לאשר הרשאה בדפדפן.'; }
   };
+  // ---- סקר: הצבעה (לחיצה שנייה מבטלת). בסקר של בחירה אחת – ההצבעה עוברת לאפשרות החדשה
+  body.addEventListener('click', e => {
+    const w = e.target.closest && e.target.closest('[data-poll-who]');
+    if(w){ const m = (cur.msgs || []).find(x => x.id === w.dataset.pollWho); if(m) pollVoters(m); return; }
+    const b = e.target.closest && e.target.closest('[data-vote]'); if(!b) return;
+    const [mid, k] = b.dataset.vote.split(':'), idx = +k;
+    const apply = t => { const v = { ...((t.poll || {}).votes || {}) }; let mine = (v[me] || []).slice();
+      if(mine.includes(idx)) mine = mine.filter(x => x !== idx); else mine = t.poll.multi ? [...mine, idx] : [idx];
+      if(mine.length) v[me] = mine; else delete v[me]; t.poll = { ...t.poll, votes: v }; };
+    const loc = (cur.msgs || []).find(x => x.id === mid); if(!loc || !loc.poll) return;
+    apply(loc); paint.sig = null; paint();
+    saveMsgs(msgs => { const t = msgs.find(y => y.id === mid); if(!t || !t.poll) return false; apply(t); }, 'chatVote');
+  });
+  const pollVoters = m => {
+    const v = m.poll.votes || {};
+    const html = m.poll.opts.map((o, i) => { const who = Object.keys(v).filter(x => (v[x] || []).includes(i)); return `<div class="msginfo-row"><b>${escapeHtml(o)} · ${who.length}</b><span>${who.map(x => escapeHtml(x === me ? 'אתה' : (state._chatNames[x] || ''))).join(', ') || '—'}</span></div>`; }).join('');
+    const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+    ov.innerHTML = `<div class="confirm-box msginfo"><h3 style="margin:0 0 10px;">📊 ${escapeHtml(m.poll.q)}</h3>${html}<div class="actions"><button type="button" class="btn brass">סגירה</button></div></div>`;
+    document.body.appendChild(ov); ov.querySelector('button').onclick = () => ov.remove(); ov.onclick = e => { if(e.target === ov) ov.remove(); };
+  };
+  // ---- כפתור ＋: סקר או הודעה מתוזמנת
+  document.getElementById('chatMoreBtn').onclick = ev => {
+    ev.stopPropagation();
+    document.querySelectorAll('.att-menu').forEach(x => x.remove());
+    const btn = ev.currentTarget, mm = document.createElement('div'); mm.className = 'att-menu';
+    mm.innerHTML = `<button type="button" data-more="poll"><span class="att-ic" style="background:#FFB300;">📊</span>סקר</button><button type="button" data-more="sched"><span class="att-ic" style="background:#0795DC;">⏰</span>הודעה מתוזמנת</button>`;
+    document.body.appendChild(mm);
+    const r0 = btn.getBoundingClientRect();
+    mm.style.left = Math.max(8, Math.min(window.innerWidth - mm.offsetWidth - 8, r0.left + r0.width / 2 - mm.offsetWidth / 2)) + 'px';
+    mm.style.top = (r0.top - mm.offsetHeight - 10) + 'px';
+    const close = e => { if(!mm.contains(e.target)){ mm.remove(); document.removeEventListener('click', close, true); } };
+    setTimeout(() => document.addEventListener('click', close, true), 0);
+    mm.querySelectorAll('[data-more]').forEach(b => b.onclick = () => { mm.remove(); b.dataset.more === 'poll' ? newPoll() : newSched(); });
+  };
+  const newPoll = () => {
+    const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+    ov.innerHTML = `<div class="confirm-box" style="max-width:400px; width:94vw;">
+      <h3 style="margin:0 0 10px;">📊 סקר חדש</h3>
+      <label>שאלה</label><input type="text" id="plQ" maxlength="200" placeholder="למשל: מי מגיע ביום שישי?" />
+      <label style="margin-top:10px;">אפשרויות</label><div id="plOpts"></div>
+      <button type="button" class="btn ghost small" id="plAdd" style="margin:6px 0;">＋ אפשרות</button>
+      <label style="display:flex; align-items:center; gap:8px; margin-top:6px; font-weight:400;"><input type="checkbox" id="plMulti" style="width:auto;" /> אפשר לבחור יותר מתשובה אחת</label>
+      <div class="error-msg" id="plErr"></div>
+      <div class="actions"><button type="button" class="btn brass" id="plSend">שליחה</button><button type="button" class="btn ghost" id="plX">ביטול</button></div></div>`;
+    document.body.appendChild(ov);
+    const box = ov.querySelector('#plOpts');
+    const addOpt = () => { if(box.children.length >= 10) return; const i = document.createElement('input'); i.type = 'text'; i.maxLength = 80; i.placeholder = 'אפשרות ' + (box.children.length + 1); i.style.marginBottom = '6px'; box.appendChild(i); };
+    addOpt(); addOpt();
+    ov.querySelector('#plAdd').onclick = () => { addOpt(); box.lastChild.focus(); };
+    ov.querySelector('#plX').onclick = () => ov.remove();
+    ov.querySelector('#plSend').onclick = () => {
+      const q = ov.querySelector('#plQ').value.trim(), opts = [...box.querySelectorAll('input')].map(x => x.value.trim()).filter(Boolean);
+      if(!q) return ov.querySelector('#plErr').textContent = 'כותבים שאלה';
+      if(opts.length < 2) return ov.querySelector('#plErr').textContent = 'צריך לפחות שתי אפשרויות';
+      ov.remove(); send({ poll: { q, opts, multi: ov.querySelector('#plMulti').checked, votes: {} } });
+    };
+    setTimeout(() => ov.querySelector('#plQ').focus(), 50);
+  };
+  const newSched = () => {
+    const later = new Date(ilNow().getTime() + 3600000), p2 = x => String(x).padStart(2, '0');
+    const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+    ov.innerHTML = `<div class="confirm-box" style="max-width:400px; width:94vw;">
+      <h3 style="margin:0 0 10px;">⏰ הודעה מתוזמנת</h3>
+      <label>ההודעה</label><textarea id="scT" rows="3" maxlength="1000" style="width:100%; box-sizing:border-box; font:inherit; padding:8px 10px; border-radius:10px; border:1px solid #CFD8DC; resize:vertical;"></textarea>
+      <div style="display:flex; gap:8px; margin-top:8px;"><div style="flex:1;"><label>תאריך</label><input type="date" id="scD" value="${later.getFullYear()}-${p2(later.getMonth() + 1)}-${p2(later.getDate())}" min="${todayStr()}" /></div>
+      <div style="flex:1;"><label>שעה</label><input type="time" id="scH" value="${p2(later.getHours())}:${p2(later.getMinutes())}" /></div></div>
+      <p class="hint" style="font-size:12.5px;">ההודעה תישלח לבד בשעה שנבחרה, גם אם האתר סגור.</p>
+      <div class="error-msg" id="scErr"></div>
+      <div class="actions"><button type="button" class="btn brass" id="scOk">תזמון</button><button type="button" class="btn ghost" id="scX">ביטול</button></div></div>`;
+    document.body.appendChild(ov);
+    const ta = ov.querySelector('#scT'); ta.value = input.value.trim();
+    ov.querySelector('#scX').onclick = () => ov.remove();
+    ov.querySelector('#scOk').onclick = async e => {
+      const text = ta.value.trim(), d = ov.querySelector('#scD').value, h = ov.querySelector('#scH').value, err = ov.querySelector('#scErr');
+      if(!text) return err.textContent = 'כותבים הודעה';
+      if(!d || !h) return err.textContent = 'בוחרים תאריך ושעה';
+      const sendAt = d + 'T' + h;
+      if(sendAt <= todayStr() + 'T' + nowTimeStr().slice(0, 5)) return err.textContent = 'השעה כבר עברה';
+      e.currentTarget.disabled = true;
+      const fresh = await loadChat(id) || { msgs: [] };
+      const sched = [...(fresh.sched || []), { id: uid() + uid(), from: me, sendAt, text }];
+      const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), custom ? { sched } : { sched, members }, { merge: true }), 'chatSched');
+      if(ok !== true){ e.currentTarget.disabled = false; return err.textContent = 'שגיאה בשמירה'; }
+      ov.remove();
+      if(ta.value.trim() === input.value.trim()){ input.value = ''; input.style.height = ''; setDraft(me, id, ''); }
+      showToast('ההודעה תישלח ב-' + d.split('-').reverse().slice(0, 2).join('/') + ' ' + h);
+    };
+    setTimeout(() => ta.focus(), 50);
+  };
+  const schedBar = document.getElementById('chatSchedBar');
+  const paintSched = list => {
+    const mine = list.filter(x => x && x.from === me);
+    schedBar.hidden = !mine.length;
+    schedBar.textContent = '⏰ ' + (mine.length === 1 ? 'הודעה מתוזמנת אחת' : mine.length + ' הודעות מתוזמנות') + ' · לחצו לצפייה';
+    schedBar.onclick = () => {
+      const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+      const fmtS = x => x.sendAt.slice(0, 10).split('-').reverse().slice(0, 2).join('/') + ' ' + x.sendAt.slice(11, 16);
+      ov.innerHTML = `<div class="confirm-box msginfo"><h3 style="margin:0 0 10px;">⏰ הודעות מתוזמנות</h3>${mine.sort((a, b) => a.sendAt.localeCompare(b.sendAt)).map(x => `<div class="msginfo-row"><b>${fmtS(x)}</b><span style="white-space:pre-wrap;">${escapeHtml(x.text)}</span><button type="button" class="btn ghost small" data-sc-del="${x.id}" style="margin-top:4px;">ביטול השליחה</button></div>`).join('')}
+        <div class="actions"><button type="button" class="btn brass" id="scClose">סגירה</button></div></div>`;
+      document.body.appendChild(ov);
+      ov.querySelector('#scClose').onclick = () => ov.remove();
+      ov.querySelectorAll('[data-sc-del]').forEach(b => b.onclick = async () => {
+        const fresh = await loadChat(id); if(!fresh) return;
+        const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), { sched: (fresh.sched || []).filter(x => x.id !== b.dataset.scDel) }, { merge: true }), 'chatSchedDel');
+        if(ok === true){ b.closest('.msginfo-row').remove(); showToast('השליחה בוטלה'); if(!ov.querySelector('[data-sc-del]')) ov.remove(); }
+      });
+    };
+  };
+  // ---- השתקת השיחה
+  document.getElementById('chatMuteBtn').onclick = ev => {
+    ev.stopPropagation();
+    document.querySelectorAll('.att-menu').forEach(x => x.remove());
+    const btn = ev.currentTarget, mm = document.createElement('div'); mm.className = 'att-menu';
+    mm.innerHTML = chatMuted(id) ? `<button type="button" data-mu="0">🔔&nbsp; ביטול ההשתקה</button>` : `<button type="button" data-mu="8">🔕&nbsp; ל-8 שעות</button><button type="button" data-mu="168">🔕&nbsp; לשבוע</button><button type="button" data-mu="-1">🔕&nbsp; תמיד</button>`;
+    document.body.appendChild(mm);
+    const r0 = btn.getBoundingClientRect();
+    mm.style.left = Math.max(8, Math.min(window.innerWidth - mm.offsetWidth - 8, r0.left)) + 'px'; mm.style.top = (r0.bottom + 6) + 'px';
+    const close = e => { if(!mm.contains(e.target)){ mm.remove(); document.removeEventListener('click', close, true); } };
+    setTimeout(() => document.addEventListener('click', close, true), 0);
+    mm.querySelectorAll('[data-mu]').forEach(b => b.onclick = async () => {
+      mm.remove();
+      const h = +b.dataset.mu;
+      const until = h === 0 ? null : h < 0 ? 'forever' : (() => { const d = new Date(ilNow().getTime() + h * 3600000), p2 = x => String(x).padStart(2, '0'); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()); })();
+      await setMsgSoundPref(role, { chatMutes: { ...(state._chatMutes || {}), [id]: until } });
+      btn.textContent = chatMuted(id) ? '🔕' : '🔔';
+      showToast(until ? 'השיחה הושתקה' : 'ההשתקה בוטלה');
+    });
+  };
   let unsub = () => {};
   try{
     unsub = onSnapshot(doc(db, 'chats', id), snap => {
@@ -8586,9 +8769,9 @@ async function renderChatRoom(role, otherId){
       const d = snap.exists() ? snap.data() : { msgs: [] };
       typing = d.typing || null;
       if(custom && Array.isArray(d.members)) members = d.members;
-      const sig = JSON.stringify([(d.cleared || {})[me] || '', (d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted, m.reactions || null, m.edited ? m.text : 0])]);
+      const sig = JSON.stringify([(d.cleared || {})[me] || '', (d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted, m.reactions || null, m.edited ? m.text : 0, m.poll ? m.poll.votes || {} : 0])]);
       if(sig !== paint.sig){ paint.sig = sig; cur = d; paint(); markSeen(); } else { cur = { ...cur, pinned: d.pinned }; paintTyping(); }
-      paintPin();
+      paintPin(); paintSched(d.sched || []); deliverDueSched(id, d);
     }, () => {});
   }catch(e){ cur = (await loadChat(id)) || { msgs: [] }; paint(); markSeen(); }
   const tick = setInterval(() => { if(!document.getElementById('chatBody')){ clearInterval(tick); return; } paintTyping(); }, 1500);
@@ -8665,6 +8848,7 @@ async function startChatNotifier(role){
     try{
       unsubs.push(onSnapshot(doc(db, 'chats', id), snap => {
         const d = snap.exists() ? snap.data() : {}, msgs = d.msgs || [];
+        deliverDueSched(id, d);
         const newest = msgs.slice(-1)[0];
         if(!(id in lastSeenIds)){ lastSeenIds[id] = newest ? newest.id : null; return; }   // טעינה ראשונה – לא מתריעים על ישנות
         const prevIdx = lastSeenIds[id] ? msgs.findIndex(m => m.id === lastSeenIds[id]) : -1;
@@ -8673,6 +8857,7 @@ async function startChatNotifier(role){
         if(!fresh.length) return;
         refreshChatBadge(role);
         const inRoomNow = document.getElementById('chatBody') && state._chatOpenId === id && document.visibilityState === 'visible';
+        if(chatMuted(id)) return;
         if(inRoomNow){ chatPing(); return; }
         notifyChat(role, id, d, fresh[fresh.length - 1]);
       }, () => {}));
@@ -8682,7 +8867,7 @@ async function startChatNotifier(role){
 function notifyChat(role, id, d, m){
   const who = state._chatNames[m.from] || 'הודעה חדשה';
   const where = id === 'team' ? 'כל הצוות' : /^g_/.test(id) ? (d.name || 'קבוצה') : '';
-  const body = m.text ? m.text.slice(0, 140) : m.files ? '📷 ' + m.files.length + ' קבצים' : m.fileId ? '📎 קובץ' : m.audioId ? '🎙 הודעה קולית' : '';
+  const body = m.text ? m.text.slice(0, 140) : m.files ? '📷 ' + m.files.length + ' קבצים' : m.fileId ? '📎 קובץ' : m.audioId ? '🎙 הודעה קולית' : m.poll ? '📊 ' + m.poll.q : '';
   chatPing(); flashTitle(who);
   if(document.visibilityState === 'visible') headsUp(who, where, body, () => {
     const other = id === 'team' || /^g_/.test(id) ? id : id.split('__').find(x => x !== chatMe(role));
@@ -8777,12 +8962,13 @@ function openSoundPicker(role, btn){
 }
 function soundKeyDoc(role){ return role === 'mgr' ? 'mgr-prefs' : (state.currentEmployee && state.currentEmployee.id); }
 async function loadMsgSoundPref(role){
-  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0;
+  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0; state._chatMutes = d.chatMutes || {};
     const b = document.getElementById('msgSoundBtn'); if(b) b.textContent = state._msgSoundMuted ? '🔕' : '🔔'; }catch(e){}
 }
 async function setMsgSoundPref(role, patch){
   if('muteMsgSound' in patch) state._msgSoundMuted = patch.muteMsgSound;
   if('msgSound' in patch) state._msgSound = patch.msgSound;
+  if('chatMutes' in patch) state._chatMutes = patch.chatMutes;
   const id = soundKeyDoc(role); if(!id) return;
   await saveDoc(() => setDoc(doc(db, 'settings', id), patch, { merge: true }), 'msgSound');
   if(state._settingsCache && state._settingsCache.empId === id) state._settingsCache = null;
@@ -8968,7 +9154,7 @@ async function renderChatMonitor(target, myGroupIds){
     return `<button type="button" class="wa-contact" data-mon-open="${c.id}">
       <span class="wa-avatar group">${WAI.eye}</span>
       <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(label(c))}</b><span class="wa-c-time">${chatTime(last.at)}</span></span>
-      <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml((state._chatNames[last.from] || '') + ': ' + (last.deleted ? '🚫 נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : ''))))}</span></span></span></button>`;
+      <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml((state._chatNames[last.from] || '') + ': ' + (last.deleted ? '🚫 נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : last.poll ? '📊 ' + last.poll.q : ''))))}</span></span></span></button>`;
   }).join('');
   target.appendChild(box);
   box.querySelectorAll('[data-mon-open]').forEach(b => b.onclick = () => renderChatMonitorRoom(others.find(c => c.id === b.dataset.monOpen), label));
@@ -9146,6 +9332,69 @@ function headsUp(who, where, body, onOpen){
   el.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
   el.addEventListener('touchmove', e => { if(sy !== null && e.touches[0].clientY - sy < -25){ sy = null; clearTimeout(t); hide(); } }, { passive: true });
 }
+
+// ================= עזרי צ׳אט: השתקה, הודעות מתוזמנות, סקרים, הודעה ← משימה =================
+function chatMuted(id){ const v = (state._chatMutes || {})[id]; return v === 'forever' || (!!v && v > todayStr() + 'T' + nowTimeStr().slice(0, 5)); }
+// הודעה מתוזמנת שהגיע זמנה עוברת להודעות. כל משתתף מחובר יכול לעשות את זה (וגם הגשר כל דקה) – בלי כפילויות
+async function deliverDueSched(id, d){
+  const now = todayStr() + 'T' + nowTimeStr().slice(0, 5);
+  if(!(d.sched || []).some(x => x && x.sendAt <= now)) return;
+  state._schedBusy = state._schedBusy || {}; if(state._schedBusy[id]) return; state._schedBusy[id] = true;
+  try{
+    const fresh = await loadChat(id); if(!fresh) return;
+    const due = (fresh.sched || []).filter(x => x && x.sendAt <= now); if(!due.length) return;
+    const have = new Set((fresh.msgs || []).map(m => m.id));
+    const add = due.filter(x => !have.has(x.id)).map(x => ({ id: x.id, from: x.from, at: x.sendAt + ':00', seenBy: [], text: x.text, scheduled: true }));
+    const msgs = [...(fresh.msgs || []), ...add].slice(-CHAT_MAX);
+    const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), { msgs, sched: (fresh.sched || []).filter(x => !due.includes(x)) }, { merge: true }), 'chatSchedDeliver');
+    const me = state.currentEmployee ? state.currentEmployee.id : 'mgr';
+    if(ok === true) add.filter(m => m.from === me).forEach(m => pushNotify({ kind: 'chat', chatId: id, msgId: m.id }));
+  }finally{ state._schedBusy[id] = false; }
+}
+function pollHtml(m, me){
+  const p = m.poll, v = p.votes || {}, voters = Object.keys(v).filter(x => (v[x] || []).length);
+  const cnt = p.opts.map((_, i) => voters.filter(x => v[x].includes(i)).length), max = Math.max(1, ...cnt);
+  const ro = me === '__viewer__';
+  return `<div class="wa-poll"><div class="wa-poll-q">📊 ${escapeHtml(p.q)}</div><div class="wa-poll-hint">${p.multi ? 'אפשר לבחור כמה תשובות' : 'בחירת תשובה אחת'}</div>
+    ${p.opts.map((o, i) => { const on = (v[me] || []).includes(i); return `<button type="button" class="wa-poll-opt${on ? ' on' : ''}" ${ro ? 'disabled' : `data-vote="${m.id}:${i}"`}><span class="wa-poll-box">${on ? '✓' : ''}</span><span class="wa-poll-txt">${escapeHtml(o)}</span><span class="wa-poll-n">${cnt[i]}</span><span class="wa-poll-bar" style="width:${Math.round(cnt[i] / max * 100)}%"></span></button>`; }).join('')}
+    <button type="button" class="wa-poll-who" data-poll-who="${m.id}">${voters.length ? voters.length + ' הצביעו · מי הצביע?' : 'עוד אין הצבעות'}</button></div>`;
+}
+async function msgToTask(role, m, otherId){
+  const isMgr = role === 'mgr';
+  const emps = isMgr ? activeEmployees() : [state.currentEmployee];
+  if(!emps.length || !emps[0]) return showToast('אין עובדים');
+  const def = emps.find(e => e.id === otherId) || emps.find(e => e.id === m.from) || emps[0];
+  const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+  ov.innerHTML = `<div class="confirm-box" style="max-width:400px; width:94vw;">
+    <h3 style="margin:0 0 10px;">✔ הפיכה למשימה</h3>
+    ${isMgr ? `<label>לעובד</label><select id="mtE">${emps.map(e => `<option value="${e.id}"${e.id === def.id ? ' selected' : ''}>${escapeHtml(e.name)}</option>`).join('')}</select>` : '<p class="hint" style="margin:0 0 6px;">המשימה תתווסף לרשימת המשימות שלך.</p>'}
+    <label style="margin-top:8px;">המשימה</label><textarea id="mtT" rows="3" maxlength="500" style="width:100%; box-sizing:border-box; font:inherit; padding:8px 10px; border-radius:10px; border:1px solid #CFD8DC; resize:vertical;"></textarea>
+    ${m.fileId ? `<p class="hint" style="font-size:12.5px;">📎 הקובץ מההודעה יצורף למשימה</p>` : ''}
+    <label style="margin-top:8px;">תאריך</label><input type="date" id="mtD" value="${todayStr()}" />
+    <label style="display:flex; align-items:center; gap:8px; margin-top:6px; font-weight:400;"><input type="checkbox" id="mtN" style="width:auto;" /> בלי תאריך (עד שמסיימים)</label>
+    <div class="error-msg" id="mtErr"></div>
+    <div class="actions"><button type="button" class="btn brass" id="mtOk">הוספה</button><button type="button" class="btn ghost" id="mtX">ביטול</button></div></div>`;
+  document.body.appendChild(ov);
+  const ta = ov.querySelector('#mtT'); ta.value = m.text || m.fileName || '';
+  ov.querySelector('#mtN').onchange = e => { ov.querySelector('#mtD').disabled = e.target.checked; };
+  ov.querySelector('#mtX').onclick = () => ov.remove();
+  ov.querySelector('#mtOk').onclick = async e => {
+    const text = ta.value.trim(), err = ov.querySelector('#mtErr');
+    if(!text) return err.textContent = 'כותבים את המשימה';
+    const empId = isMgr ? ov.querySelector('#mtE').value : state.currentEmployee.id;
+    const nodate = ov.querySelector('#mtN').checked, date = ov.querySelector('#mtD').value || todayStr();
+    e.currentTarget.disabled = true;
+    const fresh = await loadTasks(empId); if(fresh === null){ e.currentTarget.disabled = false; return err.textContent = 'שגיאה בטעינה'; }
+    const extra = m.fileId ? { attach: { fileId: m.fileId, fileName: m.fileName || 'קובץ', fileType: m.fileType || '' } } : {};
+    fresh.push(nodate ? { id: uid(), text, nodate: true, done: false, created: todayStr(), ...extra } : { id: uid(), text, date, done: false, ...extra });
+    const r = await saveTasks(empId, fresh);
+    if(r !== true){ e.currentTarget.disabled = false; return err.textContent = 'שגיאה בשמירה: ' + r; }
+    ov.remove(); showToast('המשימה נוספה');
+    if(isMgr) pushNotify({ kind: 'task', empId, text });
+  };
+  setTimeout(() => ta.focus(), 50);
+}
+try{ if(localStorage.getItem('waDark')) document.body.classList.add('wa-dark'); }catch(e){}
 
 // ================= תמונת פרופיל בצ׳אט: נשמרת ב-statuses/<id>.photo (כל משתמש עורך רק את שלו) =================
 async function chatPhoto(id){
