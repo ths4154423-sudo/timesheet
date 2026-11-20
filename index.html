@@ -880,6 +880,8 @@ audio.wa-lb-media{ width:min(520px, 90vw); background:none; }
 .st-tap.next{ left:0; } .st-tap.prev{ right:0; }
 .st-views{ position:absolute; bottom:22px; left:50%; transform:translateX(-50%); z-index:3; border:none; background:rgba(255,255,255,.15); color:#fff; border-radius:18px; padding:8px 16px; font:inherit; cursor:pointer; }
 .confirm-msg{ white-space:pre-line; }
+.wa-avatar{ overflow:hidden; }
+.wa-avatar img{ width:100%; height:100%; object-fit:cover; display:block; border-radius:50%; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8065,7 +8067,8 @@ async function renderChatHome(role){
     <div class="wa-full-head">
       ${coUser ? '' : `<button type="button" class="wa-back" id="waFullClose" aria-label="חזרה">${WAI.back}</button>`}
       <b>צ׳אט</b>
-      <button type="button" class="wa-back" id="msgSoundBtn" title="${state._msgSoundMuted ? 'הפעלת צליל הודעות' : 'השתקת צליל הודעות'}" aria-label="צליל הודעות" style="margin-inline-start:auto; color:#fff; font-size:19px;">${state._msgSoundMuted ? '🔕' : '🔔'}</button>
+      <button type="button" class="wa-back" id="myProfileBtn" title="תמונת הפרופיל שלי" aria-label="תמונת פרופיל" style="margin-inline-start:auto; padding:0;"><span class="wa-avatar" data-av="${me}" style="width:32px; height:32px; flex-basis:32px; font-size:14px;">${escapeHtml((state._chatNames[me] || 'אני').charAt(0))}</span></button>
+      <button type="button" class="wa-back" id="msgSoundBtn" title="${state._msgSoundMuted ? 'הפעלת צליל הודעות' : 'השתקת צליל הודעות'}" aria-label="צליל הודעות" style="color:#fff; font-size:19px;">${state._msgSoundMuted ? '🔕' : '🔔'}</button>
       ${coUser ? `<button type="button" class="logout-link" id="waFullLogout" style="margin-inline-start:auto;">התנתקות</button>` : ''}
     </div>
     <div class="wa-full-body">
@@ -8078,7 +8081,7 @@ async function renderChatHome(role){
 
       ${rows.map(r => `
         <button type="button" class="wa-contact" data-chat-open="${r.c.id}">
-          <span class="wa-avatar${r.c.group ? ' group' : ''}${r.c.self ? ' self' : ''}">${r.c.self ? '📝' : r.c.group ? WAI.group : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
+          <span class="wa-avatar${r.c.group ? ' group' : ''}${r.c.self ? ' self' : ''}"${r.c.group || r.c.self ? '' : ` data-av="${r.c.id}"`}>${r.c.self ? '📝' : r.c.group ? WAI.group : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
           <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(r.c.name)}</b><span class="wa-c-time">${r.last ? chatTime(r.last.at) : ''}</span></span>
             <span class="wa-c-bottom">${r.ticks}<span class="wa-c-prev" data-prev-for="${chatIdWith(me, r.c.id)}" data-prev-orig="${escapeHtml(r.prev)}">${getDraft(me, chatIdWith(me, r.c.id)) ? `<span class="wa-draft">טיוטה:</span> ${escapeHtml(getDraft(me, chatIdWith(me, r.c.id)).slice(0, 60))}` : escapeHtml(r.prev)}</span>${r.un ? `<span class="wa-c-unread">${r.un}</span>` : ''}</span></span>
         </button>`).join('')}
@@ -8088,6 +8091,8 @@ async function renderChatHome(role){
     <button type="button" class="wa-fab" id="chatNewGroup" title="קבוצה חדשה" aria-label="קבוצה חדשה">${WAI.newgroup}</button>
     </div>`;
   renderStatusStrip(role);
+  fillAvatars(target);
+  document.getElementById('myProfileBtn').onclick = () => editChatPhoto(role);
   clearInterval(state._stTimer);
   state._stTimer = setInterval(() => {
     if(!document.getElementById('statusStrip')){ clearInterval(state._stTimer); return; }
@@ -8212,7 +8217,7 @@ async function renderChatRoom(role, otherId){
   target.innerHTML = `
     <div class="card wa-room">
       <div class="wa-room-head"><button type="button" class="wa-back" id="chatRoomBack" aria-label="חזרה">${WAI.back}</button>
-        <span class="wa-avatar${isGroup ? ' group' : ''}">${isGroup ? WAI.group : escapeHtml(name.charAt(0) || '?')}</span>
+        <span class="wa-avatar${isGroup ? ' group' : ''}"${isGroup || selfChat ? '' : ` data-av="${otherId}"`}>${isGroup ? WAI.group : escapeHtml(name.charAt(0) || '?')}</span>
         <span style="flex:1;"><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span>
         ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">' + WAI.adduser + '</button>' : ''}
         ${isGroup || selfChat ? '' : '<a class="wa-back" id="chatTel" title="התקשרות לטלפון" aria-label="התקשרות לטלפון" hidden>' + WAI.dial + '</a><button type="button" class="wa-back" id="chatVideo" title="שיחת וידאו" aria-label="שיחת וידאו">' + WAI.video + '</button><button type="button" class="wa-back" id="chatCall" title="שיחה קולית" aria-label="שיחה קולית">' + WAI.phone + '</button>'}
@@ -8237,6 +8242,7 @@ async function renderChatRoom(role, otherId){
         <span class="hint wa-status" id="chatStatus"></span>
       </div>
     </div>`;
+  fillAvatars(target);
   document.getElementById('chatRoomBack').onclick = () => renderChatHome(role);
   // התקשרות רגילה לטלפון של איש הקשר (קישור tel:) – בטלפון נפתח החייגן
   const telA = document.getElementById('chatTel');
@@ -9141,6 +9147,62 @@ function headsUp(who, where, body, onOpen){
   el.addEventListener('touchmove', e => { if(sy !== null && e.touches[0].clientY - sy < -25){ sy = null; clearTimeout(t); hide(); } }, { passive: true });
 }
 
+// ================= תמונת פרופיל בצ׳אט: נשמרת ב-statuses/<id>.photo (כל משתמש עורך רק את שלו) =================
+async function chatPhoto(id){
+  state._chatPhotos = state._chatPhotos || {};
+  const c = state._chatPhotos[id];
+  if(c && Date.now() - c.t < 60000) return c.p;
+  let p = null;
+  try{ const sn = await getDoc(doc(db, 'statuses', id)); p = (sn.exists() && sn.data().photo) || null; }catch(e){}
+  if(!p){ const e = (state.employees || []).find(x => x.id === id); p = (e && e.photo) || null; }
+  state._chatPhotos[id] = { p, t: Date.now() };
+  return p;
+}
+function fillAvatars(root){
+  (root || document).querySelectorAll('[data-av]').forEach(async el => {
+    const p = await chatPhoto(el.dataset.av);
+    if(p){ el.innerHTML = '<img alt="" />'; el.firstChild.src = p; el.classList.add('has-photo'); }
+  });
+}
+function shrinkAvatar(file){
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const S = 320, k = Math.min(img.width, img.height), c = document.createElement('canvas'); c.width = c.height = S;
+      c.getContext('2d').drawImage(img, (img.width - k) / 2, (img.height - k) / 2, k, k, 0, 0, S, S); URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.85)); };
+    img.onerror = rej; img.src = url;
+  });
+}
+async function editChatPhoto(role){
+  const me = chatMe(role), cur = await chatPhoto(me);
+  const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+  ov.innerHTML = `<div class="confirm-box" style="text-align:center; max-width:340px;">
+    <h3 style="margin:0 0 12px;">תמונת הפרופיל שלי</h3>
+    <div class="wa-avatar" id="pfPrev" style="width:140px; height:140px; margin:0 auto 14px; font-size:52px;">${escapeHtml((state._chatNames[me] || 'אני').charAt(0))}</div>
+    <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+      <label class="btn ghost small" style="margin:0; cursor:pointer;">🖼️ גלריה<input type="file" id="pfGal" accept="image/*" hidden /></label>
+      <label class="btn ghost small" style="margin:0; cursor:pointer;">📷 צילום<input type="file" id="pfCam" accept="image/*" capture="user" hidden /></label>
+      <button type="button" class="btn ghost small" id="pfDel" ${cur ? '' : 'hidden'}>🗑 הסרה</button>
+    </div>
+    <div class="error-msg" id="pfErr"></div>
+    <div class="actions"><button type="button" class="btn brass" id="pfSave" disabled>שמירה</button><button type="button" class="btn ghost" id="pfCancel">סגירה</button></div></div>`;
+  document.body.appendChild(ov);
+  const prev = ov.querySelector('#pfPrev'), save = ov.querySelector('#pfSave');
+  const showP = p => { if(p){ prev.innerHTML = '<img alt="" />'; prev.firstChild.src = p; } };
+  showP(cur);
+  let next;
+  const pick = async e => { const f = e.target.files && e.target.files[0]; if(!f) return; try{ next = await shrinkAvatar(f); showP(next); save.disabled = false; }catch(x){ ov.querySelector('#pfErr').textContent = 'לא הצלחנו לקרוא את התמונה'; } };
+  ov.querySelector('#pfGal').onchange = pick; ov.querySelector('#pfCam').onchange = pick;
+  ov.querySelector('#pfCancel').onclick = () => ov.remove();
+  const store = async p => {
+    const ok = await saveDoc(() => setDoc(doc(db, 'statuses', me), { photo: p }, { merge: true }), 'chatPhoto');
+    if(ok !== true){ ov.querySelector('#pfErr').textContent = 'שגיאה בשמירה: ' + ok; return; }
+    (state._chatPhotos = state._chatPhotos || {})[me] = { p, t: Date.now() };
+    ov.remove(); showToast(p ? 'תמונת הפרופיל עודכנה' : 'התמונה הוסרה'); renderChatHome(role);
+  };
+  save.onclick = () => { save.disabled = true; store(next); };
+  ov.querySelector('#pfDel').onclick = () => store(null);
+}
+
 // ================= סטטוסים: טקסט על רקע צבעוני או תמונה, נמחקים אחרי 24 שעות =================
 // statuses/<בעלים>: items[{id, type, text, bg, fileId, at}] · statusViews/<צופה>: seen{statusId: זמן}
 const ST_TTL = 24 * 3600 * 1000;
@@ -9211,7 +9273,7 @@ function statusCompose(role){
       item = { id: item.id, at: item.at, type: 'image', fileId, text };
     }
     let cur = []; try{ const sn = await getDoc(doc(db, 'statuses', me)); cur = stLive(sn.exists() ? sn.data().items : []); }catch(x){}
-    const ok = await saveDoc(() => setDoc(doc(db, 'statuses', me), { items: [...cur, item].slice(-30) }), 'statusPost');
+    const ok = await saveDoc(() => setDoc(doc(db, 'statuses', me), { items: [...cur, item].slice(-30) }, { merge: true }), 'statusPost');
     if(ok !== true){ btn.disabled = false; btn.textContent = 'פרסום'; err.textContent = 'שגיאה בפרסום: ' + ok; return; }
     ov.remove(); showToast('הסטטוס פורסם · יוצג 24 שעות'); renderStatusStrip(role);
   };
@@ -9269,7 +9331,7 @@ function openStatusViewer(role, owner, items){
     paused = true;
     if(!(await showConfirmModal('למחוק את הסטטוס הזה?', { yes: 'מחיקה', danger: true }))){ paused = false; return; }
     const it = items[idx]; items.splice(idx, 1);
-    await saveDoc(() => setDoc(doc(db, 'statuses', me), { items: items.slice() }), 'statusDel');
+    await saveDoc(() => setDoc(doc(db, 'statuses', me), { items: items.slice() }, { merge: true }), 'statusDel');
     if(!items.length) return close();
     ov.querySelector('.st-bars').innerHTML = items.map(() => '<span><i></i></span>').join('');
     idx = Math.min(idx, items.length - 1); paused = false; show();
