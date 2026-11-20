@@ -8733,6 +8733,7 @@ async function renderChatRoom(role, otherId){
   const wipeMsgs = async ids => {
     const n = ids.length;
     if(!(await showConfirmModal(n > 1 ? 'למחוק לגמרי ' + n + ' הודעות?' : 'למחוק את ההודעה לגמרי?', { yes: 'מחיקה', danger: true }))) return;
+    sel = null; paintSel();
     await saveMsgs(msgs => { ids.forEach(x => { const k = msgs.findIndex(y => y.id === x); if(k < 0) return; const t = msgs[k]; if(t.from === me || me === 'mgr') msgs.splice(k, 1); else t.hiddenFor = [...new Set([...(t.hiddenFor || []), me])]; }); }, 'chatWipe');
   };
   selBar.querySelectorAll('[data-sel]').forEach(b => b.onclick = async ev => {
@@ -8748,6 +8749,7 @@ async function renderChatRoom(role, otherId){
       if(mineLive.length && mineLive.length === live.length && live.length){
         const ch = await showConfirmModal('למחוק ' + (list.length > 1 ? list.length + ' הודעות' : 'את ההודעה') + ' אצל כולם?', { yes: 'מחיקה אצל כולם', danger: true });
         if(!ch) return;
+        sel = null; paintSel();
         await saveMsgs(msgs => { list.forEach(m => { const k = msgs.findIndex(y => y.id === m.id); if(k < 0) return; if(msgs[k].deleted) msgs.splice(k, 1); else { const t = msgs[k]; ['text', 'fileId', 'fileName', 'fileType', 'files', 'audioId', 'reply', 'reactions', 'poll', 'loc'].forEach(q => delete t[q]); t.deleted = true; } }); }, 'chatDelMany');
       } else await wipeMsgs(ids);
       sel = null; paintSel();
