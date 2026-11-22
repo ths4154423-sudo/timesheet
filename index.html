@@ -953,6 +953,20 @@ body.wa-dark .wa-row.wa-sel{ background:rgba(0,168,132,.28); }
 .st-th button{ position:absolute; top:-6px; left:-6px; width:18px; height:18px; border-radius:50%; border:none; background:#54656F; color:#fff; font-size:10px; cursor:pointer; padding:0; line-height:18px; }
 .st-thumbs[hidden]{ display:none; }
 body:has(.st-view) .confirm-overlay{ z-index:10010; }
+.st-animopt{ display:flex; align-items:center; gap:6px; justify-content:center; flex-wrap:wrap; font-weight:400; margin:6px 0; cursor:pointer; }
+.st-animopt input{ width:auto; } .st-animopt small{ color:#667781; width:100%; text-align:center; }
+.st-anim{ position:absolute; inset:0; overflow:hidden; display:flex; align-items:center; justify-content:center; background:linear-gradient(160deg,#0E1B2E,#1F3A5F 45%,#3B2F5C); background-size:200% 200%; animation:stBg 10s ease-in-out infinite alternate; }
+@keyframes stBg{ from{ background-position:0% 0%; } to{ background-position:100% 100%; } }
+.st-aglow{ position:absolute; width:60vmin; height:60vmin; border-radius:50%; background:radial-gradient(circle, rgba(255,214,170,.28), transparent 70%); animation:stGlow 4s ease-in-out infinite alternate; }
+@keyframes stGlow{ from{ transform:scale(.85); opacity:.6; } to{ transform:scale(1.15); opacity:1; } }
+.st-aparts i{ position:absolute; bottom:-30px; color:rgba(255,255,255,.7); font-style:normal; animation:stRise linear infinite; }
+@keyframes stRise{ 0%{ transform:translateY(0) translateX(0); opacity:0; } 10%{ opacity:.9; } 100%{ transform:translateY(-110vh) translateX(30px); opacity:0; } }
+.st-alines{ position:relative; text-align:center; padding:24px; max-width:640px; }
+.st-al{ font-size:clamp(22px, 5.5vw, 38px); line-height:1.5; color:#FDF6EC; opacity:0; transform:translateY(18px); filter:blur(6px); animation:stLine 1.4s ease forwards; text-shadow:0 2px 18px rgba(255,200,150,.35); font-weight:300; }
+.st-al:last-child{ font-weight:700; color:#FFE4C4; margin-top:10px; }
+@keyframes stLine{ to{ opacity:1; transform:none; filter:none; } }
+.st-reveal img{ animation:stReveal 2.2s ease forwards; }
+@keyframes stReveal{ from{ opacity:0; transform:scale(1.12); filter:blur(14px) brightness(1.6); } to{ opacity:1; transform:none; filter:none; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -9616,7 +9630,7 @@ async function renderStatusStrip(role){
   const circle = (id, label, isMe) => {
     const items = all[id] || [], last = items[items.length - 1];
     const unseen = !isMe && items.some(z => !seen[z.id]);
-    const inner = last ? (last.type === 'image' ? `<img data-st-thumb="${last.fileId}" alt="" />` : `<span class="st-txt" style="background:${last.bg}">${escapeHtml((last.text || '').slice(0, 14))}</span>`) : `<span class="st-init">${escapeHtml((label || '?').charAt(0))}</span>`;
+    const inner = last ? (last.type === 'image' ? `<img data-st-thumb="${last.fileId}" alt="" />` : (last.type === 'anim' ? `<span class="st-txt" style="background:linear-gradient(160deg,#1F3A5F,#3B2F5C)">💭</span>` : `<span class="st-txt" style="background:${last.bg}">${escapeHtml((last.text || '').slice(0, 14))}</span>`)) : `<span class="st-init">${escapeHtml((label || '?').charAt(0))}</span>`;
     return `<button type="button" class="st-item" data-st-open="${id}"><span class="st-ring${unseen ? ' unseen' : items.length ? ' seen' : ''}">${inner}${isMe ? '<span class="st-plus">＋</span>' : ''}</span><span class="st-name">${escapeHtml(isMe ? 'הסטטוס שלי' : label)}</span></button>`;
   };
   strip.innerHTML = circle(me, 'אני', true) + others.map(id => circle(id, state._chatNames[id] || '', false)).join('');
@@ -9626,6 +9640,12 @@ async function renderStatusStrip(role){
     if(id === me && (e.target.closest('.st-plus') || !mine.length)) return statusCompose(role);
     openStatusViewer(role, id, all[id] || []);
   });
+}
+const ST_LONGING = ['יש אנשים…', 'שגם כשהם רחוקים', 'המקום שלהם בלב נשאר מלא', 'מתגעגעים 🤍'];
+function stAnimHtml(it){
+  const parts = Array.from({ length: 18 }, (_, i) => `<i style="left:${(i * 53) % 100}%; animation-delay:${(i * 0.7) % 6}s; animation-duration:${6 + (i % 5)}s; font-size:${10 + (i % 4) * 5}px;">${i % 3 ? '✦' : '🤍'}</i>`).join('');
+  const lines = (it.lines || ST_LONGING).map((l, i) => `<div class="st-al" style="animation-delay:${0.6 + i * 1.6}s">${escapeHtml(l)}</div>`).join('');
+  return `<div class="st-anim"><div class="st-aglow"></div><div class="st-aparts">${parts}</div><div class="st-alines">${lines}</div></div>`;
 }
 function statusCompose(role){
   const me = chatMe(role);
@@ -9640,6 +9660,8 @@ function statusCompose(role){
       <label class="btn ghost small" style="margin:0; cursor:pointer;">📷 צילום<input type="file" id="stCam" accept="image/*" capture="environment" hidden /></label>
     </div>
     <div class="st-thumbs" id="stThumbs" hidden></div>
+    <label class="st-animopt"><input type="checkbox" id="stAnim" /> 💭 פתיחה מונפשת – געגועים <small>(קודם אנימציה, ורק אחריה התמונה)</small></label>
+    <textarea id="stAnimLines" rows="4" maxlength="300" hidden style="width:100%; box-sizing:border-box; font:inherit; padding:8px 10px; border-radius:10px; border:1px solid #CFD8DC; margin-bottom:8px;"></textarea>
     <p class="hint" style="font-size:12.5px; margin:0;">אפשר לבחור כמה תמונות (עד 10) · אפשר גם להדביק: Ctrl+V או Win+V</p>
     <div class="error-msg" id="stErr"></div>
     <div class="actions"><button type="button" class="btn brass" id="stPost">פרסום</button><button type="button" class="btn ghost" id="stCancel">ביטול</button></div></div>`;
@@ -9657,6 +9679,9 @@ function statusCompose(role){
     thumbs.querySelectorAll('[data-thx]').forEach(b => b.onclick = () => { imgs[curI].cap = ta.value; imgs.splice(+b.dataset.thx, 1); curI = Math.min(curI, imgs.length - 1); if(curI < 0) curI = 0; if(!imgs.length) ta.value = ''; showImg(); });
   };
   ta.addEventListener('input', () => { if(imgs[curI]) imgs[curI].cap = ta.value; });
+  const animCb = ov.querySelector('#stAnim'), animTa = ov.querySelector('#stAnimLines');
+  animTa.value = ST_LONGING.join('\n'); animTa.placeholder = 'שורה בכל שורה';
+  animCb.onchange = () => { animTa.hidden = !animCb.checked; };
   ov.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { bg = b.dataset.c; if(!imgs.length) prev.style.background = bg; });
   const onImg = e => {
     const fs = [...((e.target && e.target.files) || [])].filter(f => /^image\//.test(f.type)); if(e.target && 'value' in e.target) try{ e.target.value = ''; }catch(x){}
@@ -9681,18 +9706,19 @@ function statusCompose(role){
     const btn = e.currentTarget;
     if(imgs[curI]) imgs[curI].cap = ta.value;
     const text = ta.value.trim();
-    if(!text && !imgs.length){ err.textContent = 'כותבים משהו או בוחרים תמונה'; return; }
+    if(!text && !imgs.length && !animCb.checked){ err.textContent = 'כותבים משהו או בוחרים תמונה'; return; }
     btn.disabled = true;
     const fail = m => { btn.disabled = false; btn.textContent = 'פרסום'; err.textContent = m; };
     const items = [];
-    if(!imgs.length) items.push({ id: uid() + uid(), at: stNowIso(), type: 'text', text, bg });
+    if(animCb.checked){ const lines = animTa.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 6); items.push({ id: uid() + uid(), at: stNowIso(), type: 'anim', theme: 'longing', lines: lines.length ? lines : ST_LONGING }); }
+    if(!imgs.length && (text || !animCb.checked)) items.push({ id: uid() + uid(), at: stNowIso(), type: 'text', text, bg });
     for(let k = 0; k < imgs.length; k++){
       btn.textContent = imgs.length > 1 ? `מעלה ${k + 1} מתוך ${imgs.length}...` : 'מפרסם...';
       let data; try{ data = await shrinkImage(imgs[k].f); }catch(x){ return fail('לא הצלחנו לקרוא תמונה'); }
       const fileId = uid() + uid();
       const ok = await saveDoc(() => setDoc(doc(db, 'voiceMessages', fileId), { file: data, name: 'status.jpg', type: 'image/jpeg', createdAt: new Date().toISOString() }), 'statusImg');
       if(ok !== true) return fail('שגיאה בהעלאת תמונה');
-      items.push({ id: uid() + uid(), at: stNowIso(), type: 'image', fileId, text: (imgs[k].cap || '').trim() });
+      items.push({ id: uid() + uid(), at: stNowIso(), type: 'image', fileId, text: (imgs[k].cap || '').trim(), ...(animCb.checked && k === 0 ? { reveal: true } : {}) });
     }
     let cur = []; try{ const sn = await getDoc(doc(db, 'statuses', me)); cur = stLive(sn.exists() ? sn.data().items : []); }catch(x){}
     const ok = await saveDoc(() => setDoc(doc(db, 'statuses', me), { items: [...cur, ...items].slice(-30) }, { merge: true }), 'statusPost');
@@ -9727,7 +9753,10 @@ function openStatusViewer(role, owner, items){
     const it = items[idx]; if(!it){ return close(); }
     bars.forEach((b, k) => { b.style.width = k < idx ? '100%' : '0%'; });
     ov.querySelector('.st-htime').textContent = fmt(it.at);
-    if(it.type === 'image'){ body.innerHTML = `<img alt="" />${it.text ? `<div class="st-cap"></div>` : ''}`; if(it.text) body.querySelector('.st-cap').textContent = it.text; const f = await loadTaskFile(it.fileId); if(f) body.querySelector('img').src = f.data; body.style.background = '#000'; }
+    DUR = it.type === 'anim' ? 3000 + (it.lines || []).length * 1700 : it.reveal ? 7000 : 5000;
+    body.classList.toggle('st-reveal', !!it.reveal);
+    if(it.type === 'anim'){ body.style.background = '#0E1B2E'; body.innerHTML = stAnimHtml(it); }
+    else if(it.type === 'image'){ body.innerHTML = `<img alt="" />${it.text ? `<div class="st-cap"></div>` : ''}`; if(it.text) body.querySelector('.st-cap').textContent = it.text; const f = await loadTaskFile(it.fileId); if(f) body.querySelector('img').src = f.data; body.style.background = '#000'; }
     else { body.innerHTML = '<div class="st-bigtxt"></div>'; body.querySelector('.st-bigtxt').textContent = it.text; body.style.background = it.bg; }
     markSeen(it);
     if(mineOwn) updateViews(it);
