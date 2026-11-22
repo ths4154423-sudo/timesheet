@@ -952,6 +952,7 @@ body.wa-dark .wa-row.wa-sel{ background:rgba(0,168,132,.28); }
 .st-th.on{ border-color:#00A884; }
 .st-th button{ position:absolute; top:-6px; left:-6px; width:18px; height:18px; border-radius:50%; border:none; background:#54656F; color:#fff; font-size:10px; cursor:pointer; padding:0; line-height:18px; }
 .st-thumbs[hidden]{ display:none; }
+body:has(.st-view) .confirm-overlay{ z-index:10010; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -9713,7 +9714,7 @@ function openStatusViewer(role, owner, items){
     <div class="st-tap prev"></div><div class="st-tap next"></div>
     ${mineOwn ? '<button type="button" class="st-views"></button>' : ''}`;
   document.body.appendChild(ov);
-  const body = ov.querySelector('.st-body'), bars = ov.querySelectorAll('.st-bars i');
+  const body = ov.querySelector('.st-body'); let bars = ov.querySelectorAll('.st-bars i');
   let timer = null, t0 = 0, paused = false, DUR = 5000;
   const fmt = at => { const d = new Date(at); return d.toLocaleTimeString('he-IL', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit' }); };
   const markSeen = async it => {
@@ -9752,10 +9753,14 @@ function openStatusViewer(role, owner, items){
   if(del) del.onclick = async () => {
     paused = true;
     if(!(await showConfirmModal('למחוק את הסטטוס הזה?', { yes: 'מחיקה', danger: true }))){ paused = false; return; }
-    const it = items[idx]; items.splice(idx, 1);
-    await saveDoc(() => setDoc(doc(db, 'statuses', me), { items: items.slice() }, { merge: true }), 'statusDel');
+    const it = items[idx];
+    let fresh = items; try{ const sn = await getDoc(doc(db, 'statuses', me)); fresh = stLive(sn.exists() ? sn.data().items : []); }catch(x){}
+    const ok = await saveDoc(() => setDoc(doc(db, 'statuses', me), { items: fresh.filter(x => x.id !== it.id) }, { merge: true }), 'statusDel');
+    if(ok !== true){ paused = false; return showToast('המחיקה לא הצליחה'); }
+    items.splice(idx, 1); showToast('הסטטוס נמחק');
     if(!items.length) return close();
     ov.querySelector('.st-bars').innerHTML = items.map(() => '<span><i></i></span>').join('');
+    bars = ov.querySelectorAll('.st-bars i');
     idx = Math.min(idx, items.length - 1); paused = false; show();
   };
   show();
