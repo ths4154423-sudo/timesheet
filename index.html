@@ -2778,7 +2778,10 @@ function renderEmployeeGuide(emp){
       הדיווח בטלפון עובד רק מהמספר שרשום אצלכם במערכת.`)}
     ${sec('🔔', 'צלצולי תזכורת', `
       אם לא דיווחתם כניסה עד השעה שנקבעה, או לא דיווחתם יציאה בערב – שעון הנוכחות יצלצל אליכם. <b>אין צורך לענות</b>, הצלצול הוא רק תזכורת.<br>
-      לא רוצים תזכורות? <b>הגדרות ← התראות ותזכורות</b>.`)}
+      לא רוצים תזכורות? <b>הגדרות ← התראות ותזכורות</b>.<br>
+      צינתוק כניסה מגיע אם עדיין לא רשמת כניסה, וצינתוק יציאה אם יום העבודה שלך עדיין פתוח. לא נשלח בשבת, בחגים ובימי חופשה או מחלה.
+      כדי לקבל צינתוקים צריך להירשם פעם אחת בשלוחה הטלפונית, במקש 6. אפשר לשנות את ההגדרות האלה גם שם.<br>
+      <b>ביטול צינתוק לימים מסוימים:</b> למשל יום שלא באים לעבודה ולא נרשם כחופש. באותו יום לא יישלח צינתוק כניסה וגם לא צינתוק יציאה. אפשר לעשות את זה גם בטלפון, בשלוחה, במקש 6.`)}
     ${sec('⚠️', 'שכחתי משהו', `
       <b>שכחתי לסיים הפסקה:</b> בזמן ההפסקה לוחצים <b>"שכחתי לסיים – עדכון שעה"</b> ומזינים את השעה שבה ההפסקה באמת נגמרה.<br>
       <b>שכחתי לדווח יציאה:</b> כשנכנסים לאתר יופיע חלון "יש יום עבודה פתוח" – לוחצים <b>"עדכון שעת סיום"</b>. מי שמתחיל למחרת יום חדש בטלפון יקבל על זה גם מייל.<br>
@@ -2808,20 +2811,16 @@ async function renderEmployeeReminders(emp){
   app.innerHTML = `
     <div class="card">
       <h3 style="margin-top:0;">⏰ צינתוק תזכורת</h3>
-      <p class="hint" style="font-size:13.5px; margin-top:-4px;">
-        צינתוק כניסה מגיע אם עדיין לא רשמת כניסה, וצינתוק יציאה אם יום העבודה שלך עדיין פתוח. לא נשלח בשבת, בחגים ובימי חופשה או מחלה.
-        כדי לקבל צינתוקים צריך להירשם פעם אחת בשלוחה הטלפונית, במקש 6. אפשר לשנות את ההגדרות האלה גם שם.
-      </p>
       <form id="remForm">
         <div class="field"><label>שעת צינתוק כניסה</label><input type="time" id="remIn" value="${inTime}" required /></div>
         <label style="display:flex; align-items:flex-start; gap:10px; margin:6px 0 16px; cursor:pointer;">
           <input type="checkbox" class="toggle" id="remInOff" ${st.noEntryReminder === true ? 'checked' : ''} style="margin-top:3px;" />
-          <span><span style="display:block; font-weight:600;">השתקת צינתוק הכניסה</span><span class="hint" style="display:block; margin-top:2px; font-size:13px;">לא תקבל/י צינתוק אם עדיין לא רשמת כניסה</span></span>
+          <span><span style="display:block; font-weight:600;">השתקת צינתוק הכניסה</span></span>
         </label>
         <div class="field"><label>שעת צינתוק יציאה</label><input type="time" id="remOut" value="${outTime}" required /></div>
         <label style="display:flex; align-items:flex-start; gap:10px; margin:6px 0 16px; cursor:pointer;">
           <input type="checkbox" class="toggle" id="remOutOff" ${st.noExitReminder === true ? 'checked' : ''} style="margin-top:3px;" />
-          <span><span style="display:block; font-weight:600;">השתקת צינתוק היציאה</span><span class="hint" style="display:block; margin-top:2px; font-size:13px;">לא תקבל/י צינתוק אם יום העבודה שלך עדיין פתוח</span></span>
+          <span><span style="display:block; font-weight:600;">השתקת צינתוק היציאה</span></span>
         </label>
         <div class="hint" style="font-size:13px; margin-bottom:6px;">ימים שבהם אקבל צינתוק</div>
         <div style="display:flex; gap:12px; flex-wrap:wrap;">
@@ -2833,7 +2832,7 @@ async function renderEmployeeReminders(emp){
     </div>
     <div class="card">
       <h3 style="margin-top:0;">🚫 ביטול צינתוק לימים מסוימים</h3>
-      <p class="hint" style="font-size:13.5px; margin-top:-4px;">למשל יום שלא באים לעבודה ולא נרשם כחופש. באותו יום לא יישלח צינתוק כניסה וגם לא צינתוק יציאה. אפשר לעשות את זה גם בטלפון, בשלוחה, במקש 6.</p>
+      
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <button type="button" class="btn ghost small" id="skipTomorrow">ביטול למחר</button>
         <input type="date" id="skipDate" min="${todayStr()}" style="width:auto;" />
