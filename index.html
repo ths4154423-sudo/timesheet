@@ -996,6 +996,31 @@ body.wa-dark .wa-unread-sep{ background:#182229; color:#AEBAC1; }
 body.wa-dark .wa-jump{ background:#202C33; color:#AEBAC1; }
 body.wa-dark .wa-media{ background:#111B21; } body.wa-dark .wa-media .wa-room-head{ background:#202C33; }
 body.wa-dark .wa-md-tabs{ border-color:#222D34; } body.wa-dark .wa-md-row{ color:#E9EDEF; border-color:#222D34; }
+/* ---- עיצוב צ׳אט ותמונת רקע ---- */
+body.wa-themed:not(.wa-dark) .wa-full-head, body.wa-themed:not(.wa-dark) .wa-room .wa-room-head, body.wa-themed:not(.wa-dark) .wa-selbar, body.wa-themed:not(.wa-dark) .wa-media .wa-room-head{ background:var(--wa-head); }
+body.wa-themed:not(.wa-dark) .wa-row.out .wa-bubble{ background:var(--wa-out); }
+body.wa-themed:not(.wa-dark) .wa-row.out .wa-bubble::before{ border-color:transparent var(--wa-out) transparent transparent; }
+body.wa-themed:not(.wa-dark) .wa-btn.send, body.wa-themed:not(.wa-dark) .wa-fab, body.wa-themed:not(.wa-dark) .wa-c-unread{ background:var(--wa-accent); }
+body.wa-themed:not(.wa-dark) .wa-chat{ background-color:var(--wa-chatbg); }
+body.wa-themed:not(.wa-dark) .wa-md-tabs button.on{ color:var(--wa-head); border-bottom-color:var(--wa-head); }
+body.wa-haswall .wa-chat{ background:var(--wa-wall) !important; background-color:var(--wa-chatbg, #EFEAE2) !important; }
+.lk-prev{ border-radius:12px; overflow:hidden; border:1px solid #E0E0E0; margin-bottom:10px; }
+.lk-head{ background:var(--wa-head, #008069); color:#fff; padding:8px 12px; font-weight:600; text-align:right; }
+.lk-chat{ height:120px; display:flex; flex-direction:column; gap:8px; padding:12px; background:var(--wa-chatbg, #EFEAE2); }
+body.wa-haswall .lk-chat{ background:var(--wa-wall) !important; background-color:var(--wa-chatbg, #EFEAE2) !important; }
+.lk-in, .lk-out{ max-width:75%; padding:6px 10px; border-radius:8px; font-size:13.5px; box-shadow:0 1px .5px rgba(0,0,0,.13); color:#111B21; }
+.lk-in{ background:#fff; align-self:flex-start; } .lk-out{ background:var(--wa-out, #D9FDD3); align-self:flex-end; }
+.lk-label{ font-size:13px; font-weight:600; color:#54656F; margin:10px 0 6px; text-align:right; }
+.lk-themes{ display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
+.lk-themes button{ border:2px solid transparent; background:#F5F6F6; border-radius:10px; padding:6px 4px 4px; cursor:pointer; display:flex; flex-wrap:wrap; justify-content:center; gap:3px; }
+.lk-themes button span{ width:20px; height:20px; border-radius:50%; border:1px solid rgba(0,0,0,.1); }
+.lk-themes button small{ width:100%; font-size:11.5px; color:#54656F; }
+.lk-themes button.on, .lk-walls .on{ border-color:#00A884 !important; }
+.lk-walls{ display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
+.lk-walls button, .lk-up{ height:62px; border:2px solid #E0E0E0; border-radius:10px; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding:2px; font:inherit; position:relative; overflow:hidden; }
+.lk-walls small{ font-size:11px; background:rgba(255,255,255,.85); border-radius:6px; padding:0 5px; color:#3B4A54; }
+.lk-none{ background:#fff; align-items:center !important; font-size:13px; color:#54656F; }
+.lk-up{ flex-direction:column; align-items:center; justify-content:center; font-size:20px; background:#F5F6F6; margin:0; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8181,7 +8206,8 @@ async function renderChatHome(role){
     <div class="wa-full-head">
       ${coUser ? '' : `<button type="button" class="wa-back" id="waFullClose" aria-label="חזרה">${WAI.back}</button>`}
       <b>צ׳אט</b>
-      <button type="button" class="wa-back" id="chatDarkBtn" title="מצב כהה" aria-label="מצב כהה" style="margin-inline-start:auto; color:#fff; font-size:18px;">${document.body.classList.contains('wa-dark') ? '☀️' : '🌙'}</button>
+      <button type="button" class="wa-back" id="chatLookBtn" title="עיצוב ותמונת רקע" aria-label="עיצוב ותמונת רקע" style="margin-inline-start:auto; color:#fff; font-size:18px;">🎨</button>
+      <button type="button" class="wa-back" id="chatDarkBtn" title="מצב כהה" aria-label="מצב כהה" style="color:#fff; font-size:18px;">${document.body.classList.contains('wa-dark') ? '☀️' : '🌙'}</button>
       <button type="button" class="wa-back" id="myProfileBtn" title="תמונת הפרופיל שלי" aria-label="תמונת פרופיל" style="padding:0;"><span class="wa-avatar" data-av="${me}" style="width:32px; height:32px; flex-basis:32px; font-size:14px;">${escapeHtml((state._chatNames[me] || 'אני').charAt(0))}</span></button>
       <button type="button" class="wa-back" id="msgSoundBtn" title="${state._msgSoundMuted ? 'הפעלת צליל הודעות' : 'השתקת צליל הודעות'}" aria-label="צליל הודעות" style="color:#fff; font-size:19px;">${state._msgSoundMuted ? '🔕' : '🔔'}</button>
       ${coUser ? `<button type="button" class="logout-link" id="waFullLogout" style="margin-inline-start:auto;">התנתקות</button>` : ''}
@@ -8209,6 +8235,7 @@ async function renderChatHome(role){
   renderStatusStrip(role);
   fillAvatars(target);
   document.getElementById('myProfileBtn').onclick = () => editChatPhoto(role);
+  document.getElementById('chatLookBtn').onclick = () => openChatLook(role);
   document.getElementById('chatDarkBtn').onclick = e => { const on = document.body.classList.toggle('wa-dark'); try{ localStorage.setItem('waDark', on ? '1' : ''); }catch(x){} e.currentTarget.textContent = on ? '☀️' : '🌙'; };
   clearInterval(state._stTimer);
   state._stTimer = setInterval(() => {
@@ -9198,7 +9225,7 @@ function openSoundPicker(role, btn){
 }
 function soundKeyDoc(role){ return role === 'mgr' ? 'mgr-prefs' : (state.currentEmployee && state.currentEmployee.id); }
 async function loadMsgSoundPref(role){
-  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0; state._chatMutes = d.chatMutes || {}; state._chatArchive = d.chatArchive || []; state._msgReminders = d.msgReminders || [];
+  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0; state._chatMutes = d.chatMutes || {}; state._chatArchive = d.chatArchive || []; state._msgReminders = d.msgReminders || []; state._chatLook = { theme: d.chatTheme || '', wall: d.chatWall || '' }; applyChatLook();
     const b = document.getElementById('msgSoundBtn'); if(b) b.textContent = state._msgSoundMuted ? '🔕' : '🔔'; }catch(e){}
 }
 async function setMsgSoundPref(role, patch){
@@ -9207,6 +9234,7 @@ async function setMsgSoundPref(role, patch){
   if('chatMutes' in patch) state._chatMutes = patch.chatMutes;
   if('chatArchive' in patch) state._chatArchive = patch.chatArchive;
   if('msgReminders' in patch) state._msgReminders = patch.msgReminders;
+  if('chatTheme' in patch || 'chatWall' in patch){ state._chatLook = { ...(state._chatLook || {}), ...('chatTheme' in patch ? { theme: patch.chatTheme } : {}), ...('chatWall' in patch ? { wall: patch.chatWall } : {}) }; applyChatLook(); }
   const id = soundKeyDoc(role); if(!id) return;
   await saveDoc(() => setDoc(doc(db, 'settings', id), patch, { merge: true }), 'msgSound');
   if(state._settingsCache && state._settingsCache.empId === id) state._settingsCache = null;
@@ -9569,6 +9597,83 @@ function headsUp(who, where, body, onOpen){
   let sy = null;
   el.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
   el.addEventListener('touchmove', e => { if(sy !== null && e.touches[0].clientY - sy < -25){ sy = null; clearTimeout(t); hide(); } }, { passive: true });
+}
+
+// ================= עיצוב הצ׳אט ותמונת רקע (נשמר בחשבון: chatTheme, chatWall) =================
+const CHAT_THEMES = {
+  '':       { name: 'קלאסי',  head: '#008069', out: '#D9FDD3', accent: '#00A884', bg: '#EFEAE2' },
+  blue:     { name: 'כחול',   head: '#1E5AA8', out: '#D6E8FF', accent: '#2F7BE0', bg: '#E8EEF6' },
+  purple:   { name: 'סגול',   head: '#5B3D99', out: '#E8DEFF', accent: '#7A55D1', bg: '#EEEAF6' },
+  teal:     { name: 'טורקיז', head: '#00838F', out: '#D2F4F2', accent: '#00A3A6', bg: '#E6F2F2' },
+  brown:    { name: 'אגוז',   head: '#6D4C41', out: '#F3E5D8', accent: '#8D6E63', bg: '#F1ECE6' },
+  navy:     { name: 'לילה',   head: '#22304A', out: '#DCE3EE', accent: '#3E5A8A', bg: '#E6E9EF' },
+  rose:     { name: 'בורדו',  head: '#8E2446', out: '#F8DDE5', accent: '#B23A5E', bg: '#F4E9EC' },
+  gray:     { name: 'אפור',   head: '#455A64', out: '#E3E9EC', accent: '#607D8B', bg: '#ECEFF1' }
+};
+const CHAT_WALLS = {
+  dots:   { name: 'נקודות', css: 'radial-gradient(rgba(0,0,0,.07) 1.2px, transparent 1.4px) 0 0/18px 18px' },
+  waves:  { name: 'גלים',   css: 'repeating-linear-gradient(135deg, rgba(255,255,255,.35) 0 12px, rgba(255,255,255,0) 12px 24px)' },
+  sky:    { name: 'שמיים',  css: 'linear-gradient(180deg, #CFE6FB 0%, #EAF3FB 60%, #FFFFFF 100%)' },
+  sunset: { name: 'שקיעה',  css: 'linear-gradient(160deg, #FFE0C2 0%, #FBC8D4 50%, #D9C8F5 100%)' },
+  mint:   { name: 'מנטה',   css: 'linear-gradient(160deg, #D8F5E8 0%, #EAF7F0 50%, #F7FBF9 100%)' },
+  night:  { name: 'כוכבים', css: 'radial-gradient(rgba(255,255,255,.55) 1px, transparent 1.3px) 0 0/26px 26px, linear-gradient(180deg, #13233A, #24385A)' }
+};
+function applyChatLook(){
+  const lk = state._chatLook || {}, th = CHAT_THEMES[lk.theme] || CHAT_THEMES[''], b = document.body.style;
+  b.setProperty('--wa-head', th.head); b.setProperty('--wa-out', th.out); b.setProperty('--wa-accent', th.accent); b.setProperty('--wa-chatbg', th.bg);
+  document.body.classList.toggle('wa-themed', !!lk.theme);
+  const w = lk.wall || '';
+  const css = !w ? '' : /^data:image\//.test(w) ? `url("${w}") center/cover no-repeat` : (CHAT_WALLS[w] || {}).css || '';
+  if(css) b.setProperty('--wa-wall', css); else b.removeProperty('--wa-wall');
+  document.body.classList.toggle('wa-haswall', !!css);
+}
+function shrinkWall(file){
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const k = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      let q = .78, out = c.toDataURL('image/jpeg', q); while(out.length > 450000 && q > .4){ q -= .08; out = c.toDataURL('image/jpeg', q); } res(out); };
+    img.onerror = rej; img.src = url;
+  });
+}
+function openChatLook(role){
+  const lk = { ...(state._chatLook || {}) };
+  const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+  ov.innerHTML = `<div class="confirm-box" style="max-width:440px; width:94vw;">
+    <h3 style="margin:0 0 10px;">🎨 עיצוב הצ׳אט</h3>
+    <div class="lk-prev" id="lkPrev"><div class="lk-head">צ׳אט</div><div class="lk-chat"><span class="lk-in">שלום, מה שלומך?</span><span class="lk-out">ברוך השם, הכל טוב 🙂</span></div></div>
+    <div class="lk-label">צבע</div>
+    <div class="lk-themes">${Object.entries(CHAT_THEMES).map(([k, t]) => `<button type="button" data-th="${k}" title="${t.name}"><span style="background:${t.head}"></span><span style="background:${t.out}"></span><small>${t.name}</small></button>`).join('')}</div>
+    <div class="lk-label">תמונת רקע</div>
+    <div class="lk-walls">
+      <button type="button" data-wall="" class="lk-none">ללא</button>
+      ${Object.entries(CHAT_WALLS).map(([k, w]) => `<button type="button" data-wall="${k}" style="background:${w.css}; background-color:#EFEAE2;" title="${w.name}"><small>${w.name}</small></button>`).join('')}
+      <label class="lk-up" title="תמונה משלי">🖼️<small>תמונה שלי</small><input type="file" id="lkFile" accept="image/*" hidden /></label>
+    </div>
+    <p class="hint" style="font-size:12.5px; margin:6px 0 0;">נשמר בחשבון שלך, בכל המכשירים. אפשר גם להדביק תמונה (Ctrl+V).</p>
+    <div class="error-msg" id="lkErr"></div>
+    <div class="actions"><button type="button" class="btn brass" id="lkSave">שמירה</button><button type="button" class="btn ghost" id="lkX">ביטול</button></div></div>`;
+  document.body.appendChild(ov);
+  const before = { ...(state._chatLook || {}) };
+  const prevApply = () => {
+    state._chatLook = lk; applyChatLook();
+    ov.querySelectorAll('[data-th]').forEach(b => b.classList.toggle('on', b.dataset.th === (lk.theme || '')));
+    ov.querySelectorAll('[data-wall]').forEach(b => b.classList.toggle('on', b.dataset.wall === (lk.wall || '')));
+    ov.querySelector('.lk-up').classList.toggle('on', /^data:/.test(lk.wall || ''));
+  };
+  ov.querySelectorAll('[data-th]').forEach(b => b.onclick = () => { lk.theme = b.dataset.th; prevApply(); });
+  ov.querySelectorAll('[data-wall]').forEach(b => b.onclick = () => { lk.wall = b.dataset.wall; prevApply(); });
+  const useFile = async f => { if(!f || !/^image\//.test(f.type)) return; try{ lk.wall = await shrinkWall(f); prevApply(); }catch(e){ ov.querySelector('#lkErr').textContent = 'לא הצלחנו לקרוא את התמונה'; } };
+  ov.querySelector('#lkFile').onchange = e => useFile(e.target.files && e.target.files[0]);
+  const onPaste = e => { if(!document.body.contains(ov)){ document.removeEventListener('paste', onPaste); return; } const f = [...((e.clipboardData && e.clipboardData.items) || [])].filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean)[0]; if(f){ e.preventDefault(); useFile(f); } };
+  document.addEventListener('paste', onPaste);
+  ov.querySelector('#lkX').onclick = () => { state._chatLook = before; applyChatLook(); ov.remove(); };
+  ov.querySelector('#lkSave').onclick = async e => {
+    e.currentTarget.disabled = true;
+    await setMsgSoundPref(role, { chatTheme: lk.theme || '', chatWall: lk.wall || '' });
+    ov.remove(); showToast('העיצוב נשמר');
+  };
+  prevApply();
 }
 
 // ================= "תזכיר לי" על הודעה: נשמר בהגדרות האישיות (msgReminders); מוצג באתר, והגשר שולח התראת דחיפה אם האתר סגור =================
