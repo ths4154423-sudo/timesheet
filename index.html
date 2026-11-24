@@ -1021,6 +1021,7 @@ body.wa-haswall .lk-chat{ background:var(--wa-wall) !important; background-color
 .lk-walls small{ font-size:11px; background:rgba(255,255,255,.85); border-radius:6px; padding:0 5px; color:#3B4A54; }
 .lk-none{ background:#fff; align-items:center !important; font-size:13px; color:#54656F; }
 .lk-up{ flex-direction:column; align-items:center; justify-content:center; font-size:20px; background:#F5F6F6; margin:0; }
+.wa-room.room-wall .wa-chat{ background:var(--room-wall) !important; background-color:var(--wa-chatbg, #EFEAE2) !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8396,6 +8397,7 @@ async function renderChatRoom(role, otherId){
         <span style="flex:1;"><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span>
         ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">' + WAI.adduser + '</button>' : ''}
         ${isGroup || selfChat ? '' : '<a class="wa-back" id="chatTel" title="התקשרות לטלפון" aria-label="התקשרות לטלפון" hidden>' + WAI.dial + '</a><button type="button" class="wa-back" id="chatVideo" title="שיחת וידאו" aria-label="שיחת וידאו">' + WAI.video + '</button><button type="button" class="wa-back" id="chatCall" title="שיחה קולית" aria-label="שיחה קולית">' + WAI.phone + '</button>'}
+        <button type="button" class="wa-back" id="chatWallBtn" title="תמונת רקע לשיחה הזו" aria-label="תמונת רקע לשיחה" style="font-size:18px;">🎨</button>
         <button type="button" class="wa-back" id="chatMediaBtn" title="מדיה, קבצים וקישורים" aria-label="מדיה וקבצים" style="font-size:18px;">🖼️</button>
         <button type="button" class="wa-back" id="chatMuteBtn" title="השתקת השיחה" aria-label="השתקת השיחה" style="font-size:18px;">${chatMuted(id) ? '🔕' : '🔔'}</button>
         <button type="button" class="wa-back" id="chatSearchBtn" title="חיפוש בשיחה" aria-label="חיפוש בשיחה">${WAI.search}</button>
@@ -8971,6 +8973,8 @@ async function renderChatRoom(role, otherId){
       });
     };
   };
+  applyRoomWall(roomEl, id);
+  document.getElementById('chatWallBtn').onclick = () => openChatLook(role, id);
   // ---- מדיה, קבצים וקישורים בשיחה
   document.getElementById('chatMediaBtn').onclick = () => {
     const msgs = visibleMsgs(cur, me).filter(m => !m.deleted);
@@ -9225,7 +9229,7 @@ function openSoundPicker(role, btn){
 }
 function soundKeyDoc(role){ return role === 'mgr' ? 'mgr-prefs' : (state.currentEmployee && state.currentEmployee.id); }
 async function loadMsgSoundPref(role){
-  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0; state._chatMutes = d.chatMutes || {}; state._chatArchive = d.chatArchive || []; state._msgReminders = d.msgReminders || []; state._chatLook = { theme: d.chatTheme || '', wall: d.chatWall || '' }; applyChatLook();
+  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0; state._chatMutes = d.chatMutes || {}; state._chatArchive = d.chatArchive || []; state._msgReminders = d.msgReminders || []; state._chatLook = { theme: d.chatTheme || '', wall: d.chatWall || '' }; state._chatWalls = d.chatWalls || {}; applyChatLook();
     const b = document.getElementById('msgSoundBtn'); if(b) b.textContent = state._msgSoundMuted ? '🔕' : '🔔'; }catch(e){}
 }
 async function setMsgSoundPref(role, patch){
@@ -9234,6 +9238,7 @@ async function setMsgSoundPref(role, patch){
   if('chatMutes' in patch) state._chatMutes = patch.chatMutes;
   if('chatArchive' in patch) state._chatArchive = patch.chatArchive;
   if('msgReminders' in patch) state._msgReminders = patch.msgReminders;
+  if('chatWalls' in patch){ state._chatWalls = patch.chatWalls; const r = document.querySelector('.wa-room'); if(r && state._chatOpenId) applyRoomWall(r, state._chatOpenId); }
   if('chatTheme' in patch || 'chatWall' in patch){ state._chatLook = { ...(state._chatLook || {}), ...('chatTheme' in patch ? { theme: patch.chatTheme } : {}), ...('chatWall' in patch ? { wall: patch.chatWall } : {}) }; applyChatLook(); }
   const id = soundKeyDoc(role); if(!id) return;
   await saveDoc(() => setDoc(doc(db, 'settings', id), patch, { merge: true }), 'msgSound');
@@ -9618,6 +9623,14 @@ const CHAT_WALLS = {
   mint:   { name: 'מנטה',   css: 'linear-gradient(160deg, #D8F5E8 0%, #EAF7F0 50%, #F7FBF9 100%)' },
   night:  { name: 'כוכבים', css: 'radial-gradient(rgba(255,255,255,.55) 1px, transparent 1.3px) 0 0/26px 26px, linear-gradient(180deg, #13233A, #24385A)' }
 };
+function wallCss(w){ return !w ? '' : /^data:image\//.test(w) ? `url("${w}") center/cover no-repeat` : (CHAT_WALLS[w] || {}).css || ''; }
+// רקע לשיחה מסוימת (chatWalls[chatId]) גובר על הרקע הכללי
+function applyRoomWall(roomEl, chatId){
+  if(!roomEl) return;
+  const v = (state._chatWalls || {})[chatId], css = v === 'none' ? 'none' : wallCss(v);
+  if(css) roomEl.style.setProperty('--room-wall', css); else roomEl.style.removeProperty('--room-wall');
+  roomEl.classList.toggle('room-wall', !!css);
+}
 function applyChatLook(){
   const lk = state._chatLook || {}, th = CHAT_THEMES[lk.theme] || CHAT_THEMES[''], b = document.body.style;
   b.setProperty('--wa-head', th.head); b.setProperty('--wa-out', th.out); b.setProperty('--wa-accent', th.accent); b.setProperty('--wa-chatbg', th.bg);
@@ -9636,27 +9649,33 @@ function shrinkWall(file){
     img.onerror = rej; img.src = url;
   });
 }
-function openChatLook(role){
-  const lk = { ...(state._chatLook || {}) };
+function openChatLook(role, chatId){
+  const per = !!chatId;
+  const lk = per ? { ...(state._chatLook || {}), wall: ((state._chatWalls || {})[chatId] === 'none' ? '' : (state._chatWalls || {})[chatId]) || '__def' } : { ...(state._chatLook || {}) };
   const ov = document.createElement('div'); ov.className = 'confirm-overlay';
   ov.innerHTML = `<div class="confirm-box" style="max-width:440px; width:94vw;">
-    <h3 style="margin:0 0 10px;">🎨 עיצוב הצ׳אט</h3>
+    <h3 style="margin:0 0 10px;">${per ? '🎨 רקע לשיחה הזו' : '🎨 עיצוב הצ׳אט'}</h3>
     <div class="lk-prev" id="lkPrev"><div class="lk-head">צ׳אט</div><div class="lk-chat"><span class="lk-in">שלום, מה שלומך?</span><span class="lk-out">ברוך השם, הכל טוב 🙂</span></div></div>
-    <div class="lk-label">צבע</div>
-    <div class="lk-themes">${Object.entries(CHAT_THEMES).map(([k, t]) => `<button type="button" data-th="${k}" title="${t.name}"><span style="background:${t.head}"></span><span style="background:${t.out}"></span><small>${t.name}</small></button>`).join('')}</div>
+    <div class="lk-label"${per ? ' hidden' : ''}>צבע</div>
+    <div class="lk-themes"${per ? ' hidden' : ''}>${Object.entries(CHAT_THEMES).map(([k, t]) => `<button type="button" data-th="${k}" title="${t.name}"><span style="background:${t.head}"></span><span style="background:${t.out}"></span><small>${t.name}</small></button>`).join('')}</div>
     <div class="lk-label">תמונת רקע</div>
     <div class="lk-walls">
+      ${per ? '<button type="button" data-wall="__def" class="lk-none" style="font-size:12px;">כמו בכל הצ׳אטים</button>' : ''}
       <button type="button" data-wall="" class="lk-none">ללא</button>
       ${Object.entries(CHAT_WALLS).map(([k, w]) => `<button type="button" data-wall="${k}" style="background:${w.css}; background-color:#EFEAE2;" title="${w.name}"><small>${w.name}</small></button>`).join('')}
       <label class="lk-up" title="תמונה משלי">🖼️<small>תמונה שלי</small><input type="file" id="lkFile" accept="image/*" hidden /></label>
     </div>
-    <p class="hint" style="font-size:12.5px; margin:6px 0 0;">נשמר בחשבון שלך, בכל המכשירים. אפשר גם להדביק תמונה (Ctrl+V).</p>
+    <p class="hint" style="font-size:12.5px; margin:6px 0 0;">${per ? 'הרקע יופיע רק בשיחה הזו, ' : ''}נשמר בחשבון שלך, בכל המכשירים. אפשר גם להדביק תמונה (Ctrl+V).${per ? '' : ' לרקע לשיחה מסוימת: כפתור 🎨 בתוך השיחה.'}</p>
     <div class="error-msg" id="lkErr"></div>
     <div class="actions"><button type="button" class="btn brass" id="lkSave">שמירה</button><button type="button" class="btn ghost" id="lkX">ביטול</button></div></div>`;
   document.body.appendChild(ov);
   const before = { ...(state._chatLook || {}) };
+  const lkChat = ov.querySelector('.lk-chat');
   const prevApply = () => {
-    state._chatLook = lk; applyChatLook();
+    if(per){
+      const css = lk.wall === '__def' ? wallCss((state._chatLook || {}).wall) : wallCss(lk.wall);
+      lkChat.style.cssText = css ? `background:${css} !important; background-color:var(--wa-chatbg, #EFEAE2) !important;` : 'background:var(--wa-chatbg, #EFEAE2) !important;';
+    } else { state._chatLook = lk; applyChatLook(); }
     ov.querySelectorAll('[data-th]').forEach(b => b.classList.toggle('on', b.dataset.th === (lk.theme || '')));
     ov.querySelectorAll('[data-wall]').forEach(b => b.classList.toggle('on', b.dataset.wall === (lk.wall || '')));
     ov.querySelector('.lk-up').classList.toggle('on', /^data:/.test(lk.wall || ''));
@@ -9667,9 +9686,15 @@ function openChatLook(role){
   ov.querySelector('#lkFile').onchange = e => useFile(e.target.files && e.target.files[0]);
   const onPaste = e => { if(!document.body.contains(ov)){ document.removeEventListener('paste', onPaste); return; } const f = [...((e.clipboardData && e.clipboardData.items) || [])].filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean)[0]; if(f){ e.preventDefault(); useFile(f); } };
   document.addEventListener('paste', onPaste);
-  ov.querySelector('#lkX').onclick = () => { state._chatLook = before; applyChatLook(); ov.remove(); };
+  ov.querySelector('#lkX').onclick = () => { if(!per){ state._chatLook = before; applyChatLook(); } ov.remove(); };
   ov.querySelector('#lkSave').onclick = async e => {
     e.currentTarget.disabled = true;
+    if(per){
+      const walls = { ...(state._chatWalls || {}) };
+      if(lk.wall === '__def') delete walls[chatId]; else walls[chatId] = lk.wall || 'none';
+      await setMsgSoundPref(role, { chatWalls: walls });
+      ov.remove(); return showToast('הרקע של השיחה נשמר');
+    }
     await setMsgSoundPref(role, { chatTheme: lk.theme || '', chatWall: lk.wall || '' });
     ov.remove(); showToast('העיצוב נשמר');
   };
