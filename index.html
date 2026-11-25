@@ -2135,9 +2135,9 @@ function applyUiV2(on){
 }
 // "פרסומת" חד-פעמית: מציגה לעובד שיש עיצוב חדש ומאפשרת לעבור אליו (או להישאר)
 async function maybeV2Promo(emp, st){
-  if(!emp || emp.chatOnly || st.uiV2 || st.v2PromoSeen) return;
-  try{ if(localStorage.getItem('v2promo:' + emp.id)) return; }catch(e){}
-  if(document.querySelector('.confirm-overlay')) return setTimeout(() => maybeV2Promo(emp, st), 2500);
+  if(!emp || emp.chatOnly || st.uiV2 || !state._justLoggedIn) return;
+  if(document.querySelector('.confirm-overlay, .welcome-splash, .splash')) return setTimeout(() => maybeV2Promo(emp, st), 2500);
+  state._justLoggedIn = false;
   const ov = document.createElement('div'); ov.className = 'confirm-overlay v2promo-ov';
   ov.innerHTML = `<div class="v2promo">
     <div class="v2p-badge">✨ חדש!</div>
@@ -2154,7 +2154,6 @@ async function maybeV2Promo(emp, st){
     <div class="hint" style="font-size:12px; margin-top:8px;">אפשר לשנות בכל רגע: הגדרות ← עיצוב ותצוגה</div></div>`;
   document.body.appendChild(ov);
   const choose = async on => {
-    try{ localStorage.setItem('v2promo:' + emp.id, '1'); }catch(e){}
     ov.remove();
     const cur = await loadSettings(emp.id) || {};
     await saveSettings(emp.id, { ...cur, uiV2: on, v2PromoSeen: true });
@@ -2907,6 +2906,7 @@ async function renderEmployeeLogin(){
       }
       const emp = login.emp;
       saveSession({ role: 'employee', empId: emp.id, emp });
+      state._justLoggedIn = true;   // החלון 'עיצוב חדש' מופיע אחרי כל כניסה עם קוד
       state.employees = [emp];
       if(emp.chatOnly){ renderEmployeeDashboard(emp); return; }
       const hoursData = await loadHours(emp.id);
