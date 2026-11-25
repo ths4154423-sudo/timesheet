@@ -1232,6 +1232,7 @@ body.wa-dark .wa-em-search input{ background:#2A3942 !important; color:#E9EDEF; 
 .st-rrow button{ border:none; width:44px; height:44px; border-radius:50%; background:#00A884; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; flex:0 0 44px; }
 .st-reply.typing{ background:rgba(0,0,0,.6); }
 .st-view .st-cap{ bottom:130px; }
+.st-rx button.mine{ background:rgba(0,168,132,.85); box-shadow:0 0 0 2px #fff; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -10895,7 +10896,7 @@ function openStatusViewer(role, owner, items){
     else if(it.type === 'image'){ body.innerHTML = `<img alt="" />${it.text ? `<div class="st-cap"></div>` : ''}`; if(it.text) body.querySelector('.st-cap').textContent = it.text; const f = await loadTaskFile(it.fileId); if(f) body.querySelector('img').src = f.data; body.style.background = '#000'; }
     else { body.innerHTML = '<div class="st-bigtxt"></div>'; body.querySelector('.st-bigtxt').textContent = it.text; body.style.background = it.bg; }
     markSeen(it);
-    if(mineOwn) updateViews(it);
+    if(mineOwn) updateViews(it); else if(state._stOnShow) state._stOnShow();
     t0 = Date.now();
     timer = setInterval(() => { if(paused){ t0 += 100; return; } const p = Math.min(1, (Date.now() - t0) / DUR); bars[idx].style.width = (p * 100) + '%'; if(p >= 1){ idx++; show(); } }, 100);
   };
@@ -10906,7 +10907,7 @@ function openStatusViewer(role, owner, items){
     vb.textContent = '👁 ' + viewers.length + ' צפיות';
     vb.onclick = () => { paused = true; showConfirmModal(viewers.length ? viewers.sort((a, b) => String(b.at).localeCompare(String(a.at))).map(v => (state._chatNames[v.x] || '') + ' · ' + fmt(v.at)).join('\n') : 'עוד אף אחד לא צפה', { yes: 'סגירה', info: true, danger: false }).then(() => { paused = false; }); };
   };
-  const close = () => { clearInterval(timer); ov.remove(); document.removeEventListener('keydown', onKey); renderStatusStrip(role); };
+  const close = () => { clearInterval(timer); ov.remove(); document.removeEventListener('keydown', onKey); state._stOnShow = null; renderStatusStrip(role); };
   const onKey = e => { if(e.target && e.target.tagName === 'INPUT'){ if(e.key === 'Escape') e.target.blur(); return; } if(e.key === 'Escape') close(); if(e.key === 'ArrowLeft'){ idx++; show(); } if(e.key === 'ArrowRight'){ idx = Math.max(0, idx - 1); show(); } };
   // תגובה לסטטוס: נשלחת בשיחה האישית עם בעל הסטטוס, עם ציטוט של הסטטוס (כמו בוואטסאפ)
   const rf = ov.querySelector('.st-reply');
@@ -10914,17 +10915,38 @@ function openStatusViewer(role, owner, items){
     const inp = rf.querySelector('input');
     inp.addEventListener('focus', () => { paused = true; rf.classList.add('typing'); });
     inp.addEventListener('blur', () => { if(!inp.value.trim()){ paused = false; rf.classList.remove('typing'); } });
-    const sendReply = async text => {
-      const it = items[idx]; if(!it || !text) return;
+    let busy = false;
+    const sendReply = async (text, isReact) => {
+      const it = items[idx]; if(!it || !text || busy) return;
+      busy = true; setTimeout(() => { busy = false; }, 800);
       const snip = '⭕ סטטוס · ' + (it.type === 'image' ? '📷 ' + (it.text || 'תמונה') : it.type === 'anim' ? '💭 ' + ((it.lines || [])[0] || 'סטטוס מונפש') : (it.text || '')).slice(0, 80);
       const cid = chatIdWith(me, owner), nm = { id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [], text, reply: { id: 'st_' + it.id, from: owner, snip }, statusReply: { id: it.id, ...(it.type === 'image' ? { fileId: it.fileId } : {}) } };
       const fresh = await loadChat(cid) || { msgs: [] };
+      // תגובת אימוג׳י לאותו סטטוס: הודעה אחת בלבד – אימוג׳י חדש מחליף את הקודם (ולא נשלחת הודעה נוספת)
+      if(isReact){
+        nm.statusReply.react = true;
+        const prev = (fresh.msgs || []).find(m => m.from === me && !m.deleted && m.statusReply && m.statusReply.id === it.id && m.statusReply.react);
+        if(prev){
+          if(prev.text === text){ showToast('כבר הגבת ' + text); return; }
+          prev.text = text; prev.at = todayStr() + 'T' + nowTimeStr(); prev.seenBy = [];
+          const ok = await saveDoc(() => setDoc(doc(db, 'chats', cid), { msgs: fresh.msgs }, { merge: true }), 'statusReact');
+          showToast(ok === true ? 'התגובה עודכנה ל' + text : 'התגובה לא נשלחה'); paintMyReact(text); return;
+        }
+      }
       const ok = await saveDoc(() => setDoc(doc(db, 'chats', cid), { msgs: [...(fresh.msgs || []), nm].slice(-CHAT_MAX), members: [me, owner] }, { merge: true }), 'statusReply');
-      if(ok === true){ pushNotify({ kind: 'chat', chatId: cid, msgId: nm.id }); showToast('התגובה נשלחה ל' + (state._chatNames[owner] || '')); }
+      if(ok === true){ pushNotify({ kind: 'chat', chatId: cid, msgId: nm.id }); showToast('התגובה נשלחה ל' + (state._chatNames[owner] || '')); if(isReact) paintMyReact(text); }
       else showToast('התגובה לא נשלחה');
     };
+    // סימון התגובה שלי על הסטטוס הנוכחי
+    const paintMyReact = e => { rf.querySelectorAll('[data-srx]').forEach(b => b.classList.toggle('mine', b.dataset.srx === e)); };
+    const loadMyReact = async () => {
+      const it = items[idx]; if(!it) return;
+      const c = await loadChat(chatIdWith(me, owner)); const m = c && (c.msgs || []).find(x => x.from === me && !x.deleted && x.statusReply && x.statusReply.id === it.id && x.statusReply.react);
+      paintMyReact(m ? m.text : null);
+    };
+    state._stOnShow = loadMyReact;
     rf.onsubmit = async e => { e.preventDefault(); const t = inp.value.trim(); if(!t) return; inp.value = ''; inp.blur(); paused = false; rf.classList.remove('typing'); await sendReply(t); };
-    rf.querySelectorAll('[data-srx]').forEach(b => b.onclick = async e => { e.preventDefault(); e.stopPropagation(); b.classList.add('pop'); setTimeout(() => b.classList.remove('pop'), 500); await sendReply(b.dataset.srx); });
+    rf.querySelectorAll('[data-srx]').forEach(b => b.onclick = async e => { e.preventDefault(); e.stopPropagation(); b.classList.add('pop'); setTimeout(() => b.classList.remove('pop'), 500); await sendReply(b.dataset.srx, true); });
     ['pointerdown', 'click'].forEach(ev => rf.addEventListener(ev, e => e.stopPropagation()));
   }
   document.addEventListener('keydown', onKey);
