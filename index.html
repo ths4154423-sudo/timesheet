@@ -1235,6 +1235,65 @@ body.wa-dark .wa-em-search input{ background:#2A3942 !important; color:#E9EDEF; 
 .st-rx button.mine{ background:rgba(0,168,132,.85); box-shadow:0 0 0 2px #fff; }
 .wa-miss{ color:#E53935; font-weight:600; }
 .wa-row.out .wa-miss{ color:#C62828; }
+/* ================= העיצוב החדש (v2) ================= */
+body.v2{ padding-bottom:78px; background:linear-gradient(180deg, var(--paper) 0%, var(--paper-alt) 100%); background-attachment:fixed; }
+body.v2 #chatBtn, body.v2 #tasksBtn, body.v2 #settingsBtn{ display:none !important; }
+body.v2 .card{ border-radius:20px; border:1px solid color-mix(in srgb, var(--line) 70%, transparent); box-shadow:0 4px 16px rgba(18,41,63,.06); padding:18px; }
+body.v2 .card h3{ font-size:18px; }
+body.v2 .btn{ border-radius:12px; }
+body.v2 .btn.brass{ font-weight:700; }
+body.v2 .punch-card-x{ background:linear-gradient(160deg,#0F2A45,#173E62); color:#fff; border:none; box-shadow:0 12px 30px rgba(15,42,69,.25); padding:20px 18px; }
+body.v2 .punch-card-x h3{ color:#fff; font-size:15px; font-weight:600; opacity:.85; letter-spacing:.2px; }
+body.v2 .punch-card-x .hint, body.v2 .punch-card-x label, body.v2 .punch-card-x p{ color:#C7DDF0 !important; }
+body.v2 .punch-card-x input, body.v2 .punch-card-x select{ background:rgba(255,255,255,.08) !important; color:#fff !important; border:1.5px solid rgba(255,255,255,.22) !important; border-radius:12px !important; min-height:46px; }
+body.v2 .punch-card-x .btn.ghost{ background:rgba(255,255,255,.08); color:#fff; border:1.5px solid rgba(255,255,255,.3); }
+body.v2 .punch-card-x .btn.brass{ min-height:54px; font-size:16.5px; font-weight:800; border-radius:14px; box-shadow:0 4px 14px rgba(95,191,143,.35); }
+body.v2 .punch-card-x .btn.danger{ border-radius:14px; min-height:50px; }
+body.v2 .punch-card-x .mono, body.v2 .punch-card-x .digit-block, body.v2 .punch-card-x .num{ color:#8FE3B8; }
+body.v2 .punch-card-x a{ color:#FFE2B0; }
+body.v2 .punch-card-x .card, body.v2 .punch-card-x [style*="background:var(--paper-alt)"]{ background:rgba(255,255,255,.07) !important; color:#fff; }
+body.v2 .collapsible-header{ border-radius:20px; }
+/* רישומי החודש ככרטיסים בטלפון */
+@media (max-width:720px){
+  body.v2 #entriesList .table-scroll{ overflow:visible; }
+  body.v2 #entriesList table, body.v2 #entriesList tbody{ display:block; width:100%; }
+  body.v2 #entriesList thead{ display:none; }
+  body.v2 #entriesList tr{ display:grid; grid-template-columns:1fr auto; gap:2px 10px; padding:12px 14px; margin-bottom:10px; border:1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius:16px; background:var(--surface); box-shadow:0 2px 8px rgba(18,41,63,.05); }
+  body.v2 #entriesList td{ display:block; border:none !important; padding:0 !important; text-align:right; }
+  body.v2 #entriesList td:nth-child(1){ grid-column:1; grid-row:1; font-weight:700; font-size:15px; }
+  body.v2 #entriesList td:nth-child(4){ grid-column:2; grid-row:1; font-weight:800; font-size:17px; text-align:left; }
+  body.v2 #entriesList td:nth-child(2){ grid-column:1; grid-row:2; font-weight:600; }
+  body.v2 #entriesList td:nth-child(5):not(:last-child){ grid-column:2; grid-row:2; text-align:left; color:var(--ink-soft); }
+  body.v2 #entriesList td:nth-child(3){ grid-column:1; grid-row:3; font-size:12.5px; color:var(--ink-soft); }
+  body.v2 #entriesList td:last-child{ grid-column:1 / -1; grid-row:4; margin-top:8px; padding-top:8px !important; border-top:1px dashed color-mix(in srgb, var(--line) 80%, transparent) !important; }
+  body.v2 #entriesList .row-actions{ justify-content:flex-start; }
+}
+#v2nav{ position:fixed; bottom:0; left:0; right:0; z-index:400; display:flex; justify-content:space-around; background:var(--surface); border-top:1px solid color-mix(in srgb, var(--line) 70%, transparent); padding:6px 0 calc(8px + env(safe-area-inset-bottom)); box-shadow:0 -4px 16px rgba(18,41,63,.07); }
+#v2nav button{ position:relative; display:flex; flex-direction:column; align-items:center; gap:1px; border:none; background:none; color:var(--ink-soft); font:inherit; font-size:11.5px; min-width:68px; padding:4px 0; cursor:pointer; border-radius:12px; }
+#v2nav button b{ font-size:21px; font-weight:400; line-height:1.2; font-family:'Noto Color Emoji', sans-serif; }
+#v2nav button.on{ color:var(--brass-dark); font-weight:700; }
+#v2nav button.on b{ transform:translateY(-1px); }
+#v2nav button.on::after{ content:''; position:absolute; top:-6px; width:28px; height:3px; border-radius:3px; background:var(--brass-dark); }
+.v2cnt{ position:absolute; top:0; right:14px; background:#E5484D; color:#fff; border-radius:999px; font-size:10.5px; font-weight:700; padding:0 5px; min-width:16px; line-height:16px; }
+.v2cnt[hidden]{ display:none; }
+.v2promo{ background:var(--surface, #fff); color:var(--ink); border-radius:24px; padding:24px 20px 18px; max-width:380px; width:92vw; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.3); animation:v2pIn .45s cubic-bezier(.2,1.2,.4,1); }
+@keyframes v2pIn{ from{ transform:translateY(30px) scale(.94); opacity:0; } to{ transform:none; opacity:1; } }
+.v2p-badge{ display:inline-block; background:linear-gradient(135deg,#5FBF8F,#3D9A6C); color:#fff; border-radius:999px; padding:3px 14px; font-weight:800; font-size:13px; margin-bottom:8px; }
+.v2promo h2{ margin:0 0 6px; font-size:22px; }
+.v2promo p{ margin:0 0 14px; font-size:14px; color:var(--ink-soft); }
+.v2promo ul{ text-align:right; margin:12px 0 14px; padding-inline-start:20px; font-size:13.5px; line-height:1.7; }
+.v2promo .btn{ width:100%; margin:6px 0 0 !important; min-height:48px; border-radius:14px; font-size:15.5px; }
+.v2p-mock{ background:#EAF3FB; border-radius:18px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+.v2p-card{ background:linear-gradient(160deg,#0F2A45,#173E62); color:#fff; border-radius:14px; padding:12px; text-align:right; }
+.v2p-top{ display:flex; justify-content:space-between; font-size:11px; color:#C7DDF0; }
+.v2p-pill{ color:#8FE3B8; border:1px solid rgba(143,227,184,.4); border-radius:99px; padding:0 7px; }
+.v2p-time{ text-align:center; font-size:30px; font-weight:800; color:#8FE3B8; margin:4px 0; }
+.v2p-btns{ display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:11.5px; font-weight:700; }
+.v2p-btns span{ border:1px solid rgba(255,255,255,.3); border-radius:9px; padding:6px; text-align:center; } .v2p-btns .g{ background:#5FBF8F; color:#0D2235; border:none; }
+.v2p-row{ background:#fff; border-radius:12px; padding:8px 10px; display:flex; align-items:center; gap:10px; font-size:12px; text-align:right; } .v2p-row b{ background:#EAF3FB; border-radius:8px; padding:2px 8px; } .v2p-row span{ flex:1; } .v2p-row em{ font-style:normal; font-weight:800; }
+.v2p-nav{ background:#fff; border-radius:12px; display:flex; justify-content:space-around; padding:6px; font-size:16px; } .v2p-nav .on{ border-bottom:2px solid #3D9A6C; }
+body.v2 #app:has(> .punch-card-x){ display:flex; flex-direction:column; }
+body.v2 #app > .punch-card-x{ order:-1; margin-top:4px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -2046,8 +2105,67 @@ function applyEmployeeTheme(settings){
   root.setProperty('--ink-soft', mixHexColors(text, bg, 0.35));
   root.setProperty('--surface', surface);
   root.setProperty('--line', line);
+  applyUiV2(!!settings.uiV2);
+}
+// ================= העיצוב החדש (v2): שכבת עיצוב שאפשר להדליק ולכבות לכל עובד =================
+function applyUiV2(on){
+  on = on && !!state.currentEmployee && !state.currentEmployee.chatOnly;
+  document.body.classList.toggle('v2', on);
+  let nav = document.getElementById('v2nav');
+  if(!on){ if(nav) nav.remove(); clearInterval(state._v2navT); return; }
+  if(!nav){
+    nav = document.createElement('nav'); nav.id = 'v2nav';
+    nav.innerHTML = `<button type="button" data-v2="home"><b>🏠</b>בית</button><button type="button" data-v2="chat"><b>💬</b>צ׳אט<span class="v2cnt" id="v2chatN" hidden></span></button><button type="button" data-v2="tasks"><b>✔</b>משימות<span class="v2cnt" id="v2tasksN" hidden></span></button><button type="button" data-v2="settings"><b>⚙️</b>הגדרות</button>`;
+    document.body.appendChild(nav);
+    nav.querySelectorAll('[data-v2]').forEach(b => b.onclick = () => {
+      const emp = state.currentEmployee; if(!emp) return;
+      const a = b.dataset.v2;
+      if(a === 'home') renderEmployeeDashboard(emp, null, true);
+      else if(a === 'chat') renderChatHome('emp');
+      else if(a === 'tasks') renderEmployeeTasks(emp);
+      else renderEmployeeSettings(emp);
+    });
+  }
+  const sync = () => {
+    const r = getRoute() || {}, page = r.page || 'dash';
+    nav.querySelectorAll('[data-v2]').forEach(b => b.classList.toggle('on', (b.dataset.v2 === 'home' && page === 'dash') || b.dataset.v2 === page));
+    [['chatBadge', 'v2chatN'], ['tasksBadge', 'v2tasksN']].forEach(([src, dst]) => { const s0 = document.getElementById(src), d = document.getElementById(dst); if(!s0 || !d) return; const t = (s0.textContent || '').trim(); d.hidden = !t || t === '0'; d.textContent = t; });
+  };
+  clearInterval(state._v2navT); state._v2navT = setInterval(() => { if(!document.body.classList.contains('v2')){ clearInterval(state._v2navT); return; } sync(); }, 1500); sync();
+}
+// "פרסומת" חד-פעמית: מציגה לעובד שיש עיצוב חדש ומאפשרת לעבור אליו (או להישאר)
+async function maybeV2Promo(emp, st){
+  if(!emp || emp.chatOnly || st.uiV2 || st.v2PromoSeen) return;
+  try{ if(localStorage.getItem('v2promo:' + emp.id)) return; }catch(e){}
+  if(document.querySelector('.confirm-overlay')) return setTimeout(() => maybeV2Promo(emp, st), 2500);
+  const ov = document.createElement('div'); ov.className = 'confirm-overlay v2promo-ov';
+  ov.innerHTML = `<div class="v2promo">
+    <div class="v2p-badge">✨ חדש!</div>
+    <h2>יש לנו עיצוב חדש</h2>
+    <p>מראה מודרני ונקי יותר – אפשר לעבור אליו עכשיו, ולחזור לעיצוב הרגיל בכל רגע.</p>
+    <div class="v2p-mock">
+      <div class="v2p-card"><div class="v2p-top"><span>בעבודה מאז 08:12</span><span class="v2p-pill">● בעבודה</span></div><div class="v2p-time">6:24</div><div class="v2p-btns"><span>☕ הפסקה</span><span class="g">■ סיום יום</span></div></div>
+      <div class="v2p-row"><b>24</b><span>08:05 – 16:40</span><em>8:05</em></div>
+      <div class="v2p-nav"><span class="on">🏠</span><span>💬</span><span>✔</span><span>⚙️</span></div>
+    </div>
+    <ul><li>כרטיס נוכחות כהה ובולט</li><li>רישומי החודש ככרטיסים נוחים לטלפון</li><li>סרגל ניווט בתחתית המסך</li></ul>
+    <button type="button" class="btn brass v2p-go">✨ לעבור לעיצוב החדש</button>
+    <button type="button" class="btn ghost v2p-no">להישאר בעיצוב הרגיל</button>
+    <div class="hint" style="font-size:12px; margin-top:8px;">אפשר לשנות בכל רגע: הגדרות ← עיצוב ותצוגה</div></div>`;
+  document.body.appendChild(ov);
+  const choose = async on => {
+    try{ localStorage.setItem('v2promo:' + emp.id, '1'); }catch(e){}
+    ov.remove();
+    const cur = await loadSettings(emp.id) || {};
+    await saveSettings(emp.id, { ...cur, uiV2: on, v2PromoSeen: true });
+    if(state._settingsCache && state._settingsCache.empId === emp.id) state._settingsCache = null;
+    if(on){ showToast('✨ ברוך הבא לעיצוב החדש'); renderEmployeeDashboard(emp, null, true); }
+  };
+  ov.querySelector('.v2p-go').onclick = () => choose(true);
+  ov.querySelector('.v2p-no').onclick = () => choose(false);
 }
 function resetTheme(){
+  document.body.classList.remove('v2'); { const n = document.getElementById('v2nav'); if(n) n.remove(); }
   ['--brass', '--brass-dark', '--brass-text', '--paper', '--paper-alt', '--ink', '--ink-soft', '--surface', '--line'].forEach(v => {
     document.documentElement.style.removeProperty(v);
   });
@@ -6063,6 +6181,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   applyEmployeeTheme(empSettings);
   setHeader('שלום, ' + emp.name, (empSettings.hideMirror ? '' : '<span class="mirror-grp" style="display:inline-flex; gap:2px;"><button class="btn ghost small" id="mirrorBtn" title="מראה">🪞 מראה</button><button class="btn ghost small" id="hideMirrorBtn" title="הסתרת המראה" style="padding-inline:8px;">✕</button></span> ') + '<button class="btn ghost small" id="chatBtn">💬 צ׳אט<span id="chatBadge" class="tasks-badge"></span></button> <button class="btn ghost small" id="tasksBtn">✔ משימות<span id="tasksBadge" class="tasks-badge"></span></button> <button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="logout-link" id="logoutBtn" title="התנתקות"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><polyline points="8 7 3 12 8 17"/><line x1="3" y1="12" x2="15" y2="12"/></svg>התנתקות</button>');
   setTimeout(() => maybeBirthdayGreeting(emp), 600);
+  setTimeout(() => maybeV2Promo(emp, empSettings), 2200);
   const month = state._empMonth || currentMonthStr();
 
   const passedFresh = useCache && typeof useCache === 'object' ? useCache : null;
@@ -6428,7 +6547,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     </div>`;
     })()}
 
-    <div class="card">
+    <div class="card punch-card-x">
       <h3>כרטיס נוכחות היום</h3>
       ${!openEntry ? `
         <p class="hint" style="margin-top:-6px; margin-bottom:12px; font-size:13px;">לחצו כשאתם מגיעים לעבודה — את שעת הסיום תעדכנו בנפרד בסוף היום.</p>
@@ -7442,6 +7561,14 @@ const EMPLOYEE_SETTINGS_DEFS = [
     label: 'צבע הטקסט באתר',
     hint: 'אפשר לבחור צבע טקסט ספציפי, או להשאיר על "התאמה אוטומטית" — ואז הטקסט יהיה בהיר או כהה בהתאם לצבע הרקע שנבחר, כדי שתמיד יהיה קריא.',
     default: null
+  },
+  {
+    key: 'uiV2',
+    category: 'appearance',
+    type: 'checkbox',
+    label: '✨ העיצוב החדש',
+    hint: 'מראה מודרני: כרטיס נוכחות כהה ובולט, רישומי החודש ככרטיסים, וסרגל ניווט בתחתית המסך. אפשר לחזור לעיצוב הרגיל בכל רגע – מבטלים את הסימון כאן.',
+    default: false
   },
   {
     key: 'hideMirror',
