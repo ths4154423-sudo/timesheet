@@ -10914,7 +10914,7 @@ function renderCallLog(role, rows, chats, contacts){
     const dur = (String(x.m.text || '').match(/·\s*([\d:]+)/) || [])[1] || '';
     return `<div class="wa-contact wa-call-row"><span class="wa-avatar" data-av="${x.other}">${escapeHtml((x.name || '?').charAt(0))}</span>
       <span class="wa-c-main"><b${missed && !out ? ' style="color:#E53935;"' : ''}>${escapeHtml(x.name || '')}</b>
-      <span class="wa-c-prev"><span class="${missed ? 'cl-miss' : 'cl-ok'}">${out ? '↗' : '↙'}</span> ${missed ? (out ? 'לא נענתה' : 'שיחה שלא נענתה') : (out ? 'יוצאת' : 'נכנסת')}${dur ? ' · ' + dur : ''} · ${fmt(x.m.at)}</span></span>
+      <span class="wa-c-prev"><span class="${missed && !out ? 'cl-miss' : 'cl-ok'}">${out ? '↗\uFE0E' : '↙\uFE0E'}</span> ${out ? 'יוצאת' : missed ? 'שיחה שלא נענתה' : 'נכנסת'}${dur ? ' · ' + dur : ''} · ${fmt(x.m.at)}</span></span>
       <button type="button" class="wa-back cl-btn" data-cl-call="${x.other}" data-cl-video="${video ? 1 : 0}" title="${video ? 'שיחת וידאו' : 'שיחה קולית'}" aria-label="התקשרות">${video ? WAI.video : WAI.phone}</button></div>`;
   }).join('') : '<p class="hint" style="text-align:center; padding:30px 10px;">עוד אין שיחות קוליות או וידאו.<br>מתקשרים מתוך שיחה, בכפתור 📞 או 🎥 שבראש השיחה.</p>'}</div>`;
   fillAvatars(pane);
