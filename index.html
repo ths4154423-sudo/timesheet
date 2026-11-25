@@ -1220,6 +1220,18 @@ body.wa-dark .wa-sticker{ background:linear-gradient(135deg, var(--stc), color-m
 .docs-up-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; } .docs-up-row select{ width:auto; } .docs-up-row input{ flex:1; min-width:160px; }
 body.wa-dark .wa-em-search input{ background:#2A3942 !important; color:#E9EDEF; } body.wa-dark .wa-em-cats{ border-color:#2A3942; }
 .wa-md-row .wa-back{ color:#8696A0 !important; } .wa-md-row .wa-back:hover{ color:#D93025 !important; }
+.st-reply{ position:absolute; left:0; right:0; bottom:0; z-index:4; padding:10px 12px 14px; background:linear-gradient(transparent, rgba(0,0,0,.55)); display:flex; flex-direction:column; gap:8px; align-items:center; }
+.st-rx{ display:flex; gap:6px; }
+.st-rx button{ border:none; background:rgba(255,255,255,.14); width:42px; height:42px; border-radius:50%; font-size:22px; cursor:pointer; font-family:'Noto Color Emoji', sans-serif; transition:transform .15s, background .15s; }
+.st-rx button:hover{ background:rgba(255,255,255,.26); transform:scale(1.12); }
+.st-rx button.pop{ animation:stPop .5s ease; }
+@keyframes stPop{ 0%{ transform:scale(1); } 40%{ transform:scale(1.6); } 100%{ transform:scale(1); } }
+.st-rrow{ display:flex; gap:8px; width:100%; max-width:560px; }
+.st-rrow input{ flex:1; border:1px solid rgba(255,255,255,.35) !important; background:rgba(0,0,0,.35) !important; color:#fff; border-radius:22px; padding:10px 16px; font:inherit; font-size:15px; outline:none; min-width:0; }
+.st-rrow input::placeholder{ color:rgba(255,255,255,.75); }
+.st-rrow button{ border:none; width:44px; height:44px; border-radius:50%; background:#00A884; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; flex:0 0 44px; }
+.st-reply.typing{ background:rgba(0,0,0,.6); }
+.st-view .st-cap{ bottom:130px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -10861,7 +10873,8 @@ function openStatusViewer(role, owner, items){
       ${mineOwn ? '<button type="button" class="st-del" title="מחיקה">🗑</button>' : ''}<button type="button" class="st-close" aria-label="סגירה">✕</button></div>
     <div class="st-body"></div>
     <div class="st-tap prev"></div><div class="st-tap next"></div>
-    ${mineOwn ? '<button type="button" class="st-views"></button>' : ''}`;
+    ${mineOwn ? '<button type="button" class="st-views"></button>' : `<form class="st-reply"><div class="st-rx">${['❤️', '👍', '😂', '😮', '🙏', '👏'].map(e => `<button type="button" data-srx="${e}">${e}</button>`).join('')}</div>
+      <div class="st-rrow"><input type="text" maxlength="500" placeholder="תגובה ל${escapeHtml(state._chatNames[owner] || '')}..." /><button type="submit" aria-label="שליחה">${WAI.send}</button></div></form>`}`;
   document.body.appendChild(ov);
   const body = ov.querySelector('.st-body'); let bars = ov.querySelectorAll('.st-bars i');
   let timer = null, t0 = 0, paused = false, DUR = 5000;
@@ -10894,7 +10907,26 @@ function openStatusViewer(role, owner, items){
     vb.onclick = () => { paused = true; showConfirmModal(viewers.length ? viewers.sort((a, b) => String(b.at).localeCompare(String(a.at))).map(v => (state._chatNames[v.x] || '') + ' · ' + fmt(v.at)).join('\n') : 'עוד אף אחד לא צפה', { yes: 'סגירה', info: true, danger: false }).then(() => { paused = false; }); };
   };
   const close = () => { clearInterval(timer); ov.remove(); document.removeEventListener('keydown', onKey); renderStatusStrip(role); };
-  const onKey = e => { if(e.key === 'Escape') close(); if(e.key === 'ArrowLeft'){ idx++; show(); } if(e.key === 'ArrowRight'){ idx = Math.max(0, idx - 1); show(); } };
+  const onKey = e => { if(e.target && e.target.tagName === 'INPUT'){ if(e.key === 'Escape') e.target.blur(); return; } if(e.key === 'Escape') close(); if(e.key === 'ArrowLeft'){ idx++; show(); } if(e.key === 'ArrowRight'){ idx = Math.max(0, idx - 1); show(); } };
+  // תגובה לסטטוס: נשלחת בשיחה האישית עם בעל הסטטוס, עם ציטוט של הסטטוס (כמו בוואטסאפ)
+  const rf = ov.querySelector('.st-reply');
+  if(rf){
+    const inp = rf.querySelector('input');
+    inp.addEventListener('focus', () => { paused = true; rf.classList.add('typing'); });
+    inp.addEventListener('blur', () => { if(!inp.value.trim()){ paused = false; rf.classList.remove('typing'); } });
+    const sendReply = async text => {
+      const it = items[idx]; if(!it || !text) return;
+      const snip = '⭕ סטטוס · ' + (it.type === 'image' ? '📷 ' + (it.text || 'תמונה') : it.type === 'anim' ? '💭 ' + ((it.lines || [])[0] || 'סטטוס מונפש') : (it.text || '')).slice(0, 80);
+      const cid = chatIdWith(me, owner), nm = { id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [], text, reply: { id: 'st_' + it.id, from: owner, snip }, statusReply: { id: it.id, ...(it.type === 'image' ? { fileId: it.fileId } : {}) } };
+      const fresh = await loadChat(cid) || { msgs: [] };
+      const ok = await saveDoc(() => setDoc(doc(db, 'chats', cid), { msgs: [...(fresh.msgs || []), nm].slice(-CHAT_MAX), members: [me, owner] }, { merge: true }), 'statusReply');
+      if(ok === true){ pushNotify({ kind: 'chat', chatId: cid, msgId: nm.id }); showToast('התגובה נשלחה ל' + (state._chatNames[owner] || '')); }
+      else showToast('התגובה לא נשלחה');
+    };
+    rf.onsubmit = async e => { e.preventDefault(); const t = inp.value.trim(); if(!t) return; inp.value = ''; inp.blur(); paused = false; rf.classList.remove('typing'); await sendReply(t); };
+    rf.querySelectorAll('[data-srx]').forEach(b => b.onclick = async e => { e.preventDefault(); e.stopPropagation(); b.classList.add('pop'); setTimeout(() => b.classList.remove('pop'), 500); await sendReply(b.dataset.srx); });
+    ['pointerdown', 'click'].forEach(ev => rf.addEventListener(ev, e => e.stopPropagation()));
+  }
   document.addEventListener('keydown', onKey);
   ov.querySelector('.st-close').onclick = close;
   ov.querySelector('.st-tap.next').onclick = () => { idx++; show(); };
