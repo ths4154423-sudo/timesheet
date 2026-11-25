@@ -1132,6 +1132,20 @@ body.wa-dark .wa-tabs{ background:#111B21; border-bottom:1px solid #1F2C33; }
 body.wa-dark .wa-tabs button{ color:#8696A0; } body.wa-dark .wa-tabs button.on{ color:#00A884; border-bottom-color:#00A884; }
 body.wa-dark .wa-tab-n{ background:#00A884; color:#111B21; } body.wa-dark .wa-tab-dot{ background:#00A884; }
 body.wa-dark .st-list .st-name{ color:#E9EDEF; } body.wa-dark .st-list .st-item:hover{ background:#182229; } body.wa-dark .st-list .st-sec{ color:#00A884; }
+.dnd-box{ padding:8px 10px 10px; border-bottom:1px solid #E9EDEF; margin-bottom:4px; }
+.dnd-title{ font-weight:700; font-size:14px; margin-bottom:6px; } .dnd-title small{ font-weight:400; color:#E53935; }
+.dnd-btns{ display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap; }
+.dnd-btns button{ flex:1; border:1px solid #D1D7DB; background:#fff; border-radius:14px; padding:5px 8px; font:inherit; font-size:13px; cursor:pointer; white-space:nowrap; }
+.dnd-btns button:hover{ background:#F0F2F5; }
+.wa-tab-n.miss{ background:#E53935 !important; color:#fff !important; }
+.wa-lp{ display:flex; flex-direction:column; gap:2px; background:rgba(0,0,0,.05); border-radius:8px; overflow:hidden; margin:4px 0 2px; text-decoration:none; color:inherit; max-width:320px; }
+.wa-lp img{ width:100%; max-height:170px; object-fit:cover; display:block; }
+.wa-lp-t{ font-weight:700; font-size:13.5px; padding:6px 9px 0; }
+.wa-lp-d{ font-size:12.5px; color:#54656F; padding:0 9px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.wa-lp-h{ font-size:11.5px; color:#8696A0; padding:0 9px 6px; text-align:right; }
+.gi-row{ display:flex !important; align-items:center; gap:10px; flex-direction:row !important; }
+body.wa-dark .wa-lp{ background:rgba(255,255,255,.07); } body.wa-dark .wa-lp-d{ color:#AEBAC1; }
+body.wa-dark .dnd-btns button{ background:#2A3942; color:#E9EDEF; border-color:#3B4A54; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8354,10 +8368,10 @@ async function renderChatHome(role){
       <button type="button" class="wa-back" id="chatLookBtn" title="עיצוב ותמונת רקע" aria-label="עיצוב ותמונת רקע" style="margin-inline-start:auto; color:#fff; font-size:18px;">🎨</button>
       <button type="button" class="wa-back" id="chatDarkBtn" title="מצב כהה" aria-label="מצב כהה" style="color:#fff; font-size:18px;">${document.body.classList.contains('wa-dark') ? '☀️' : '🌙'}</button>
       <button type="button" class="wa-back" id="myProfileBtn" title="תמונת הפרופיל שלי" aria-label="תמונת פרופיל" style="padding:0;"><span class="wa-avatar" data-av="${me}" style="width:32px; height:32px; flex-basis:32px; font-size:14px;">${escapeHtml((state._chatNames[me] || 'אני').charAt(0))}</span></button>
-      <button type="button" class="wa-back" id="msgSoundBtn" title="${state._msgSoundMuted ? 'הפעלת צליל הודעות' : 'השתקת צליל הודעות'}" aria-label="צליל הודעות" style="color:#fff; font-size:19px;">${state._msgSoundMuted ? '🔕' : '🔔'}</button>
+      <button type="button" class="wa-back" id="msgSoundBtn" title="${state._msgSoundMuted ? 'הפעלת צליל הודעות' : 'השתקת צליל הודעות'}" aria-label="צליל הודעות ואל תפריע" style="color:#fff; font-size:19px;">${chatDnd() ? '⛔' : state._msgSoundMuted ? '🔕' : '🔔'}</button>
       ${coUser ? `<button type="button" class="logout-link" id="waFullLogout" style="margin-inline-start:auto;">התנתקות</button>` : ''}
     </div>
-    <div class="wa-tabs" id="waTabs"><button type="button" data-ht="chats">צ׳אטים<span class="wa-tab-n" id="waTabChatsN" hidden></span></button><button type="button" data-ht="status">סטטוס<span class="wa-tab-dot" id="waTabStDot" hidden></span></button><button type="button" data-ht="calls">שיחות</button></div>
+    <div class="wa-tabs" id="waTabs"><button type="button" data-ht="chats">צ׳אטים<span class="wa-tab-n" id="waTabChatsN" hidden></span></button><button type="button" data-ht="status">סטטוס<span class="wa-tab-dot" id="waTabStDot" hidden></span></button><button type="button" data-ht="calls">שיחות<span class="wa-tab-n miss" id="waTabCallsN" hidden></span></button></div>
     <div class="wa-full-body">
     <div data-hp="status" hidden><div class="st-strip st-list" id="statusStrip"></div><p class="hint" style="text-align:center; font-size:12.5px;">סטטוסים נמחקים אוטומטית אחרי 24 שעות</p></div>
     <div data-hp="calls" hidden id="waCallsPane"></div>
@@ -8389,11 +8403,14 @@ async function renderChatHome(role){
     target.querySelectorAll('[data-ht]').forEach(b => b.classList.toggle('on', b.dataset.ht === t));
     target.querySelectorAll('[data-hp]').forEach(p2 => p2.hidden = p2.dataset.hp !== t);
     const fab = document.getElementById('chatNewGroup'); if(fab) fab.hidden = t !== 'chats';
-    if(t === 'calls') renderCallLog(role, rows, chats, contacts);
+    if(t === 'calls'){ renderCallLog(role, rows, chats, contacts); try{ localStorage.setItem('callsSeen:' + me, todayStr() + 'T' + nowTimeStr()); }catch(e){} const n = document.getElementById('waTabCallsN'); if(n) n.hidden = true; }
     if(t === 'status'){ renderStatusStrip(role); }
   };
   target.querySelectorAll('[data-ht]').forEach(b => b.onclick = () => showTab(b.dataset.ht));
   { const totalUn = rows.reduce((a, r) => a + (r.un || 0), 0), n = document.getElementById('waTabChatsN'); if(totalUn){ n.hidden = false; n.textContent = totalUn; } }
+  { let since = ''; try{ since = localStorage.getItem('callsSeen:' + me) || ''; }catch(e){}
+    let miss = 0; contacts.forEach((c, i) => { if(c.group || c.self || c.id === 'team') return; ((chats[i] || {}).msgs || []).forEach(m => { if(m.call && m.from !== me && /לא נענתה/.test(m.text || '') && String(m.at) > since) miss++; }); });
+    const n = document.getElementById('waTabCallsN'); if(miss){ n.hidden = false; n.textContent = miss; } }
   showTab(state._chatTab || 'chats');
   document.getElementById('myProfileBtn').onclick = () => editChatPhoto(role);
   document.getElementById('chatLookBtn').onclick = () => openChatLook(role);
@@ -8489,7 +8506,7 @@ async function renderChatHome(role){
     if(r === 'granted'){ registerPush(); showToast('ההתראות הופעלו'); new Notification('דירתא – צ׳אט', { body: 'מעכשיו תקבלו כאן הודעה כשמגיעה הודעה חדשה', icon: 'logo.jpg' }); renderChatHome(role); }
   };
   document.getElementById('chatNewGroup').onclick = async () => {
-    const pick = await chatPickMembers(contacts0.filter(c => !c.group), [], true);
+    const pick = await chatPickMembers(contacts0.filter(c => !c.group && !c.self && c.id !== me), [], true);
     if(!pick) return;
     const gid = 'g_' + uid() + uid();
     const mem = [...new Set([me, ...pick.ids, 'mgr'])];   // המנהל מצורף אוטומטית לכל קבוצה
@@ -8550,7 +8567,8 @@ function chatBubblesHtml(ch, me, isGroup, members){
         ${me === '__viewer__' ? '' : `<div class="wa-cc-btns">${m.contact.id && m.contact.id !== me ? `<button type="button" data-cc-chat="${escapeHtml(m.contact.id)}">💬 הודעה</button>` : ''}${m.contact.phone ? `<a href="tel:${escapeHtml(m.contact.phone)}">📞 התקשרות</a>` : ''}</div>`}` : ''}
       ${m.loc ? `<div class="wa-loc"><div class="wa-loc-pin">📍</div><div class="wa-loc-main"><b>מיקום</b><span><bdi>${m.loc.lat.toFixed(5)}, ${m.loc.lng.toFixed(5)}</bdi>${m.loc.acc ? ' · דיוק ' + Math.round(m.loc.acc) + ' מ׳' : ''}</span>
         <span class="wa-loc-btns"><a href="https://waze.com/ul?ll=${m.loc.lat},${m.loc.lng}&navigate=yes" target="_blank" rel="noopener">🚗 Waze</a><a href="https://www.google.com/maps?q=${m.loc.lat},${m.loc.lng}" target="_blank" rel="noopener">🗺️ גוגל מפות</a></span></div></div>` : ''}
-      ${m.text ? `<div class="wa-text">${linkify(m.text)}</div>` : ''}
+      ${m.text ? `<div class="wa-text">${m.call && !mine && /לא נענתה/.test(m.text) ? '<span style="color:#E53935;">📞 שיחה שלא נענתה מ' + escapeHtml(state._chatNames[m.from] || '') + '</span>' : linkify(m.text)}</div>` : ''}
+      ${m.lp && m.lp.title ? `<a class="wa-lp" href="${escapeHtml(m.lp.url)}" target="_blank" rel="noopener">${m.lp.img ? `<img src="${escapeHtml(m.lp.img)}" alt="" loading="lazy" onerror="this.remove()" />` : ''}<span class="wa-lp-t">${escapeHtml(m.lp.title)}</span>${m.lp.desc ? `<span class="wa-lp-d">${escapeHtml(m.lp.desc)}</span>` : ''}<span class="wa-lp-h" dir="ltr">${escapeHtml((m.lp.url.match(/^https?:\/\/([^/]+)/) || [])[1] || '')}</span></a>` : ''}
       ${m.ack ? (mine ? `<button type="button" class="wa-ack-who" data-ack-who="${m.id}">✔ אישרו ${ackN} מתוך ${ackOthers.length}</button>` : me === '__viewer__' ? '' : (m.acks || {})[me] ? '<div class="wa-ack-done">✔ אישרת קריאה</div>' : `<button type="button" class="wa-ack-btn" data-ack="${m.id}">קראתי ✔</button>`) : ''}
       <span class="wa-time">${m.scheduled ? '<i class="wa-edited">⏰</i>' : ''}${m.edited ? '<i class="wa-edited">נערכה</i>' : ''}${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
     </div>${reactHtml}</div>`;
@@ -8573,6 +8591,7 @@ async function renderChatRoom(role, otherId){
       <div class="wa-room-head"><button type="button" class="wa-back" id="chatRoomBack" aria-label="חזרה">${WAI.back}</button>
         <span class="wa-avatar${isGroup ? ' group' : ''}"${isGroup || selfChat ? '' : ` data-av="${otherId}"`}>${isGroup ? WAI.group : escapeHtml(name.charAt(0) || '?')}</span>
         <span style="flex:1;"><b>${escapeHtml(name)}</b><span class="wa-room-sub" id="chatSub"></span></span>
+        ${custom ? '<button type="button" class="wa-back" id="chatGroupInfo" title="פרטי הקבוצה" aria-label="פרטי הקבוצה" style="font-size:18px;">ℹ️</button>' : ''}
         ${custom ? '<button type="button" class="wa-back" id="chatAddMembers" title="הוספת משתתפים" aria-label="הוספת משתתפים">' + WAI.adduser + '</button>' : ''}
         ${isGroup || selfChat ? '' : '<a class="wa-back" id="chatTel" title="התקשרות לטלפון" aria-label="התקשרות לטלפון" hidden>' + WAI.dial + '</a><button type="button" class="wa-back" id="chatVideo" title="שיחת וידאו" aria-label="שיחת וידאו">' + WAI.video + '</button><button type="button" class="wa-back" id="chatCall" title="שיחה קולית" aria-label="שיחה קולית">' + WAI.phone + '</button>'}
         <button type="button" class="wa-back" id="chatWallBtn" title="תמונת רקע לשיחה הזו" aria-label="תמונת רקע לשיחה" style="font-size:18px;">🎨</button>
@@ -8624,9 +8643,46 @@ async function renderChatRoom(role, otherId){
     cur = { ...cur, cleared: { ...(cur.cleared || {}), [me]: last.id }, clearedAt: { ...(cur.clearedAt || {}), [me]: last.at || '' } };
     paint.sig = null; paint(); showToast('הצ׳אט נוקה');
   };
+  const giBtn = document.getElementById('chatGroupInfo');
+  if(giBtn) giBtn.onclick = async () => {
+    const g0 = await loadChat(id); if(!g0) return showToast('שגיאה בטעינה');
+    const isAdminG = me === 'mgr' || g0.createdBy === me;
+    const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+    const paintGi = g => {
+      ov.innerHTML = `<div class="confirm-box msginfo" style="max-width:420px; width:94vw;">
+        <h3 style="margin:0 0 10px;">👥 פרטי הקבוצה</h3>
+        <label>שם הקבוצה</label><div style="display:flex; gap:6px;"><input type="text" id="giName" maxlength="60" ${isAdminG ? '' : 'disabled'} /><button type="button" class="btn brass small" id="giSave" style="margin:0;" ${isAdminG ? '' : 'hidden'}>שמירה</button></div>
+        <div class="lk-label">משתתפים (${(g.members || []).length})</div>
+        ${(g.members || []).map(x => `<div class="msginfo-row gi-row"><span class="wa-avatar" data-av="${x}" style="width:34px; height:34px; flex-basis:34px; font-size:14px;">${escapeHtml((state._chatNames[x] || '?').charAt(0))}</span><b style="flex:1;">${escapeHtml(x === me ? 'אתה' : (state._chatNames[x] || x))}</b>${g.createdBy === x ? '<span class="hint" style="font-size:12px;">יצר/ה את הקבוצה</span>' : ''}${isAdminG && x !== me && x !== 'mgr' ? `<button type="button" class="btn ghost small" data-gi-rm="${x}" style="margin:0;">הסרה</button>` : ''}</div>`).join('')}
+        <div class="actions" style="flex-wrap:wrap;">
+          <button type="button" class="btn ghost" id="giLeave" ${me === 'mgr' ? 'hidden' : ''}>🚪 יציאה מהקבוצה</button>
+          ${isAdminG ? '<button type="button" class="btn danger" id="giDel">🗑 מחיקת הקבוצה</button>' : ''}
+          <button type="button" class="btn brass" id="giClose">סגירה</button></div></div>`;
+      ov.querySelector('#giName').value = g.name || '';
+      fillAvatars(ov);
+      ov.querySelector('#giClose').onclick = () => ov.remove();
+      const upd = async (patch, label) => { const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), patch, { merge: true }), label); if(ok !== true) showToast('הפעולה לא הצליחה'); return ok === true; };
+      const sv = ov.querySelector('#giSave'); if(sv) sv.onclick = async () => { const nm = ov.querySelector('#giName').value.trim(); if(!nm) return; if(await upd({ name: nm }, 'groupRename')){ state._chatNames[id] = nm; showToast('השם עודכן'); ov.remove(); renderChatRoom(role, otherId); } };
+      ov.querySelectorAll('[data-gi-rm]').forEach(b => b.onclick = async () => {
+        if(!(await showConfirmModal('להסיר את ' + (state._chatNames[b.dataset.giRm] || '') + ' מהקבוצה?', { yes: 'הסרה', danger: true }))) return;
+        const f = await loadChat(id); if(!f) return; const nm = (f.members || []).filter(x => x !== b.dataset.giRm);
+        if(await upd({ members: nm }, 'groupRemove')){ members = nm; paintGi({ ...f, members: nm }); showToast('הוסר מהקבוצה'); }
+      });
+      const lv = ov.querySelector('#giLeave'); if(lv) lv.onclick = async () => {
+        if(!(await showConfirmModal('לצאת מהקבוצה? לא תקבל יותר הודעות ממנה.', { yes: 'יציאה', danger: true }))) return;
+        const f = await loadChat(id); if(!f) return;
+        if(await upd({ members: (f.members || []).filter(x => x !== me) }, 'groupLeave')){ ov.remove(); showToast('יצאת מהקבוצה'); renderChatHome(role); }
+      };
+      const dl = ov.querySelector('#giDel'); if(dl) dl.onclick = async () => {
+        if(!(await showConfirmModal('למחוק את הקבוצה לכולם? ההודעות יימחקו.', { yes: 'מחיקה', danger: true }))) return;
+        if(await upd({ members: [], msgs: [], deleted: true }, 'groupDelete')){ ov.remove(); showToast('הקבוצה נמחקה'); renderChatHome(role); }
+      };
+    };
+    document.body.appendChild(ov); paintGi(g0);
+  };
   const addBtn = document.getElementById('chatAddMembers');
   if(addBtn) addBtn.onclick = async () => {
-    const pick = await chatPickMembers(allContacts.filter(c => !c.group), members, false, 'הוספת משתתפים');
+    const pick = await chatPickMembers(allContacts.filter(c => !c.group && !c.self && c.id !== me && c.id !== 'team'), members, false, 'הוספת משתתפים');
     if(!pick) return;
     const fresh = await loadChat(id); if(!fresh) return showToast('שגיאה בטעינה');
     const nm = [...new Set([...(fresh.members || []), ...pick.ids])];
@@ -8853,6 +8909,11 @@ async function renderChatRoom(role, otherId){
     sigTyping(null);
     const m = Object.assign({ id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [] }, extra);
     if(replyTo){ m.reply = replyTo; setReply(null); }
+    // תצוגה מקדימה לקישור: הגשר מביא את הכותרת והתמונה של העמוד (עד 4 שניות; אם לא – נשלח בלי)
+    const lpUrl = !m.lp && typeof m.text === 'string' && (m.text.match(/https?:\/\/[^\s<>"']+/) || [])[0];
+    if(lpUrl){ try{ const tok = role === 'mgr' ? await auth.currentUser.getIdToken() : await empIdToken();
+      const r = await Promise.race([bridge('link-preview', { idToken: tok, url: lpUrl }), new Promise(res => setTimeout(() => res(null), 4000))]);
+      if(r && r.title) m.lp = { url: lpUrl, title: String(r.title).slice(0, 140), ...(r.desc ? { desc: String(r.desc).slice(0, 200) } : {}), ...(r.img ? { img: String(r.img).slice(0, 600) } : {}) }; }catch(e){} }
     pinned = true; cur = { ...cur, msgs: [...(cur.msgs || []), m] }; paint();
     const toEnd = () => { pinned = true; body.scrollTop = body.scrollHeight; }; toEnd(); requestAnimationFrame(toEnd); [80, 300, 800].forEach(ms => setTimeout(toEnd, ms));
     input.style.height = '';
@@ -9433,7 +9494,7 @@ async function startChatNotifier(role){
         if(!fresh.length) return;
         refreshChatBadge(role);
         const inRoomNow = document.getElementById('chatBody') && state._chatOpenId === id && document.visibilityState === 'visible';
-        if(chatMuted(id)) return;
+        if(chatMuted(id) || chatDnd()) return;
         if(inRoomNow){ chatPing(); return; }
         notifyChat(role, id, d, fresh[fresh.length - 1]);
       }, () => {}));
@@ -9481,8 +9542,9 @@ async function showDesktopNote(title, body, onClick){
 }
 // צליל קצר וכותרת מהבהבת בכרטיסייה – גם כשהתראות המערכת חסומות
 // צליל הודעה (שני צלילים קצרים). ההשתקה שמורה בחשבון – בכל מחשב וטלפון שבו החשבון פתוח
+function chatDnd(){ const v = state._dndUntil; return v === 'forever' || (!!v && v > todayStr() + 'T' + nowTimeStr().slice(0, 5)); }
 function chatPing(force){
-  if(!force && state._msgSoundMuted) return;
+  if(!force && (state._msgSoundMuted || chatDnd())) return;
   const now = Date.now(); if(!force && now - (state._lastPing || 0) < 1500) return; state._lastPing = now;
   playMsgSound(state._msgSound || 0);
 }
@@ -9531,13 +9593,24 @@ function openSoundPicker(role, btn){
   document.querySelectorAll('.sound-pop').forEach(x => x.remove());
   const pop = document.createElement('div'); pop.className = 'sound-pop';
   const cur = state._msgSound || 0;
-  pop.innerHTML = `<label class="sound-row sound-mute"><span>🔕 השתקת צליל ההודעות</span><input type="checkbox" class="toggle" id="sndMute" ${state._msgSoundMuted ? 'checked' : ''} /></label>
+  const dndTxt = !chatDnd() ? '' : state._dndUntil === 'forever' ? 'פעיל עד שתבטל' : 'פעיל עד ' + state._dndUntil.slice(8, 10) + '/' + state._dndUntil.slice(5, 7) + ' ' + state._dndUntil.slice(11, 16);
+  pop.innerHTML = `<div class="dnd-box"><div class="dnd-title">⛔ אל תפריע ${dndTxt ? `<small>· ${dndTxt}</small>` : ''}</div><div class="dnd-btns">${chatDnd() ? '<button type="button" data-dnd="off">ביטול</button>' : '<button type="button" data-dnd="1">לשעה</button><button type="button" data-dnd="morning">עד הבוקר</button><button type="button" data-dnd="forever">עד שאבטל</button>'}</div><div class="hint" style="font-size:11.5px;">בלי צלילים, חלונות קופצים והתראות לטלפון. ההודעות ממשיכות להגיע.</div></div>
+    <label class="sound-row sound-mute"><span>🔕 השתקת צליל ההודעות</span><input type="checkbox" class="toggle" id="sndMute" ${state._msgSoundMuted ? 'checked' : ''} /></label>
     <div class="sound-list">${MSG_SOUNDS.map((x, i) => `<button type="button" class="sound-row${i === cur ? ' on' : ''}" data-snd="${i}"><span>${i === cur ? '✓ ' : ''}${escapeHtml(x.n)}</span><span class="hint">▶</span></button>`).join('')}</div>`;
   document.body.appendChild(pop);
   const r0 = btn.getBoundingClientRect();
   pop.style.top = (r0.bottom + 6) + 'px'; pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r0.left)) + 'px';
   const close = e => { if(!pop.contains(e.target) && e.target !== btn){ pop.remove(); document.removeEventListener('click', close, true); } };
   setTimeout(() => document.addEventListener('click', close, true), 0);
+  pop.querySelectorAll('[data-dnd]').forEach(b => b.onclick = async () => {
+    const v = b.dataset.dnd, p2 = x => String(x).padStart(2, '0');
+    let until = null;
+    if(v === '1'){ const d = new Date(ilNow().getTime() + 3600000); until = d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+    else if(v === 'morning'){ const n = ilNow(), d = new Date(n.getTime() + (n.getHours() >= 7 ? 86400000 : 0)); until = d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T07:00'; }
+    else if(v === 'forever') until = 'forever';
+    pop.remove(); await setMsgSoundPref(role, { dndUntil: until });
+    showToast(until ? '⛔ מצב אל תפריע הופעל' : 'מצב אל תפריע בוטל');
+  });
   pop.querySelector('#sndMute').onchange = async e => {
     const muted = e.target.checked; btn.textContent = muted ? '🔕' : '🔔';
     await setMsgSoundPref(role, { muteMsgSound: muted });
@@ -9551,8 +9624,8 @@ function openSoundPicker(role, btn){
 }
 function soundKeyDoc(role){ return role === 'mgr' ? 'mgr-prefs' : (state.currentEmployee && state.currentEmployee.id); }
 async function loadMsgSoundPref(role){
-  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0; state._chatMutes = d.chatMutes || {}; state._chatArchive = d.chatArchive || []; state._msgReminders = d.msgReminders || []; state._chatLook = { theme: d.chatTheme || '', wall: d.chatWall || '' }; state._chatWalls = d.chatWalls || {}; state._chatPins = d.chatPins || []; state._chatUnreadMarks = d.chatUnreadMarks || []; applyChatLook();
-    const b = document.getElementById('msgSoundBtn'); if(b) b.textContent = state._msgSoundMuted ? '🔕' : '🔔'; }catch(e){}
+  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0; state._chatMutes = d.chatMutes || {}; state._chatArchive = d.chatArchive || []; state._msgReminders = d.msgReminders || []; state._chatLook = { theme: d.chatTheme || '', wall: d.chatWall || '' }; state._chatWalls = d.chatWalls || {}; state._chatPins = d.chatPins || []; state._chatUnreadMarks = d.chatUnreadMarks || []; state._dndUntil = d.dndUntil || null; applyChatLook();
+    const b = document.getElementById('msgSoundBtn'); if(b) b.textContent = chatDnd() ? '⛔' : state._msgSoundMuted ? '🔕' : '🔔'; }catch(e){}
 }
 async function setMsgSoundPref(role, patch){
   if('muteMsgSound' in patch) state._msgSoundMuted = patch.muteMsgSound;
@@ -9561,6 +9634,7 @@ async function setMsgSoundPref(role, patch){
   if('chatArchive' in patch) state._chatArchive = patch.chatArchive;
   if('msgReminders' in patch) state._msgReminders = patch.msgReminders;
   if('chatPins' in patch) state._chatPins = patch.chatPins;
+  if('dndUntil' in patch){ state._dndUntil = patch.dndUntil; const b = document.getElementById('msgSoundBtn'); if(b) b.textContent = chatDnd() ? '⛔' : state._msgSoundMuted ? '🔕' : '🔔'; }
   if('chatUnreadMarks' in patch) state._chatUnreadMarks = patch.chatUnreadMarks;
   if('chatWalls' in patch){ state._chatWalls = patch.chatWalls; const r = document.querySelector('.wa-room'); if(r && state._chatOpenId) applyRoomWall(r, state._chatOpenId); }
   if('chatTheme' in patch || 'chatWall' in patch){ state._chatLook = { ...(state._chatLook || {}), ...('chatTheme' in patch ? { theme: patch.chatTheme } : {}), ...('chatWall' in patch ? { wall: patch.chatWall } : {}) }; applyChatLook(); }
