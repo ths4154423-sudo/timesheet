@@ -1201,6 +1201,25 @@ body.wa-dark .wa-kmenu button{ color:#E9EDEF; } body.wa-dark .wa-k-ic{ color:#AE
 body.wa-dark .wa-em-tabs{ border-color:#2A3942; } body.wa-dark .wa-em-tabs button.on{ color:#00A884 !important; border-bottom-color:#00A884; }
 body.wa-dark .wa-st-grid button{ background:color-mix(in srgb, var(--stc) 22%, #1F2C33) !important; } body.wa-dark .wa-st-grid b{ color:#E9EDEF !important; }
 body.wa-dark .wa-sticker{ background:linear-gradient(135deg, var(--stc), color-mix(in srgb, var(--stc) 72%, #000)); }
+.wa-emoji{ max-height:380px; }
+.wa-em-pane{ display:flex; flex-direction:column; min-height:0; flex:1; }
+.wa-em-pane[hidden]{ display:none; }
+.wa-em-search{ padding:8px 10px 4px; }
+.wa-em-search input{ width:100%; box-sizing:border-box; border:none !important; background:#F0F2F5 !important; border-radius:18px; padding:7px 12px; font:inherit; font-size:13.5px; outline:none; }
+.wa-em-cats{ display:flex; gap:2px; padding:2px 8px; border-bottom:1px solid #F0F2F5; }
+.wa-em-cats button{ flex:1; border:none; background:none; font-size:19px; padding:5px 0 6px; cursor:pointer; font-family:'Noto Color Emoji', sans-serif; border-bottom:3px solid transparent; opacity:.6; transition:opacity .15s; }
+.wa-em-cats button.on{ border-bottom-color:#00A884; opacity:1; } .wa-em-cats button:hover{ opacity:1; }
+.wa-em-grid{ overflow-y:auto; max-height:240px; }
+.wa-em-title{ grid-column:1/-1; font-size:12px; font-weight:600; color:#667781; padding:2px 4px 4px; text-align:right; font-family:'Heebo', Arial, sans-serif; }
+.req-kind{ display:flex; gap:8px; margin:6px 0 12px; }
+.req-kind button{ flex:1; border:2px solid var(--line, #DDE3E8); background:var(--surface, #fff); color:var(--ink); border-radius:12px; padding:10px; font:inherit; font-weight:600; cursor:pointer; }
+.req-kind button.on{ border-color:var(--brass-dark, #3D9A6C); background:color-mix(in srgb, var(--brass, #5FBF8F) 14%, #fff); }
+.req-leave{ background:var(--paper-alt); border-radius:12px; padding:12px 14px; margin-bottom:10px; display:grid; gap:8px; }
+.req-lv-row{ display:flex; align-items:center; gap:10px; } .req-lv-row label{ margin:0; min-width:96px; font-weight:600; font-size:14px; } .req-lv-row input, .req-lv-row select{ flex:1; }
+.docs-up{ display:flex; flex-direction:column; gap:8px; }
+.docs-up-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; } .docs-up-row select{ width:auto; } .docs-up-row input{ flex:1; min-width:160px; }
+body.wa-dark .wa-em-search input{ background:#2A3942 !important; color:#E9EDEF; } body.wa-dark .wa-em-cats{ border-color:#2A3942; }
+.wa-md-row .wa-back{ color:#8696A0 !important; } .wa-md-row .wa-back:hover{ color:#D93025 !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -3345,6 +3364,7 @@ async function renderEmployeeRequests(emp){
     recordingSeconds = 0;
   }
   let filterStatus = 'all';
+  let reqKind = 'free';
   let menuOpen = false;
   let selectedId = null;
   let myRequests = [];
@@ -3417,7 +3437,14 @@ async function renderEmployeeRequests(emp){
       app.innerHTML = `
         <div class="card">
           <h3 style="margin-top:0;">✏️ הודעה חדשה למנהל</h3>
-          <p class="hint" style="margin-top:-6px; font-size:13px;">כתוב/י כל בקשה חופשית — יציאה מוקדמת, החלפת משמרת, הערה כללית וכו'. אפשר גם טקסט, גם הודעה קולית, או שניהם.</p>
+          <div class="req-kind"><button type="button" data-rk="free" class="${reqKind === 'free' ? 'on' : ''}">💬 בקשה חופשית</button><button type="button" data-rk="leave" class="${reqKind === 'leave' ? 'on' : ''}">🏖️ בקשת חופש / מחלה</button></div>
+          ${reqKind === 'leave' ? `<div class="req-leave">
+            <div class="req-lv-row"><label>סוג</label><select id="lvType"><option value="vacation">🏖️ חופשה</option><option value="sick">🤒 מחלה</option></select></div>
+            <div class="req-lv-row"><label>מתאריך</label><input type="date" id="lvFrom" min="${todayStr()}" value="${todayStr()}" /></div>
+            <div class="req-lv-row"><label>עד תאריך <span class="hint">(לא חובה)</span></label><input type="date" id="lvTo" min="${todayStr()}" /></div>
+            <p class="hint" style="font-size:12.5px; margin:4px 0 0;">אחרי אישור המנהל, הימים יסומנו אוטומטית כחופשה/מחלה (ולא יישלח בהם צינתוק).</p></div>` : ''}
+          <p class="hint" style="margin-top:6px; font-size:13px;">${reqKind === 'leave' ? 'אפשר להוסיף הסבר (לא חובה):' : ''}</p>
+          <p class="hint" style="margin-top:-6px; font-size:13px;${reqKind === 'leave' ? ' display:none;' : ''}">כתוב/י כל בקשה חופשית — יציאה מוקדמת, החלפת משמרת, הערה כללית וכו'. אפשר גם טקסט, גם הודעה קולית, או שניהם.</p>
           <form id="newRequestForm">
             <textarea id="requestText" rows="5" style="width:100%; font-family:'Heebo',sans-serif; font-size:15px; padding:12px 14px; border:none; border-radius:10px; background:var(--paper-alt); color:var(--ink); resize:vertical;" placeholder="לדוגמה: אני צריך לצאת מוקדם ביום שלישי הבא"></textarea>
 
@@ -3448,6 +3475,7 @@ async function renderEmployeeRequests(emp){
       `;
       document.getElementById('reqBackBtn').onclick = () => { stopRecordingCleanup(); view = 'list'; render(); };
       document.getElementById('composeCancelBtn').onclick = () => { stopRecordingCleanup(); view = 'list'; render(); };
+      document.querySelectorAll('[data-rk]').forEach(b => b.onclick = () => { reqKind = b.dataset.rk; const t = document.getElementById('requestText').value; render(); document.getElementById('requestText').value = t; });
 
       const recordBtn = document.getElementById('recordBtn');
       if(recordBtn) recordBtn.onclick = async () => {
@@ -3495,7 +3523,17 @@ async function renderEmployeeRequests(emp){
         e.preventDefault();
         const errEl = document.getElementById('requestErr');
         const submitBtn = e.target.querySelector('button[type="submit"]');
-        const text = document.getElementById('requestText').value.trim();
+        let text = document.getElementById('requestText').value.trim();
+        let leave = null;
+        if(reqKind === 'leave'){
+          const from = document.getElementById('lvFrom').value, to = document.getElementById('lvTo').value || '', type = document.getElementById('lvType').value;
+          if(!from){ errEl.textContent = 'בוחרים תאריך התחלה'; return; }
+          if(to && to < from){ errEl.textContent = 'תאריך הסיום לפני תאריך ההתחלה'; return; }
+          if(to && (new Date(to) - new Date(from)) / 86400000 > 60){ errEl.textContent = 'אפשר לבקש עד חודשיים בבת אחת'; return; }
+          leave = { type, from, ...(to && to !== from ? { to } : {}) };
+          const dd = x => x.split('-').reverse().slice(0, 2).join('/');
+          text = (type === 'sick' ? '🤒 בקשת מחלה' : '🏖️ בקשת חופשה') + ': ' + dd(from) + (leave.to ? ' – ' + dd(leave.to) : '') + (text ? '\n' + text : '');
+        }
         if(!text && !recordedAudioBlob){ errEl.textContent = 'יש לכתוב תוכן או להקליט הודעה קולית'; return; }
         errEl.textContent = '';
         submitBtn.disabled = true;
@@ -3519,7 +3557,7 @@ async function renderEmployeeRequests(emp){
         if(fresh === null){ errEl.textContent = 'שגיאה בטעינת הנתונים מהשרת. נסו שוב.'; submitBtn.disabled=false; submitBtn.textContent='שליחה'; return; }
         const newReqId = uid();
         fresh.push({
-          id: newReqId, empId: emp.id, empName: emp.name, text, voiceMessageId,
+          id: newReqId, empId: emp.id, empName: emp.name, text, voiceMessageId, ...(leave ? { leave } : {}),
           status: 'pending', createdAt: new Date().toISOString(), adminNote: '', seenByEmployee: true
         });
         const ok = await saveRequests(fresh);
@@ -4355,7 +4393,8 @@ async function renderAdminRequests(){
     req.seenByEmployee = false;
     const ok = await saveRequests(fresh);
     if(ok !== true){ alert('שגיאה בשמירה: ' + ok); return; }
-    showToast(status === 'approved' ? 'הבקשה אושרה' : 'הבקשה נדחתה');
+    bridge('request-decided', { idToken: await empIdToken(), reqId: id }).then(r => { if(r && r.ok && req.leave && status === 'approved') showToast('ימי ה' + (req.leave.type === 'sick' ? 'מחלה' : 'חופשה') + ' סומנו אצל ' + (req.empName || 'העובד')); });
+    showToast(status === 'approved' ? (req.leave ? 'הבקשה אושרה · הימים יסומנו אוטומטית' : 'הבקשה אושרה') : 'הבקשה נדחתה');
     renderAdminRequests();
   }
   async function removeRequest(id){
@@ -5187,6 +5226,7 @@ function showEmployeeDetailsModal(emp){
         <div><b>Service ID לשליחה אוטומטית:</b> ${emp.emailjsServiceId ? `<span class="mono" dir="ltr" style="display:inline-block;">${escapeHtml(emp.emailjsServiceId)}</span>` : '— (לא הוגדר, ישתמש ברשימה המשותפת)'}</div>
       </div>
       <div class="actions" style="justify-content:center; margin-top:20px;">
+        <button type="button" class="btn ghost small" id="empDetailsDocs">📄 תיק עובד</button>
         <button type="button" class="btn ghost small" id="empDetailsEdit">עריכה</button>
         <button type="button" class="btn ghost" id="empDetailsClose">סגירה</button>
       </div>
@@ -5196,6 +5236,7 @@ function showEmployeeDetailsModal(emp){
   const close = () => overlay.remove();
   overlay.querySelector('#empDetailsClose').onclick = close;
   overlay.querySelector('#empDetailsEdit').onclick = () => { close(); renderEditEmployee(emp.id); };
+  overlay.querySelector('#empDetailsDocs').onclick = () => { close(); openEmpDocs(emp.id, emp.name, true); };
   overlay.onclick = (e) => { if(e.target === overlay) close(); };
 }
 
@@ -7324,6 +7365,7 @@ const SETTINGS_CATEGORIES = [
   { key: 'goal', icon: '🎯', label: 'יעד יומי', hint: 'קביעת יעד יומי בשקלים או בשעות', action: true },
   { key: 'security', icon: '🔒', label: 'אבטחה', hint: 'שינוי קוד הכניסה למערכת', action: true },
   { key: 'requests', icon: '📨', label: 'בקשה למנהל', hint: 'שליחת הודעה חופשית וצפייה בסטטוס בקשות קודמות', action: true },
+  { key: 'docs', icon: '📄', label: 'תיק עובד', hint: 'תלושי שכר, טפסים ומסמכים אישיים', action: true },
   { key: 'guide', icon: '📖', label: 'מדריך שימוש', hint: 'איך מדווחים באתר ובטלפון, ומה עושים כשמשהו לא בסדר', action: true }
 ];
 const EMPLOYEE_SETTINGS_DEFS = [
@@ -7452,6 +7494,7 @@ async function renderEmployeeSettings(emp){
       if(cat && cat.action && cat.key === 'goal'){ renderEmployeeGoal(emp); return; }
       if(cat && cat.action && cat.key === 'reminders'){ renderEmployeeReminders(emp); return; }
       if(cat && cat.action && cat.key === 'guide'){ renderEmployeeGuide(emp); return; }
+      if(cat && cat.action && cat.key === 'docs'){ openEmpDocs(emp.id, emp.name, false); return; }
       renderEmployeeSettingsCategory(emp, btn.dataset.openCategory);
     };
   });
@@ -9178,17 +9221,39 @@ async function renderChatRoom(role, otherId){
     const old = document.querySelector('.wa-emoji'); if(old){ old.remove(); return; }
     const pn = document.createElement('div'); pn.className = 'wa-emoji';
     pn.innerHTML = `<div class="wa-em-tabs"><button type="button" data-emt="e" class="on">😊 אימוג׳י</button><button type="button" data-emt="s">🏷️ מדבקות</button></div>
-      <div class="wa-em-grid" data-emp="e">${CHAT_EMOJI.map(e => `<button type="button" data-em="${e}">${e}</button>`).join('')}</div>
+      <div data-emp="e" class="wa-em-pane"><div class="wa-em-search"><input type="search" id="emSearch" placeholder="🔍 חיפוש אימוג׳י (למשל: תודה, לב, קפה)" /></div>
+        <div class="wa-em-cats">${EMOJI_CATS.map((c, k) => `<button type="button" data-emc="${k}" title="${c.n}">${c.i}</button>`).join('')}</div>
+        <div class="wa-em-grid" id="emGrid"></div></div>
       <div class="wa-st-grid" data-emp="s" hidden>${CHAT_STICKERS.map((x, k) => `<button type="button" data-stk="${k}" style="--stc:${x.c}"><span>${x.e}</span><b>${x.t}</b></button>`).join('')}</div>`;
     document.body.appendChild(pn);
     const comp = document.querySelector('.wa-compose').getBoundingClientRect();
     pn.style.bottom = (window.innerHeight - comp.top + 6) + 'px';
     pn.querySelectorAll('[data-emt]').forEach(b => b.onclick = e2 => { e2.stopPropagation(); pn.querySelectorAll('[data-emt]').forEach(x => x.classList.toggle('on', x === b)); pn.querySelectorAll('[data-emp]').forEach(x => x.hidden = x.dataset.emp !== b.dataset.emt); });
-    pn.querySelectorAll('[data-em]').forEach(b => b.onclick = e2 => {
-      e2.stopPropagation();
-      const a = input.selectionStart ?? input.value.length, z = input.selectionEnd ?? a;
-      input.value = input.value.slice(0, a) + b.dataset.em + input.value.slice(z);
-      const pos = a + b.dataset.em.length; input.focus(); input.setSelectionRange(pos, pos); input.dispatchEvent(new Event('input'));
+    const grid = pn.querySelector('#emGrid');
+    const fill = (list, title) => {
+      grid.innerHTML = (title ? `<div class="wa-em-title">${title}</div>` : '') + (list.length ? list.map(e => `<button type="button" data-em="${e}" title="${(EMOJI_WORDS[e] || '').split(' ')[0]}">${e}</button>`).join('') : '<p class="hint" style="grid-column:1/-1; text-align:center;">לא נמצא</p>');
+      grid.querySelectorAll('[data-em]').forEach(b => b.onclick = e2 => {
+        e2.stopPropagation();
+        const a = input.selectionStart ?? input.value.length, z = input.selectionEnd ?? a;
+        input.value = input.value.slice(0, a) + b.dataset.em + input.value.slice(z);
+        const pos = a + b.dataset.em.length; input.focus(); input.setSelectionRange(pos, pos); input.dispatchEvent(new Event('input'));
+        pushRecentEmoji(b.dataset.em);
+      });
+    };
+    const showCat = k => {
+      pn.querySelectorAll('[data-emc]').forEach(b => b.classList.toggle('on', +b.dataset.emc === k));
+      const c = EMOJI_CATS[k];
+      if(c.recent){ const r = recentEmojis(); if(!r.length) return showCat(1); return fill(r, 'בשימוש לאחרונה'); }
+      fill(c.l.split(' ').filter(Boolean), c.n);
+    };
+    showCat(recentEmojis().length ? 0 : 1);
+    pn.querySelectorAll('[data-emc]').forEach(b => b.onclick = e2 => { e2.stopPropagation(); pn.querySelector('#emSearch').value = ''; showCat(+b.dataset.emc); });
+    pn.querySelector('#emSearch').addEventListener('input', e2 => {
+      const q = e2.target.value.trim();
+      if(!q) return showCat(recentEmojis().length ? 0 : 1);
+      pn.querySelectorAll('[data-emc]').forEach(b => b.classList.remove('on'));
+      const all = [...new Set(EMOJI_CATS.filter(c => c.l).flatMap(c => c.l.split(' ').filter(Boolean)))];
+      fill(all.filter(e => (EMOJI_WORDS[e] || '').includes(q)), 'תוצאות');
     });
     pn.querySelectorAll('[data-stk]').forEach(b => b.onclick = () => { const x = CHAT_STICKERS[+b.dataset.stk]; pn.remove(); send({ sticker: { e: x.e, t: x.t, c: x.c } }); });
     const close = e2 => { if(!pn.contains(e2.target) && !e2.target.closest('#chatEmojiBtn')){ pn.remove(); document.removeEventListener('click', close, true); } };
@@ -10160,6 +10225,73 @@ function headsUp(who, where, body, onOpen, onReply){
   el.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
   el.addEventListener('touchmove', e => { if(sy !== null && e.touches[0].clientY - sy < -25){ sy = null; clearTimeout(t); hide(); } }, { passive: true });
 }
+
+// ================= תיק עובד: empDocs/<עובד>.items [{id, name, cat, fileId, fileType, at, by}] =================
+const DOC_CATS = { payslip: '💵 תלושי שכר', forms: '📝 טפסים (101 וכו׳)', contract: '📃 חוזה והסכמים', other: '📁 אחר' };
+async function openEmpDocs(empId, empName, isMgr){
+  const ov = document.createElement('div'); ov.className = 'wa-media';
+  ov.innerHTML = `<div class="wa-room-head"><button type="button" class="wa-back" data-dx aria-label="חזרה">${WAI.back}</button><b style="flex:1;">📄 תיק עובד${isMgr ? ' · ' + escapeHtml(empName || '') : ''}</b></div><div class="wa-md-body" id="docsBody"><div class="empty-state">טוען...</div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('[data-dx]').onclick = () => ov.remove();
+  const body = ov.querySelector('#docsBody');
+  const load = async () => { try{ const sn = await getDoc(doc(db, 'empDocs', empId)); return sn.exists() ? (sn.data().items || []) : []; }catch(e){ return null; } };
+  const paint = async () => {
+    const items = await load();
+    if(items === null){ body.innerHTML = `<div class="card" style="text-align:center;"><p class="hint">אין הרשאה לתיק העובד. ייתכן שצריך לעדכן את החוקים בפיירבייס.</p></div>`; return; }
+    const fmt = t => String(t || '').slice(0, 10).split('-').reverse().join('/');
+    const groups = Object.keys(DOC_CATS).map(k => ({ k, list: items.filter(x => (x.cat || 'other') === k).sort((a, b) => String(b.at).localeCompare(String(a.at))) })).filter(g => g.list.length);
+    body.innerHTML = `
+      <div class="card docs-up">
+        <b>${isMgr ? 'העלאת מסמך לעובד' : 'העלאת מסמך לתיק'}</b>
+        <div class="docs-up-row"><select id="docCat">${Object.entries(DOC_CATS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+        <input type="text" id="docName" maxlength="80" placeholder="שם המסמך (למשל: תלוש נובמבר 2026)" />
+        <label class="btn brass small" style="margin:0; cursor:pointer;">📎 בחירת קובץ<input type="file" id="docFile" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" hidden /></label></div>
+        <div class="hint" style="font-size:12px;">PDF, תמונה, Word או Excel · עד כ-700KB${isMgr ? '' : ' · המנהל רואה את כל המסמכים בתיק'}</div>
+        <div class="error-msg" id="docErr"></div>
+      </div>
+      ${groups.length ? groups.map(g => `<div class="card wa-list"><div class="wa-mon-title">${DOC_CATS[g.k]} (${g.list.length})</div>${g.list.map(x => `
+        <div class="wa-md-row"><span>${/pdf/.test(x.fileType || '') ? '📕' : /^image\//.test(x.fileType || '') ? '🖼️' : '📄'}</span><b data-dopen="${x.id}" style="cursor:pointer;">${escapeHtml(x.name || 'מסמך')}</b><small>${fmt(x.at)}${x.by && x.by !== 'mgr' ? ' · הועלה ע״י העובד' : ''}</small>
+          ${isMgr || x.by === empId ? `<button type="button" class="wa-back" data-ddel="${x.id}" title="מחיקה" aria-label="מחיקה" style="width:32px; height:32px;">${WAI.trash}</button>` : ''}</div>`).join('')}</div>`).join('')
+      : `<p class="hint" style="text-align:center; padding:24px;">עדיין אין מסמכים בתיק.</p>`}`;
+    body.querySelectorAll('[data-dopen]').forEach(b => b.onclick = async () => { const x = items.find(y => y.id === b.dataset.dopen); const f = x && await loadTaskFile(x.fileId); if(!f) return showToast('לא הצלחנו לפתוח את המסמך'); openChatFile(f, x.name); });
+    body.querySelectorAll('[data-ddel]').forEach(b => b.onclick = async () => {
+      if(!(await showConfirmModal('למחוק את המסמך מהתיק?', { yes: 'מחיקה', danger: true }))) return;
+      const cur = await load(); if(cur === null) return;
+      const ok = await saveDoc(() => setDoc(doc(db, 'empDocs', empId), { items: cur.filter(y => y.id !== b.dataset.ddel) }), 'docDel');
+      if(ok === true){ showToast('המסמך נמחק'); paint(); } else showToast('המחיקה לא הצליחה');
+    });
+    body.querySelector('#docFile').onchange = async e => {
+      const file = e.target.files && e.target.files[0]; e.target.value = ''; if(!file) return;
+      const err = body.querySelector('#docErr'); err.textContent = '';
+      const nm = body.querySelector('#docName').value.trim() || file.name.replace(/\.\w+$/, '');
+      let data; try{ data = /^image\//.test(file.type) ? await shrinkImage(file) : await new Promise((r, j) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = j; fr.readAsDataURL(file); }); }catch(x){ return err.textContent = 'לא הצלחנו לקרוא את הקובץ'; }
+      if(data.length > 950000) return err.textContent = 'הקובץ גדול מדי (עד כ-700KB). אפשר לכווץ PDF באתר חינמי ולנסות שוב.';
+      showToast('מעלה...');
+      const fileId = uid() + uid();
+      const ok1 = await saveDoc(() => setDoc(doc(db, 'voiceMessages', fileId), { file: data, name: file.name, type: file.type || '', createdAt: new Date().toISOString() }), 'docFile');
+      if(ok1 !== true) return err.textContent = 'שגיאה בהעלאת הקובץ';
+      const cur = await load(); if(cur === null) return err.textContent = 'אין הרשאה לשמור בתיק';
+      const item = { id: uid() + uid(), name: nm, cat: body.querySelector('#docCat').value, fileId, fileType: /^image\//.test(file.type) ? 'image/jpeg' : (file.type || ''), at: new Date().toISOString(), by: isMgr ? 'mgr' : empId };
+      const ok2 = await saveDoc(() => setDoc(doc(db, 'empDocs', empId), { items: [...cur, item] }), 'docSave');
+      if(ok2 !== true) return err.textContent = 'שגיאה בשמירה: ' + ok2;
+      showToast('המסמך נשמר בתיק'); paint();
+    };
+  };
+  paint();
+}
+// ================= קטגוריות אימוג׳י, חיפוש ואחרונים =================
+const EMOJI_CATS = [
+  { i: '🕘', n: 'אחרונים', recent: true },
+  { i: '😀', n: 'פרצופים', l: '😀 😃 😄 😁 😆 😅 😂 🤣 😊 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😜 🤪 😝 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 😮‍💨 🤥 😴 🤤 😪 😷 🤒 🤕 🥵 🥶 🥴 😵 🤯 🤠 🥳 😎 🤓 🧐 😕 😟 🙁 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 😇 🤩' },
+  { i: '👍', n: 'ידיים ואנשים', l: '👍 👎 👌 🤌 🤏 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 👏 🙌 👐 🤲 🤝 🙏 ✍️ 💪 👀 👁️ 🧠 🫶 👤 👥 🧑‍💼 👨‍💼 👨‍🔧 👨‍💻 🧑‍🏫 👶 🧒 👦 👴' },
+  { i: '❤️', n: 'לבבות וסמלים', l: '❤️ 🧡 💛 💚 💙 💜 🤎 🖤 🤍 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💯 ✅ ✔️ ☑️ ❌ ❎ ⚠️ ❗ ❓ ‼️ ⁉️ ⭐ 🌟 ✨ ⚡ 🔥 💥 🎉 🎊 🔔 🔕 📢 📣 ♻️ ⛔ 🚫 🔴 🟠 🟡 🟢 🔵 🟣 ⚪ ⚫ ➕ ➖ ➡️ ⬅️ ⬆️ ⬇️ 🔝 🆕 🆗 🆒' },
+  { i: '💼', n: 'עבודה וחפצים', l: '💼 📁 📂 📄 📃 📑 📊 📈 📉 📋 📌 📍 📎 🖇️ ✂️ 🖊️ ✏️ 📝 📅 📆 🗓️ ⏰ ⏳ ⌛ 🕐 ⏱️ 📞 ☎️ 📱 💻 🖥️ 🖨️ ⌨️ 🖱️ 💾 📷 📸 🎥 🔋 🔌 💡 🔦 🔧 🔨 🛠️ ⚙️ 🔩 🧰 🔑 🗝️ 🔒 🔓 📦 📫 📬 ✉️ 📧 💰 💵 💳 🧾 🛒 🏷️ 🎁 🏆 🥇 🥈 🥉 🎯' },
+  { i: '☕', n: 'אוכל וטבע', l: '☕ 🍵 🥤 🧃 💧 🍞 🥐 🥯 🧀 🥗 🍕 🍔 🌭 🥙 🍝 🍣 🍰 🎂 🍪 🍫 🍬 🍎 🍌 🍉 🍇 🍓 🍒 🍊 🥑 🌶️ 🌽 🌞 🌙 ⭐ ☁️ ⛅ 🌧️ ⛈️ ❄️ ☔ 🌈 🌸 🌻 🌷 🌹 🌳 🌴 🍀 🍂 🐶 🐱 🐦 🦋 🐟' },
+  { i: '🚗', n: 'תחבורה ומקומות', l: '🚗 🚕 🚙 🚌 🚐 🚚 🚛 🚜 🏍️ 🚲 🛴 🚨 🚦 🛑 ⛽ 🚆 🚇 🚊 ✈️ 🚀 🛳️ ⚓ 🏠 🏡 🏢 🏬 🏭 🏥 🏦 🏨 🏫 🏛️ 🕍 🗺️ 🧭 🏁 🚩 🎌' }
+];
+const EMOJI_WORDS = { '😀': 'חיוך שמח', '😂': 'צחוק דמעות', '🤣': 'צחוק מתגלגל', '😊': 'חיוך מסמיק', '🙂': 'חיוך', '😉': 'קריצה', '😍': 'אהבה עיניים לב', '🥰': 'אהבה', '😘': 'נשיקה', '😋': 'טעים', '😎': 'משקפי שמש מגניב', '🤔': 'חושב מתלבט', '😐': 'אדיש', '🙄': 'גלגול עיניים', '😴': 'ישן עייף', '😷': 'חולה מסכה', '🤒': 'חולה חום', '🤯': 'מפוצץ מוח', '🥳': 'מסיבה חגיגה', '😢': 'עצוב בוכה', '😭': 'בוכה', '😡': 'כועס', '😠': 'כועס', '😱': 'מפחד צועק', '😳': 'מופתע נבוך', '🥺': 'מתחנן', '😇': 'מלאך', '🤩': 'מתלהב כוכבים', '🤗': 'חיבוק', '😅': 'הקלה זיעה', '😬': 'מבוכה', '🥱': 'פיהוק עייף', '👍': 'לייק אגודל מעולה בסדר', '👎': 'לא אגודל למטה', '👌': 'אוקיי מושלם', '✌️': 'ניצחון שלום', '🤞': 'בהצלחה אצבעות', '👏': 'מחיאות כפיים כל הכבוד', '🙌': 'הידד', '🤝': 'לחיצת יד הסכם', '🙏': 'תודה בבקשה תפילה', '💪': 'כוח שריר', '👀': 'עיניים מסתכל', '👋': 'שלום נפנוף', '❤️': 'לב אהבה אדום', '💙': 'לב כחול', '💚': 'לב ירוק', '💛': 'לב צהוב', '🤍': 'לב לבן', '💔': 'לב שבור', '💯': 'מאה מושלם', '✅': 'וי בוצע אישור', '✔️': 'וי בוצע', '❌': 'איקס לא שגיאה', '⚠️': 'אזהרה', '❗': 'קריאה חשוב', '❓': 'שאלה', '⭐': 'כוכב', '✨': 'ניצוצות', '🔥': 'אש לוהט', '🎉': 'מזל טוב חגיגה', '🎊': 'קונפטי', '🔔': 'פעמון', '📢': 'הודעה כריזה', '⛔': 'אסור עצור', '🟢': 'ירוק עיגול', '🔴': 'אדום עיגול', '💼': 'תיק עבודה', '📁': 'תיקייה', '📄': 'מסמך דף', '📊': 'גרף', '📋': 'לוח רשימה', '📌': 'נעץ', '📎': 'מהדק קובץ', '📝': 'פתק כתיבה', '📅': 'תאריך לוח שנה', '⏰': 'שעון מעורר זמן', '⏳': 'שעון חול המתנה', '📞': 'טלפון שיחה', '📱': 'נייד', '💻': 'מחשב', '🖨️': 'מדפסת', '💡': 'רעיון נורה', '🔧': 'מפתח תיקון', '🛠️': 'כלים תיקון', '🔑': 'מפתח', '🔒': 'מנעול', '📦': 'חבילה משלוח', '📧': 'מייל', '💰': 'כסף', '💵': 'כסף שטר', '🛒': 'קניות עגלה', '🎁': 'מתנה', '🏆': 'גביע ניצחון', '🎯': 'מטרה יעד', '☕': 'קפה הפסקה', '🍕': 'פיצה', '🍰': 'עוגה', '🎂': 'יום הולדת עוגה', '🌞': 'שמש בוקר', '🌙': 'ירח לילה', '🌧️': 'גשם', '❄️': 'שלג קר', '🌸': 'פרח', '🚗': 'רכב מכונית נסיעה', '🚚': 'משאית משלוח', '✈️': 'מטוס טיסה', '🏠': 'בית', '🏢': 'משרד בניין', '🏁': 'סיום דגל', '🚀': 'טיל מהר' };
+function recentEmojis(){ try{ return JSON.parse(localStorage.getItem('recentEmoji') || '[]'); }catch(e){ return []; } }
+function pushRecentEmoji(e){ try{ const l = [e, ...recentEmojis().filter(x => x !== e)].slice(0, 24); localStorage.setItem('recentEmoji', JSON.stringify(l)); }catch(x){} }
 
 // ================= מצגת תמונות: כל תמונה 3.5 שניות, עם עצירה, הקודמת/הבאה =================
 function slideShow(ids){

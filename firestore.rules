@@ -74,6 +74,10 @@ service cloud.firestore {
       allow read: if isAdmin() || isEmployee();
       allow write: if isEmployeeId(viewer) || (viewer == 'mgr' && isAdmin());
     }
+    match /empDocs/{empId} {
+      allow write: if can('employees');
+      allow read, write: if isEmployeeId(empId);
+    }
     match /tasks/{empId} {
       allow write: if can('employees');
       allow read, write: if isEmployeeId(empId);
