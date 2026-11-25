@@ -2435,7 +2435,7 @@ function applyNewsTicker(on){
     tr.dataset.ok = '1';
     const html = r.items.map(t => `<span>${escapeHtml(t)}</span>`).join('<i>◆</i>');
     tr.innerHTML = html + '<i>◆</i>' + html;
-    tr.style.animationDuration = Math.max(40, r.items.join(' ').length * 0.22) + 's';
+    tr.style.animationDuration = Math.max(18, r.items.join(' ').length * 0.09) + 's';
   };
   load(); clearInterval(state._newsT); state._newsT = setInterval(() => { if(!document.getElementById('newsTicker')){ clearInterval(state._newsT); return; } load(); }, 10 * 60 * 1000);
 }
