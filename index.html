@@ -1055,6 +1055,34 @@ body.wa-dark .confirm-box .hint, body.wa-dark .confirm-box label{ color:#AEBAC1;
 body.wa-dark .confirm-box input, body.wa-dark .confirm-box textarea, body.wa-dark .confirm-box select{ background:#2A3942 !important; color:#E9EDEF; border-color:#2A3942 !important; }
 body.wa-dark .confirm-box .btn.ghost{ background:transparent; color:#D1D7DB; border-color:#3B4A54; }
 body.wa-dark .lk-themes button, body.wa-dark .lk-up{ background:#2A3942; } body.wa-dark .lk-themes button small{ color:#AEBAC1; }
+.wa-in-btn#chatEmojiBtn svg{ width:22px; height:22px; }
+.wa-emoji{ position:fixed; left:8px; right:8px; max-width:520px; margin:0 auto; z-index:10003; background:#fff; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.22); padding:8px; max-height:300px; display:flex; flex-direction:column; }
+.wa-em-tabs{ display:flex; gap:6px; margin-bottom:6px; }
+.wa-em-tabs button{ flex:1; border:none; background:#F0F2F5; border-radius:10px; padding:7px; font:inherit; font-size:13.5px; cursor:pointer; color:#54656F; }
+.wa-em-tabs button.on{ background:#D9FDD3; color:#0B6E4F; font-weight:600; }
+.wa-em-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(40px, 1fr)); overflow-y:auto; }
+.wa-em-grid button{ border:none; background:none; font-size:24px; height:42px; cursor:pointer; border-radius:8px; }
+.wa-em-grid button:hover{ background:#F0F2F5; }
+.wa-st-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(100px, 1fr)); gap:6px; overflow-y:auto; }
+.wa-st-grid[hidden], .wa-em-grid[hidden]{ display:none; }
+.wa-st-grid button{ border:2px solid var(--stc); background:#fff; border-radius:14px; padding:8px 4px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px; font:inherit; }
+.wa-st-grid span{ font-size:28px; } .wa-st-grid b{ font-size:12.5px; color:var(--stc); }
+.wa-bubble.st{ background:transparent !important; box-shadow:none !important; padding:2px 2px 18px; }
+.wa-bubble.st::before{ display:none; }
+.wa-sticker{ display:flex; flex-direction:column; align-items:center; gap:2px; background:#fff; border:3px solid var(--stc); border-radius:20px; padding:10px 18px; transform:rotate(-3deg); box-shadow:0 3px 10px rgba(0,0,0,.12); }
+.wa-sticker span{ font-size:42px; line-height:1.1; } .wa-sticker b{ color:var(--stc); font-size:16px; }
+.wa-voice-row{ display:inline-flex; align-items:center; gap:6px; }
+.wa-rate{ border:none; background:rgba(0,0,0,.08); color:#54656F; border-radius:12px; font:inherit; font-size:12px; font-weight:700; padding:3px 8px; cursor:pointer; }
+.wa-btn.mic{ touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+.wa-btn.mic.hold{ transform:scale(1.35); box-shadow:0 0 0 8px rgba(234,67,53,.18); transition:transform .15s; }
+.wa-bubble.ack{ border-inline-start:4px solid #E53935; }
+.wa-ack-tag{ font-size:12px; font-weight:700; color:#E53935; margin-bottom:3px; }
+.wa-ack-btn{ display:block; width:100%; margin-top:6px; border:none; background:#E53935; color:#fff; border-radius:8px; padding:7px; font:inherit; font-weight:700; cursor:pointer; }
+.wa-ack-done{ margin-top:5px; font-size:12.5px; color:#16A34A; font-weight:600; }
+.wa-ack-who{ display:block; margin-top:5px; border:none; background:rgba(0,0,0,.06); border-radius:8px; padding:4px 8px; font:inherit; font-size:12.5px; color:#0B6E4F; font-weight:600; cursor:pointer; }
+body.wa-dark .wa-emoji{ background:#233138; } body.wa-dark .wa-em-tabs button{ background:#2A3942; color:#AEBAC1; } body.wa-dark .wa-em-tabs button.on{ background:#005C4B; color:#E9EDEF; }
+body.wa-dark .wa-em-grid button:hover{ background:#2A3942; } body.wa-dark .wa-st-grid button, body.wa-dark .wa-sticker{ background:#1F2C33; }
+body.wa-dark .wa-rate, body.wa-dark .wa-ack-who{ background:rgba(255,255,255,.1); color:#D1D7DB; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8143,7 +8171,7 @@ async function playTaskAudio(btn){
   btn.disabled = false;
   if(!res || !res.audio){ btn.textContent = label; showToast(res && res.error === 'unavailable' ? 'אי אפשר להשמיע את ההקלטה באתר כרגע. אפשר לשמוע אותה בקו' : 'לא הצלחנו לטעון את ההקלטה'); return; }
   if(taskAudioEl) taskAudioEl.pause();
-  taskAudioEl = new Audio(res.audio); taskAudioEl._id = key;
+  taskAudioEl = new Audio(res.audio); taskAudioEl._id = key; taskAudioEl.playbackRate = state._voiceRate || 1;
   btn.textContent = '⏸ עצירה';
   taskAudioEl.onended = () => { btn.textContent = idle; };
   taskAudioEl.play().catch(() => { btn.textContent = idle; showToast('לא הצלחנו להשמיע'); });
@@ -8225,7 +8253,7 @@ async function renderChatHome(role){
   const chats = await Promise.all(contacts.map((c, i) => c.custom ? Promise.resolve(groups.find(g => g.id === c.id)) : loadChat(chatIdWith(me, c.id))));
   const rows = contacts.map((c, i) => {
     const ch = chats[i] || { msgs: [] }, last = visibleMsgs(ch, me).slice(-1)[0], un = chatUnread(ch, me);
-    const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : last.poll ? '📊 ' + last.poll.q : last.loc ? '📍 מיקום' : last.contact ? '👤 ' + last.contact.name : ''))) : 'אין הודעות עדיין';
+    const prev = last ? (last.from === me ? 'אתה: ' : (c.group ? (state._chatNames[last.from] || '') + ': ' : '')) + (last.deleted ? '🚫 ההודעה נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : last.poll ? '📊 ' + last.poll.q : last.loc ? '📍 מיקום' : last.contact ? '👤 ' + last.contact.name : last.sticker ? last.sticker.e + ' ' + last.sticker.t : ''))) : 'אין הודעות עדיין';
     // וי כפול ליד ההודעה האחרונה שלי: אפור = נשלחה, כחול = כל הצד השני קרא
     let ticks = '';
     if(last && last.from === me && !last.deleted && !c.self){
@@ -8392,7 +8420,9 @@ function chatBubblesHtml(ch, me, isGroup, members){
     Object.values(rx).forEach(e => { counts[e] = (counts[e] || 0) + 1; });
     const reactHtml = (Object.keys(counts).length ? `<div class="wa-rx-show">${Object.entries(counts).map(([e, n]) => `<span${rx[me] === e ? ' class="mine"' : ''}>${e}${n > 1 ? ' ' + n : ''}</span>`).join('')}</div>` : '')
       + (me === '__viewer__' ? '' : `<button type="button" class="wa-rx-btn" data-react-open="${m.id}" title="תגובה" aria-label="תגובה">${WAI.smile}</button>`);
-    return `<div class="wa-row ${mine ? 'out' : 'in'}" data-row="${m.id}"><div class="wa-bubble" data-mid="${m.id}">
+    const ackOthers = members.filter(x => x !== m.from), ackN = ackOthers.filter(x => (m.acks || {})[x]).length;
+    return `<div class="wa-row ${mine ? 'out' : 'in'}" data-row="${m.id}"><div class="wa-bubble${m.sticker ? ' st' : ''}${m.ack ? ' ack' : ''}" data-mid="${m.id}">
+      ${m.ack ? '<div class="wa-ack-tag">📢 הודעה חשובה · נדרש אישור קריאה</div>' : ''}
       ${me === '__viewer__' ? '' : `<button type="button" class="wa-del" data-msg-menu="${m.id}" title="אפשרויות" aria-label="אפשרויות">${WAI.chev}</button>`}
       ${!mine && isGroup ? `<div class="wa-name">${escapeHtml(state._chatNames[m.from] || '')}</div>` : ''}
       ${m.fwd ? '<div class="wa-fwd">↪ הועברה</div>' : ''}
@@ -8401,13 +8431,15 @@ function chatBubblesHtml(ch, me, isGroup, members){
       ${Array.isArray(m.files) ? (() => { const imgs = m.files.filter(x => /^image\//.test(x.fileType || '')), docs = m.files.filter(x => !/^image\//.test(x.fileType || ''));
         return (imgs.length ? `<div class="wa-album n${Math.min(imgs.length, 4)}">${imgs.slice(0, 4).map((x, k) => `<div class="wa-album-cell"><img class="wa-img" data-file-img="${x.fileId}" alt="" />${k === 3 && imgs.length > 4 ? `<span class="wa-album-more" data-album-more="${m.id}">+${imgs.length - 4}</span>` : ''}</div>`).join('')}</div>` : '')
           + docs.map(x => `<button type="button" class="wa-file" data-file-open="${x.fileId}" data-file-name="${escapeHtml(x.fileName || 'קובץ')}">📄 ${escapeHtml(x.fileName || 'קובץ')}</button>`).join(''); })() : ''}
-      ${m.audioId ? `<button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button>` : ''}
+      ${m.audioId ? `<span class="wa-voice-row"><button type="button" class="wa-voice" data-play="c${m.id}" data-reply="${m.id}" data-audio="${m.audioId}">▶ הודעה קולית</button><button type="button" class="wa-rate" title="מהירות השמעה">×${state._voiceRate || 1}</button></span>` : ''}
+      ${m.sticker ? `<div class="wa-sticker" style="--stc:${escapeHtml(m.sticker.c || '#00A884')}"><span>${escapeHtml(m.sticker.e || '')}</span><b>${escapeHtml(m.sticker.t || '')}</b></div>` : ''}
       ${m.poll ? pollHtml(m, me) : ''}
       ${m.contact ? `<div class="wa-contactcard"><span class="wa-avatar" data-av="${escapeHtml(m.contact.id || '')}">${escapeHtml((m.contact.name || '?').charAt(0))}</span><div class="wa-cc-main"><b>${escapeHtml(m.contact.name || '')}</b>${m.contact.phone ? `<span dir="ltr">${escapeHtml(m.contact.phone)}</span>` : ''}</div></div>
         ${me === '__viewer__' ? '' : `<div class="wa-cc-btns">${m.contact.id && m.contact.id !== me ? `<button type="button" data-cc-chat="${escapeHtml(m.contact.id)}">💬 הודעה</button>` : ''}${m.contact.phone ? `<a href="tel:${escapeHtml(m.contact.phone)}">📞 התקשרות</a>` : ''}</div>`}` : ''}
       ${m.loc ? `<div class="wa-loc"><div class="wa-loc-pin">📍</div><div class="wa-loc-main"><b>מיקום</b><span><bdi>${m.loc.lat.toFixed(5)}, ${m.loc.lng.toFixed(5)}</bdi>${m.loc.acc ? ' · דיוק ' + Math.round(m.loc.acc) + ' מ׳' : ''}</span>
         <span class="wa-loc-btns"><a href="https://waze.com/ul?ll=${m.loc.lat},${m.loc.lng}&navigate=yes" target="_blank" rel="noopener">🚗 Waze</a><a href="https://www.google.com/maps?q=${m.loc.lat},${m.loc.lng}" target="_blank" rel="noopener">🗺️ גוגל מפות</a></span></div></div>` : ''}
       ${m.text ? `<div class="wa-text">${linkify(m.text)}</div>` : ''}
+      ${m.ack ? (mine ? `<button type="button" class="wa-ack-who" data-ack-who="${m.id}">✔ אישרו ${ackN} מתוך ${ackOthers.length}</button>` : me === '__viewer__' ? '' : (m.acks || {})[me] ? '<div class="wa-ack-done">✔ אישרת קריאה</div>' : `<button type="button" class="wa-ack-btn" data-ack="${m.id}">קראתי ✔</button>`) : ''}
       <span class="wa-time">${m.scheduled ? '<i class="wa-edited">⏰</i>' : ''}${m.edited ? '<i class="wa-edited">נערכה</i>' : ''}${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
     </div>${reactHtml}</div>`;
   }).join('');
@@ -8446,6 +8478,7 @@ async function renderChatRoom(role, otherId){
       <div class="wa-replybar" id="chatReplyBar" hidden><div class="wa-quote"><b id="chatReplyWho"></b><span id="chatReplySnip"></span></div><button type="button" class="wa-back" id="chatReplyX" aria-label="ביטול">✕</button></div>
       <div class="wa-compose">
         <div class="wa-inputwrap">
+          <button type="button" class="wa-in-btn" id="chatEmojiBtn" title="אימוג׳י ומדבקות" aria-label="אימוג׳י ומדבקות">${WAI.smile}</button>
           <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
           <button type="button" class="wa-in-btn" id="chatMoreBtn" title="סקר / הודעה מתוזמנת" aria-label="עוד">${WAI.plus}</button>
           <button type="button" class="wa-in-btn" id="chatAttachBtn" title="צירוף" aria-label="צירוף">${WAI.attach}</button>
@@ -8539,7 +8572,7 @@ async function renderChatRoom(role, otherId){
     el.hidden = !on;
     const txt = on ? (isGroup ? (state._chatNames[typing.who] || '') + ' ' : '') + (typing.kind === 'recording' ? 'מקליט הודעה...' : 'מקליד...') : '';
     if(on) el.querySelector('.wa-typing-txt').textContent = txt;
-    const sub = document.getElementById('chatSub'); if(sub) sub.textContent = on ? txt : (custom ? members.map(x => x === me ? 'אתה' : (state._chatNames[x] || '')).filter(Boolean).join(', ') : isGroup ? members.length + ' משתתפים' : '');
+    const sub = document.getElementById('chatSub'); if(sub) sub.textContent = on ? txt : (!isGroup && !selfChat && typeof presence !== 'undefined' && presence) ? presenceText(presence) : (custom ? members.map(x => x === me ? 'אתה' : (state._chatNames[x] || '')).filter(Boolean).join(', ') : isGroup ? members.length + ' משתתפים' : '');
   };
   const markSeen = async () => {
     if(!chatUnread(cur, me)) return;
@@ -8581,7 +8614,7 @@ async function renderChatRoom(role, otherId){
     ov.querySelector('#miClose').onclick = close; ov.onclick = e => { if(e.target === ov) close(); };
   };
   // תפריט הודעה כמו בוואטסאפ: תגובה באימוג'י, השב, העתקה, העברה, מחיקה
-  const snipOf = m => m.text ? m.text.slice(0, 90) : m.fileId ? '📎 ' + (m.fileName || 'קובץ') : m.files ? '📷 ' + m.files.length + ' קבצים' : m.audioId ? '🎙 הודעה קולית' : m.poll ? '📊 ' + m.poll.q : m.loc ? '📍 מיקום' : m.contact ? '👤 ' + m.contact.name : '';
+  const snipOf = m => m.text ? m.text.slice(0, 90) : m.fileId ? '📎 ' + (m.fileName || 'קובץ') : m.files ? '📷 ' + m.files.length + ' קבצים' : m.audioId ? '🎙 הודעה קולית' : m.poll ? '📊 ' + m.poll.q : m.loc ? '📍 מיקום' : m.contact ? '👤 ' + m.contact.name : m.sticker ? m.sticker.e + ' ' + m.sticker.t : '';
   let replyTo = null;
   const setReply = m => {
     replyTo = m ? { id: m.id, from: m.from, snip: snipOf(m) } : null;
@@ -8809,25 +8842,105 @@ async function renderChatRoom(role, otherId){
     if(files.length === 1) send({ ...files[0], ...(caption ? { text: caption } : {}) });
     else send({ files, ...(caption ? { text: caption } : {}) });
   };
-  const mic = document.getElementById('chatMic'); let rec = null;
-  mic.onclick = async () => {
-    if(rec && rec.state === 'recording'){ rec.stop(); return; }
+  // הקלטה: לחיצה קצרה = התחלה/עצירה. החזקה = מקליטים כל עוד מחזיקים, שחרור שולח, גרירה הצידה מבטלת
+  const mic = document.getElementById('chatMic'); let rec = null, recCancel = false, holdT = null, holdMode = false, startX = 0, pendingStop = null, recStarting = false;
+  const startRec = async hold => {
+    if(recStarting || (rec && rec.state === 'recording')) return;
+    recStarting = true; recCancel = false;
     try{
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true }), chunks = [];
       rec = new MediaRecorder(stream, { audioBitsPerSecond: 24000 });
-      let secs = 0; const tm = setInterval(() => { secs++; stEl.textContent = 'מקליט... ' + secs + ' שניות · לחצו ⏹ לשליחה'; sigTyping('recording'); if(secs >= 120) rec.stop(); }, 1000);
+      let secs = 0; const tm = setInterval(() => { secs++; stEl.textContent = 'מקליט... ' + secs + ' שניות · ' + (hold ? 'משחררים לשליחה · גוררים הצידה לביטול' : 'לחצו ⏹ לשליחה'); sigTyping('recording'); if(secs >= 120) rec.stop(); }, 1000);
       rec.ondataavailable = ev => { if(ev.data.size) chunks.push(ev.data); };
       rec.onstop = async () => {
-        clearInterval(tm); stream.getTracks().forEach(t => t.stop()); mic.innerHTML = WAI.mic; mic.classList.remove('rec'); stEl.textContent = 'שומר...';
+        clearInterval(tm); stream.getTracks().forEach(t => t.stop()); mic.innerHTML = WAI.mic; mic.classList.remove('rec', 'hold'); sigTyping(null);
+        if(recCancel){ stEl.textContent = '🗑 ההקלטה בוטלה'; setTimeout(() => { if(stEl.textContent === '🗑 ההקלטה בוטלה') stEl.textContent = ''; }, 1800); return; }
+        if(secs < 1 && hold){ stEl.textContent = 'ההקלטה קצרה מדי'; setTimeout(() => { stEl.textContent = ''; }, 1500); return; }
+        stEl.textContent = 'שומר...';
         const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
         const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
         const audioId = uid() + uid();
         const ok = await saveVoiceMessage(audioId, dataUrl);
         stEl.textContent = ok === true ? '' : 'שגיאה בשמירת ההקלטה'; if(ok === true) send({ audioId });
       };
-      rec.start(); mic.innerHTML = WAI.stop; mic.classList.add('rec'); sigTyping('recording');
+      rec.start(); mic.innerHTML = WAI.stop; mic.classList.add('rec'); if(hold) mic.classList.add('hold'); sigTyping('recording');
+      stEl.textContent = hold ? 'מקליט... משחררים לשליחה · גוררים הצידה לביטול' : 'מקליט... לחצו ⏹ לשליחה';
+      if(pendingStop !== null){ const c = pendingStop; pendingStop = null; stopRec(c); }
     }catch(err){ stEl.textContent = 'אין גישה למיקרופון. יש לאשר הרשאה בדפדפן.'; }
+    finally{ recStarting = false; }
   };
+  const stopRec = cancel => { if(rec && rec.state === 'recording'){ recCancel = !!cancel; rec.stop(); } else if(recStarting) pendingStop = !!cancel; };
+  mic.addEventListener('contextmenu', e => e.preventDefault());
+  mic.addEventListener('pointerdown', e => {
+    if(rec && rec.state === 'recording') return;
+    startX = e.clientX; holdMode = false;
+    holdT = setTimeout(() => { holdMode = true; if(navigator.vibrate) navigator.vibrate(20); try{ mic.setPointerCapture(e.pointerId); }catch(x){} startRec(true); }, 280);
+  });
+  mic.addEventListener('pointermove', e => { if(holdMode && Math.abs(e.clientX - startX) > 80){ holdMode = false; mic._skipClick = true; stopRec(true); } });
+  const endHold = cancel => { clearTimeout(holdT); if(holdMode){ holdMode = false; mic._skipClick = true; stopRec(cancel); } };
+  mic.addEventListener('pointerup', () => endHold(false));
+  mic.addEventListener('pointercancel', () => endHold(true));
+  mic.onclick = () => {
+    if(mic._skipClick){ mic._skipClick = false; return; }
+    if(rec && rec.state === 'recording') return stopRec(false);
+    startRec(false);
+  };
+  // ---- אימוג׳י ומדבקות
+  document.getElementById('chatEmojiBtn').onclick = ev => {
+    ev.stopPropagation();
+    const old = document.querySelector('.wa-emoji'); if(old){ old.remove(); return; }
+    const pn = document.createElement('div'); pn.className = 'wa-emoji';
+    pn.innerHTML = `<div class="wa-em-tabs"><button type="button" data-emt="e" class="on">😊 אימוג׳י</button><button type="button" data-emt="s">🏷️ מדבקות</button></div>
+      <div class="wa-em-grid" data-emp="e">${CHAT_EMOJI.map(e => `<button type="button" data-em="${e}">${e}</button>`).join('')}</div>
+      <div class="wa-st-grid" data-emp="s" hidden>${CHAT_STICKERS.map((x, k) => `<button type="button" data-stk="${k}" style="--stc:${x.c}"><span>${x.e}</span><b>${x.t}</b></button>`).join('')}</div>`;
+    document.body.appendChild(pn);
+    const comp = document.querySelector('.wa-compose').getBoundingClientRect();
+    pn.style.bottom = (window.innerHeight - comp.top + 6) + 'px';
+    pn.querySelectorAll('[data-emt]').forEach(b => b.onclick = e2 => { e2.stopPropagation(); pn.querySelectorAll('[data-emt]').forEach(x => x.classList.toggle('on', x === b)); pn.querySelectorAll('[data-emp]').forEach(x => x.hidden = x.dataset.emp !== b.dataset.emt); });
+    pn.querySelectorAll('[data-em]').forEach(b => b.onclick = e2 => {
+      e2.stopPropagation();
+      const a = input.selectionStart ?? input.value.length, z = input.selectionEnd ?? a;
+      input.value = input.value.slice(0, a) + b.dataset.em + input.value.slice(z);
+      const pos = a + b.dataset.em.length; input.focus(); input.setSelectionRange(pos, pos); input.dispatchEvent(new Event('input'));
+    });
+    pn.querySelectorAll('[data-stk]').forEach(b => b.onclick = () => { const x = CHAT_STICKERS[+b.dataset.stk]; pn.remove(); send({ sticker: { e: x.e, t: x.t, c: x.c } }); });
+    const close = e2 => { if(!pn.contains(e2.target) && !e2.target.closest('#chatEmojiBtn')){ pn.remove(); document.removeEventListener('click', close, true); } };
+    setTimeout(() => document.addEventListener('click', close, true), 0);
+  };
+  // ---- הודעה חשובה עם אישור קריאה
+  const newAck = () => {
+    const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+    ov.innerHTML = `<div class="confirm-box" style="max-width:420px; width:94vw;">
+      <h3 style="margin:0 0 6px;">📢 הודעה חשובה</h3><p class="hint" style="margin:0 0 10px; font-size:13px;">כל נמען יצטרך ללחוץ "קראתי ✔", ותראה מי אישר ומי עוד לא.</p>
+      <textarea id="akT" rows="4" maxlength="1000" style="width:100%; box-sizing:border-box; font:inherit; padding:8px 10px; border-radius:10px; border:1px solid #CFD8DC;"></textarea>
+      <div class="error-msg" id="akErr"></div>
+      <div class="actions"><button type="button" class="btn brass" id="akOk">שליחה</button><button type="button" class="btn ghost" id="akX">ביטול</button></div></div>`;
+    document.body.appendChild(ov);
+    const ta = ov.querySelector('#akT'); ta.value = input.value.trim();
+    ov.querySelector('#akX').onclick = () => ov.remove();
+    ov.querySelector('#akOk').onclick = () => {
+      const t = ta.value.trim(); if(!t) return ov.querySelector('#akErr').textContent = 'כותבים את ההודעה';
+      ov.remove(); if(t === input.value.trim()){ input.value = ''; input.style.height = ''; setDraft(me, id, ''); }
+      send({ text: t, ack: true, acks: {} });
+    };
+    setTimeout(() => ta.focus(), 50);
+  };
+  body.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('[data-ack]');
+    if(a){ const mid = a.dataset.ack, at = todayStr() + 'T' + nowTimeStr();
+      const loc = (cur.msgs || []).find(x => x.id === mid); if(loc){ loc.acks = { ...(loc.acks || {}), [me]: at }; paint.sig = null; paint(); }
+      saveMsgs(msgs => { const t = msgs.find(y => y.id === mid); if(!t || (t.acks || {})[me]) return false; t.acks = { ...(t.acks || {}), [me]: at }; }, 'chatAck'); return; }
+    const w = e.target.closest && e.target.closest('[data-ack-who]');
+    if(w){ const m = (cur.msgs || []).find(x => x.id === w.dataset.ackWho); if(!m) return;
+      const others = members.filter(x => x !== m.from), fmt = t => String(t).slice(0, 10).split('-').reverse().slice(0, 2).join('/') + ' ' + String(t).slice(11, 16);
+      const done = others.filter(x => (m.acks || {})[x]), notYet = others.filter(x => !(m.acks || {})[x]);
+      const ov = document.createElement('div'); ov.className = 'confirm-overlay';
+      ov.innerHTML = `<div class="confirm-box msginfo"><h3 style="margin:0 0 10px;">📢 אישורי קריאה</h3>
+        <div class="lk-label">✔ אישרו (${done.length})</div>${done.map(x => `<div class="msginfo-row"><b>${escapeHtml(state._chatNames[x] || '')}</b><span>${fmt(m.acks[x])}</span></div>`).join('') || '<p class="hint">עוד אף אחד</p>'}
+        <div class="lk-label">⏳ עוד לא אישרו (${notYet.length})</div>${notYet.map(x => `<div class="msginfo-row"><b>${escapeHtml(state._chatNames[x] || '')}</b></div>`).join('') || '<p class="hint">כולם אישרו 🎉</p>'}
+        <div class="actions"><button type="button" class="btn brass">סגירה</button></div></div>`;
+      document.body.appendChild(ov); ov.querySelector('.btn').onclick = () => ov.remove(); ov.onclick = e2 => { if(e2.target === ov) ov.remove(); }; }
+  });
   // ---- בחירת כמה הודעות: לחיצה ארוכה בטלפון, או "בחירה" בתפריט ההודעה במחשב
   let sel = null, lpFired = false;
   const selBar = document.getElementById('chatSelBar'), roomEl = body.closest('.wa-room');
@@ -8904,14 +9017,14 @@ async function renderChatRoom(role, otherId){
     ev.stopPropagation();
     document.querySelectorAll('.att-menu').forEach(x => x.remove());
     const btn = ev.currentTarget, mm = document.createElement('div'); mm.className = 'att-menu';
-    mm.innerHTML = `<button type="button" data-more="poll"><span class="att-ic" style="background:#FFB300;">📊</span>סקר</button><button type="button" data-more="sched"><span class="att-ic" style="background:#0795DC;">⏰</span>הודעה מתוזמנת</button><button type="button" data-more="loc"><span class="att-ic" style="background:#1FA855;">📍</span>מיקום</button><button type="button" data-more="contact"><span class="att-ic" style="background:#0795DC;">👤</span>איש קשר</button>`;
+    mm.innerHTML = `<button type="button" data-more="poll"><span class="att-ic" style="background:#FFB300;">📊</span>סקר</button><button type="button" data-more="sched"><span class="att-ic" style="background:#0795DC;">⏰</span>הודעה מתוזמנת</button><button type="button" data-more="loc"><span class="att-ic" style="background:#1FA855;">📍</span>מיקום</button><button type="button" data-more="contact"><span class="att-ic" style="background:#0795DC;">👤</span>איש קשר</button><button type="button" data-more="ack"><span class="att-ic" style="background:#E53935;">📢</span>הודעה חשובה (אישור קריאה)</button>`;
     document.body.appendChild(mm);
     const r0 = btn.getBoundingClientRect();
     mm.style.left = Math.max(8, Math.min(window.innerWidth - mm.offsetWidth - 8, r0.left + r0.width / 2 - mm.offsetWidth / 2)) + 'px';
     mm.style.top = (r0.top - mm.offsetHeight - 10) + 'px';
     const close = e => { if(!mm.contains(e.target)){ mm.remove(); document.removeEventListener('click', close, true); } };
     setTimeout(() => document.addEventListener('click', close, true), 0);
-    mm.querySelectorAll('[data-more]').forEach(b => b.onclick = () => { mm.remove(); b.dataset.more === 'poll' ? newPoll() : b.dataset.more === 'loc' ? sendLocation() : b.dataset.more === 'contact' ? sendContact() : newSched(); });
+    mm.querySelectorAll('[data-more]').forEach(b => b.onclick = () => { mm.remove(); b.dataset.more === 'poll' ? newPoll() : b.dataset.more === 'loc' ? sendLocation() : b.dataset.more === 'contact' ? sendContact() : b.dataset.more === 'ack' ? newAck() : newSched(); });
   };
   const sendContact = async () => {
     const list = allContacts.filter(c => !c.group && c.id !== 'team' && c.id !== me);
@@ -9008,6 +9121,29 @@ async function renderChatRoom(role, otherId){
   };
   applyRoomWall(roomEl, id);
   document.getElementById('chatWallBtn').onclick = () => openChatLook(role, id);
+  // ---- ייצוא השיחה (טקסט או הדפסה ל-PDF)
+  const exportChat = kind => {
+    const list = visibleMsgs(cur, me).filter(m => !m.deleted);
+    if(!list.length) return showToast('אין הודעות לייצוא');
+    const who = m => m.from === me ? 'אני' : (state._chatNames[m.from] || '');
+    const when = m => String(m.at || '').slice(0, 10).split('-').reverse().join('/') + ' ' + String(m.at || '').slice(11, 16);
+    const what = m => (m.ack ? '[הודעה חשובה] ' : '') + (m.text || snipOf(m) || (m.sticker ? m.sticker.e + ' ' + m.sticker.t : '')) + (m.loc ? ` (https://www.google.com/maps?q=${m.loc.lat},${m.loc.lng})` : '');
+    const title = 'צ׳אט – ' + name;
+    if(kind === 'txt'){
+      const txt = title + '\nיוצא ב-' + todayStr().split('-').reverse().join('/') + '\n\n' + list.map(m => `[${when(m)}] ${who(m)}: ${what(m)}`).join('\n');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/plain;charset=utf-8' })); a.download = ('צאט ' + name + ' ' + todayStr()).replace(/[\\/:*?"<>|׳']/g, '').trim() + '.txt';
+      document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); return showToast('הקובץ ירד');
+    }
+    const w = window.open('', '_blank'); if(!w) return showToast('הדפדפן חסם את החלון – יש לאפשר חלונות קופצים');
+    w.document.write(`<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:Arial,sans-serif;margin:24px;color:#111} h1{font-size:20px;margin:0 0 4px} .s{color:#666;font-size:12px;margin-bottom:16px} .m{padding:6px 0;border-bottom:1px solid #eee;font-size:13.5px;page-break-inside:avoid} .m b{color:#075E54} .t{color:#888;font-size:11.5px;margin-inline-start:6px} .me b{color:#1E5AA8}</style></head><body>
+      <h1>${escapeHtml(title)}</h1><div class="s">${list.length} הודעות · יוצא ב-${todayStr().split('-').reverse().join('/')}</div>
+      ${list.map(m => `<div class="m${m.from === me ? ' me' : ''}"><b>${escapeHtml(who(m))}</b><span class="t">${when(m)}</span><div>${escapeHtml(what(m)).replace(/\n/g, '<br>')}</div></div>`).join('')}
+      <script>setTimeout(function(){ window.print(); }, 300);<\/script></body></html>`);
+    w.document.close();
+  };
+  // ---- נראה לאחרונה (רק בשיחה אחד על אחד)
+  let presence = null, unsubPres = () => {};
+  if(!isGroup && !selfChat){ try{ unsubPres = onSnapshot(doc(db, 'statuses', otherId), sn => { presence = sn.exists() ? (sn.data().seen || null) : null; paintTyping(); }, () => {}); }catch(e){} }
   // ---- מדיה, קבצים וקישורים בשיחה
   document.getElementById('chatMediaBtn').onclick = () => {
     const msgs = visibleMsgs(cur, me).filter(m => !m.deleted);
@@ -9021,13 +9157,14 @@ async function renderChatRoom(role, otherId){
     imgs.reverse(); docs.reverse(); links.reverse();
     const fmt = t => String(t || '').slice(0, 10).split('-').reverse().slice(0, 2).join('/');
     const ov = document.createElement('div'); ov.className = 'wa-media';
-    ov.innerHTML = `<div class="wa-room-head"><button type="button" class="wa-back" data-md-x aria-label="חזרה">${WAI.back}</button><b style="flex:1;">מדיה, קבצים וקישורים</b></div>
+    ov.innerHTML = `<div class="wa-room-head"><button type="button" class="wa-back" data-md-x aria-label="חזרה">${WAI.back}</button><b style="flex:1;">מדיה, קבצים וקישורים</b><button type="button" class="wa-back" data-exp="txt" title="ייצוא השיחה לקובץ טקסט" style="font-size:13px; width:auto; padding:0 10px; border-radius:16px;">⬇ טקסט</button><button type="button" class="wa-back" data-exp="pdf" title="הדפסה / שמירה כ-PDF" style="font-size:13px; width:auto; padding:0 10px; border-radius:16px;">🖨 PDF</button></div>
       <div class="wa-md-tabs"><button type="button" data-md-tab="i" class="on">תמונות (${imgs.length})</button><button type="button" data-md-tab="d">קבצים (${docs.length})</button><button type="button" data-md-tab="l">קישורים (${links.length})</button></div>
       <div class="wa-md-body" data-md-pane="i">${imgs.length ? `<div class="wa-md-grid">${imgs.slice(0, 120).map((x, k) => `<button type="button" class="wa-md-cell" data-md-img="${k}"><img alt="" data-md-src="${x.fileId}" /></button>`).join('')}</div>` : '<p class="hint" style="text-align:center;">אין תמונות בשיחה</p>'}</div>
       <div class="wa-md-body" data-md-pane="d" hidden>${docs.length ? docs.map((x, k) => `<button type="button" class="wa-md-row" data-md-doc="${k}"><span>${x.audioId ? '🎙' : /^video\//.test(x.fileType || '') ? '🎬' : /^audio\//.test(x.fileType || '') ? '🎵' : '📄'}</span><b>${escapeHtml(x.fileName || 'קובץ')}</b><small>${fmt(x.at)}</small></button>`).join('') : '<p class="hint" style="text-align:center;">אין קבצים בשיחה</p>'}</div>
       <div class="wa-md-body" data-md-pane="l" hidden>${links.length ? links.map(x => `<a class="wa-md-row" href="${escapeHtml(/^https?:/.test(x.u) ? x.u : 'https://' + x.u)}" target="_blank" rel="noopener"><span>🔗</span><b dir="ltr">${escapeHtml(x.u)}</b><small>${fmt(x.at)}</small></a>`).join('') : '<p class="hint" style="text-align:center;">אין קישורים בשיחה</p>'}</div>`;
     document.body.appendChild(ov);
     ov.querySelector('[data-md-x]').onclick = () => ov.remove();
+    ov.querySelectorAll('[data-exp]').forEach(b => b.onclick = () => exportChat(b.dataset.exp));
     ov.querySelectorAll('[data-md-tab]').forEach(b => b.onclick = () => { ov.querySelectorAll('[data-md-tab]').forEach(x => x.classList.toggle('on', x === b)); ov.querySelectorAll('[data-md-pane]').forEach(p2 => p2.hidden = p2.dataset.mdPane !== b.dataset.mdTab); });
     ov.querySelectorAll('[data-md-src]').forEach(async img => { const f = await loadTaskFile(img.dataset.mdSrc); if(f) img.src = f.data; });
     const ids = imgs.map(x => x.fileId);
@@ -9065,7 +9202,7 @@ async function renderChatRoom(role, otherId){
       const d = snap.exists() ? snap.data() : { msgs: [] };
       typing = d.typing || null;
       if(custom && Array.isArray(d.members)) members = d.members;
-      const sig = JSON.stringify([(d.cleared || {})[me] || '', (d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted, m.reactions || null, m.edited ? m.text : 0, m.poll ? m.poll.votes || {} : 0, (m.hiddenFor || []).length])]);
+      const sig = JSON.stringify([(d.cleared || {})[me] || '', (d.msgs || []).map(m => [m.id, (m.seenBy || []).length, !!m.deleted, m.reactions || null, m.edited ? m.text : 0, m.poll ? m.poll.votes || {} : 0, (m.hiddenFor || []).length, Object.keys(m.acks || {}).length])]);
       if(firstUnread === undefined){ const u = visibleMsgs(d, me).filter(m => m.from !== me && !m.deleted && !(m.seenBy || []).includes(me)); firstUnread = u.length ? { id: u[0].id, n: u.length } : null; }
       else if(!pinned){ const before = new Set((cur.msgs || []).map(m => m.id)); newWhileUp += (d.msgs || []).filter(m => !before.has(m.id) && m.from !== me).length; }
       if(sig !== paint.sig){ paint.sig = sig; cur = d; paint(); markSeen(); paintJump(); } else { cur = { ...cur, pinned: d.pinned }; paintTyping(); }
@@ -9073,7 +9210,7 @@ async function renderChatRoom(role, otherId){
     }, () => {});
   }catch(e){ cur = (await loadChat(id)) || { msgs: [] }; paint(); markSeen(); }
   const tick = setInterval(() => { if(!document.getElementById('chatBody')){ clearInterval(tick); return; } paintTyping(); }, 1500);
-  state._chatWatch = () => { unsub(); clearInterval(tick); };
+  state._chatWatch = () => { unsub(); clearInterval(tick); try{ unsubPres(); }catch(e){} };
   input.focus();
 }
 
@@ -9131,6 +9268,10 @@ async function startChatNotifier(role){
   startTaskSoundWatch(role);
   registerPush();
   { const lp = new URLSearchParams(location.search); if(lp.get('chat') || lp.get('tasks')){ const l = location.href; history.replaceState(null, '', location.pathname); setTimeout(() => openFromLink(l), 800); } }
+  // נראה לאחרונה: כל דקה (כשהאתר מוצג) נשמרת השעה ב-statuses/<אני>.seen
+  const beat = () => { if(document.visibilityState === 'visible') setDoc(doc(db, 'statuses', me), { seen: trueNow().getTime() }, { merge: true }).catch(() => {}); };
+  clearInterval(state._beatTimer); state._beatTimer = setInterval(beat, 60000); beat();
+  if(!state._beatVis){ state._beatVis = true; document.addEventListener('visibilitychange', () => { if(state._chatNotif && document.visibilityState === 'visible') setDoc(doc(db, 'statuses', state._chatNotif.me), { seen: trueNow().getTime() }, { merge: true }).catch(() => {}); }); }
   clearInterval(state._remindTimer);
   state._remindTimer = setInterval(() => checkMsgReminders(role), 30000); setTimeout(() => checkMsgReminders(role), 4000);
   if(state._chatNotif && state._chatNotif.me === me) return;
@@ -9167,7 +9308,7 @@ async function startChatNotifier(role){
 function notifyChat(role, id, d, m){
   const who = state._chatNames[m.from] || 'הודעה חדשה';
   const where = id === 'team' ? 'כל הצוות' : /^g_/.test(id) ? (d.name || 'קבוצה') : '';
-  const body = m.text ? m.text.slice(0, 140) : m.files ? '📷 ' + m.files.length + ' קבצים' : m.fileId ? '📎 קובץ' : m.audioId ? '🎙 הודעה קולית' : m.poll ? '📊 ' + m.poll.q : m.loc ? '📍 מיקום' : m.contact ? '👤 ' + m.contact.name : '';
+  const body = m.text ? m.text.slice(0, 140) : m.files ? '📷 ' + m.files.length + ' קבצים' : m.fileId ? '📎 קובץ' : m.audioId ? '🎙 הודעה קולית' : m.poll ? '📊 ' + m.poll.q : m.loc ? '📍 מיקום' : m.contact ? '👤 ' + m.contact.name : m.sticker ? m.sticker.e + ' ' + m.sticker.t : '';
   chatPing(); flashTitle(who);
   if(document.visibilityState === 'visible') headsUp(who, where, body, () => {
     const other = id === 'team' || /^g_/.test(id) ? id : id.split('__').find(x => x !== chatMe(role));
@@ -9458,7 +9599,7 @@ async function renderChatMonitor(target, myGroupIds){
     return `<button type="button" class="wa-contact" data-mon-open="${c.id}">
       <span class="wa-avatar group">${WAI.eye}</span>
       <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(label(c))}</b><span class="wa-c-time">${chatTime(last.at)}</span></span>
-      <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml((state._chatNames[last.from] || '') + ': ' + (last.deleted ? '🚫 נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : last.poll ? '📊 ' + last.poll.q : last.loc ? '📍 מיקום' : last.contact ? '👤 ' + last.contact.name : ''))))}</span></span></span></button>`;
+      <span class="wa-c-bottom"><span class="wa-c-prev">${escapeHtml((state._chatNames[last.from] || '') + ': ' + (last.deleted ? '🚫 נמחקה' : (last.text || (last.fileId ? '📎 קובץ' : last.files ? '📷 ' + last.files.length + ' קבצים' : last.audioId ? '🎙 הודעה קולית' : last.poll ? '📊 ' + last.poll.q : last.loc ? '📍 מיקום' : last.contact ? '👤 ' + last.contact.name : last.sticker ? last.sticker.e + ' ' + last.sticker.t : ''))))}</span></span></span></button>`;
   }).join('');
   target.appendChild(box);
   box.querySelectorAll('[data-mon-open]').forEach(b => b.onclick = () => renderChatMonitorRoom(others.find(c => c.id === b.dataset.monOpen), label));
@@ -9635,6 +9776,23 @@ function headsUp(who, where, body, onOpen){
   let sy = null;
   el.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
   el.addEventListener('touchmove', e => { if(sy !== null && e.touches[0].clientY - sy < -25){ sy = null; clearTimeout(t); hide(); } }, { passive: true });
+}
+
+// ================= אימוג׳י, מדבקות, נראה לאחרונה =================
+try{ state._voiceRate = Number(localStorage.getItem('voiceRate')) || 1; }catch(e){}
+const CHAT_EMOJI = '😀 😃 😄 😁 😊 🙂 😉 😍 🥰 😘 😋 😎 🤩 🥳 😇 🤗 🤔 🤨 😐 😶 🙄 😏 😮 😲 😴 😌 😕 😟 😢 😭 😤 😩 🤯 😳 🥺 🙏 👍 👎 👌 ✌️ 🤞 👏 🙌 💪 🤝 👋 ✋ 👀 ❤️ 🧡 💛 💚 💙 💜 🤍 💯 ✅ ✔️ ❌ ⚠️ ❓ ❗ ⭐ 🌟 ✨ 🔥 🎉 🎊 🎁 🏆 🥇 📌 📎 📞 📱 💻 🖨️ 📄 📝 📅 ⏰ ⏳ 🕐 🚗 🚚 🏢 🏠 ☕ 🍰 🌞 🌙 ☔ 💡 🔧 🛠️ 📦 💰 🛒'.split(' ');
+const CHAT_STICKERS = [
+  { e: '✅', t: 'קיבלתי', c: '#16A34A' }, { e: '✔️', t: 'בוצע', c: '#00A884' }, { e: '🚗', t: 'בדרך', c: '#2F7BE0' }, { e: '⏳', t: 'עוד רגע', c: '#64748B' },
+  { e: '🙏', t: 'תודה רבה', c: '#7A55D1' }, { e: '👍', t: 'מעולה', c: '#F59E0B' }, { e: '📞', t: 'תתקשר אליי', c: '#0EA5E9' }, { e: '☕', t: 'בהפסקה', c: '#92400E' },
+  { e: '🤝', t: 'מסכים', c: '#0D9488' }, { e: '❓', t: 'יש שאלה', c: '#9333EA' }, { e: '🌞', t: 'בוקר טוב', c: '#EAB308' }, { e: '🏁', t: 'סיימתי להיום', c: '#DC2626' }
+];
+function presenceText(ms){
+  const now = trueNow().getTime(), diff = now - ms;
+  if(diff < 2.5 * 60000) return 'מחובר/ת עכשיו';
+  const d = new Date(ms), il = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' })), p2 = x => String(x).padStart(2, '0');
+  const ds = il.getFullYear() + '-' + p2(il.getMonth() + 1) + '-' + p2(il.getDate()), hm = p2(il.getHours()) + ':' + p2(il.getMinutes());
+  const y = new Date(ilNow().getTime() - 86400000), yds = y.getFullYear() + '-' + p2(y.getMonth() + 1) + '-' + p2(y.getDate());
+  return 'נראה/תה לאחרונה ' + (ds === todayStr() ? 'היום ב-' + hm : ds === yds ? 'אתמול ב-' + hm : p2(il.getDate()) + '/' + p2(il.getMonth() + 1) + ' ב-' + hm);
 }
 
 // ================= עיצוב הצ׳אט ותמונת רקע (נשמר בחשבון: chatTheme, chatWall) =================
@@ -10109,6 +10267,8 @@ async function openMirror(){
 document.addEventListener('click', async e => {
   if(!e.target.closest) return;
   if(e.target.closest('#mirrorBtn')) openMirror();
+  const rb = e.target.closest('.wa-rate');
+  if(rb){ e.preventDefault(); e.stopPropagation(); const r = { 1: 1.5, 1.5: 2, 2: 1 }[state._voiceRate || 1] || 1; state._voiceRate = r; try{ localStorage.setItem('voiceRate', String(r)); }catch(x){} document.querySelectorAll('.wa-rate').forEach(x => x.textContent = '×' + r); if(taskAudioEl) taskAudioEl.playbackRate = r; return; }
   const pb = e.target.closest('[data-play]');
   if(pb){ e.preventDefault(); playTaskAudio(pb); }
   if(e.target.closest('#tasksBtn') && state.currentEmployee) renderEmployeeTasks(state.currentEmployee);
