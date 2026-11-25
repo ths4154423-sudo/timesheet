@@ -1427,6 +1427,20 @@ body.v2 #headerActions{ gap:6px; }
 body.v2 #headerActions .mirror-grp .btn, body.v2 #headerActions .logout-link{ font-size:12.5px; padding:5px 10px; }
 body.v2 #headerActions{ display:flex !important; flex-wrap:wrap; gap:6px; justify-content:flex-end; align-items:center; max-width:220px; }
 body.v2 #headerActions > *{ flex:0 0 auto !important; width:auto !important; }
+/* הצ׳אט נשאר בעיצוב שלו גם כשהעיצוב החדש (הכהה) פעיל */
+body.v2:not(.wa-dark) .wa-full, body.v2:not(.wa-dark) .wa-room, body.v2:not(.wa-dark) .wa-media, body.v2:not(.wa-dark) .att-menu, body.v2:not(.wa-dark) .wa-menu, body.v2:not(.wa-dark) .wa-emoji, body.v2:not(.wa-dark) .sound-pop{ --ink:#111B21; --ink-soft:#54656F; --paper:#FFFFFF; --paper-alt:#F0F2F5; --surface:#FFFFFF; --line:#E9EDEF; color:#111B21; }
+body.v2 .wa-full .card, body.v2 .wa-room.card, body.v2 .wa-media .card{ backdrop-filter:none !important; box-shadow:none !important; }
+body.v2:not(.wa-dark) .wa-full .card, body.v2:not(.wa-dark) .wa-media .card{ background:#fff !important; border:1px solid #E9EDEF !important; color:#111B21; }
+body.v2:not(.wa-dark) .wa-room.card{ background:#fff !important; border:none !important; }
+body.v2:not(.wa-dark) .wa-full .wa-contact b, body.v2:not(.wa-dark) .wa-room b, body.v2:not(.wa-dark) .wa-full .card b, body.v2:not(.wa-dark) .wa-full .card h3{ color:#111B21; }
+body.v2:not(.wa-dark) .wa-full-head b, body.v2:not(.wa-dark) .wa-room-head b{ color:#fff; }
+body.v2:not(.wa-dark) .wa-full .hint, body.v2:not(.wa-dark) .wa-room .hint{ color:#667781 !important; }
+body.v2:not(.wa-dark) .wa-inputwrap textarea{ background:transparent !important; color:#111B21 !important; border:none !important; min-height:0 !important; box-shadow:none !important; color-scheme:light; }
+body.v2:not(.wa-dark) .wa-home-search input, body.v2:not(.wa-dark) .wa-searchbar input, body.v2:not(.wa-dark) .wa-em-search input{ background:#F0F2F5 !important; color:#111B21 !important; border:none !important; min-height:0 !important; color-scheme:light; }
+body.v2.wa-dark .wa-inputwrap textarea{ background:transparent !important; border:none !important; min-height:0 !important; }
+body.v2 .wa-full .btn.brass, body.v2 .wa-room .btn.brass{ box-shadow:none; }
+body.v2 .wa-room.card{ padding:0 !important; margin:0 !important; border-radius:0 !important; }
+body.v2 .wa-full .card.wa-list{ padding:6px 0 !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
