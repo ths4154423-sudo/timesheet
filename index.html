@@ -9046,7 +9046,7 @@ async function renderChatRoom(role, otherId){
     ev.stopPropagation();
     document.querySelectorAll('.att-menu').forEach(x => x.remove());
     const btn = ev.currentTarget, mm = document.createElement('div'); mm.className = 'att-menu';
-    mm.innerHTML = `<button type="button" data-more="poll"><span class="att-ic" style="background:#FFB300;">📊</span>סקר</button><button type="button" data-more="sched"><span class="att-ic" style="background:#0795DC;">⏰</span>הודעה מתוזמנת</button><button type="button" data-more="loc"><span class="att-ic" style="background:#1FA855;">📍</span>מיקום</button><button type="button" data-more="contact"><span class="att-ic" style="background:#0795DC;">👤</span>איש קשר</button><button type="button" data-more="ack"><span class="att-ic" style="background:#E53935;">📢</span>הודעה חשובה (אישור קריאה)</button>`;
+    mm.innerHTML = `<button type="button" data-more="poll"><span class="att-ic" style="background:#FFB300;">📊</span>סקר</button><button type="button" data-more="sched"><span class="att-ic" style="background:#0795DC;">⏰</span>הודעה מתוזמנת</button><button type="button" data-more="loc"><span class="att-ic" style="background:#1FA855;">📍</span>מיקום</button><button type="button" data-more="contact"><span class="att-ic" style="background:#0795DC;">👤</span>איש קשר</button>${role === 'mgr' ? '<button type="button" data-more="ack"><span class="att-ic" style="background:#E53935;">📢</span>הודעה חשובה (אישור קריאה)</button>' : ''}`;
     document.body.appendChild(mm);
     const r0 = btn.getBoundingClientRect();
     mm.style.left = Math.max(8, Math.min(window.innerWidth - mm.offsetWidth - 8, r0.left + r0.width / 2 - mm.offsetWidth / 2)) + 'px';
@@ -9305,11 +9305,21 @@ async function startChatNotifier(role){
   registerPush();
   { const lp = new URLSearchParams(location.search); if(lp.get('chat') || lp.get('tasks')){ const l = location.href; history.replaceState(null, '', location.pathname); setTimeout(() => openFromLink(l), 800); } }
   // נראה לאחרונה: כל דקה (כשהאתר מוצג) נשמרת השעה ב-statuses/<אני>.seen
-  const beat = () => { if(document.visibilityState === 'visible' && state._chatNotif) setDoc(doc(db, 'statuses', me), { seen: trueNow().getTime(), off: false }, { merge: true }).catch(() => {}); };
-  clearInterval(state._beatTimer); state._beatTimer = setInterval(beat, 60000); beat();
+  // "מחובר" רק כשהצ׳אט עצמו פתוח ומוצג על המסך. יציאה מהצ׳אט (גם בלי התנתקות) = לא מחובר
+  let lastOn = null, lastWrite = 0;
+  const beat = () => {
+    if(!state._chatNotif) return;
+    const on = document.visibilityState === 'visible' && !!(document.getElementById('waFull') || document.getElementById('chatBody'));
+    const now = Date.now();
+    if(on !== lastOn || (on && now - lastWrite > 55000)){
+      lastOn = on; lastWrite = now;
+      setDoc(doc(db, 'statuses', me), { seen: trueNow().getTime(), off: !on }, { merge: true }).catch(() => {});
+    }
+  };
+  clearInterval(state._beatTimer); state._beatTimer = setInterval(beat, 3000); beat();
   if(!state._beatVis){ state._beatVis = true;
     const mark = off => { if(state._chatNotif) setDoc(doc(db, 'statuses', state._chatNotif.me), { seen: trueNow().getTime(), off }, { merge: true }).catch(() => {}); };
-    document.addEventListener('visibilitychange', () => mark(document.visibilityState !== 'visible'));
+    document.addEventListener('visibilitychange', () => mark(document.visibilityState !== 'visible' || !(document.getElementById('waFull') || document.getElementById('chatBody'))));
     window.addEventListener('pagehide', () => mark(true)); }
   clearInterval(state._remindTimer);
   state._remindTimer = setInterval(() => checkMsgReminders(role), 30000); setTimeout(() => checkMsgReminders(role), 4000);
