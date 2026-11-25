@@ -9653,8 +9653,8 @@ function openSoundPicker(role, btn){
   pop.innerHTML = `<div class="dnd-box"><div class="dnd-title">⛔ אל תפריע ${dndTxt ? `<small>· ${dndTxt}</small>` : ''}</div><div class="dnd-btns">${chatDnd() ? '<button type="button" data-dnd="off">ביטול</button>' : '<button type="button" data-dnd="1">לשעה</button><button type="button" data-dnd="morning">עד הבוקר</button><button type="button" data-dnd="forever">עד שאבטל</button>'}</div><div class="hint" style="font-size:11.5px;">בלי צלילים, חלונות קופצים והתראות לטלפון. ההודעות ממשיכות להגיע.</div></div>
     <div class="dnd-box"><label class="dnd-title" style="display:flex; align-items:center; justify-content:space-between; gap:8px; cursor:pointer;"><span>↩ מענה אוטומטי</span><input type="checkbox" class="toggle" id="arOn" ${(state._autoReply || {}).on ? 'checked' : ''} /></label>
       <textarea id="arText" rows="2" maxlength="300" placeholder="למשל: אני לא זמין כרגע, אחזור אליך בהקדם" style="width:100%; box-sizing:border-box; font:inherit; font-size:13px; padding:6px 8px; border-radius:8px; border:1px solid #D1D7DB;"></textarea>
-      <select id="arMode" style="width:100%; margin-top:4px; font-size:13px;"><option value="dnd">רק כשמצב "אל תפריע" פעיל</option><option value="always">תמיד, עד שאכבה</option></select>
-      <div class="hint" style="font-size:11.5px;">נשלח פעם אחת לכל אדם (לא יותר מפעם ב-6 שעות), רק בשיחות אישיות – לא בקבוצות.</div></div>
+      <select id="arMode" style="width:100%; margin-top:4px; font-size:13px;"><option value="always">תמיד, עד שאכבה</option><option value="dnd">רק כשמצב "אל תפריע" פעיל</option></select><div class="hint" id="arWarn" style="font-size:11.5px; color:#E53935;" hidden>⚠️ "אל תפריע" כבוי כרגע – המענה לא יישלח עד שתפעיל אותו</div>
+      <div class="hint" style="font-size:11.5px;">נשלח לכל אדם לכל היותר פעם ב-6 שעות, רק בשיחות אישיות – לא בקבוצות. הגשר שולח אותו גם כשהאתר שלך סגור.</div></div>
     <label class="sound-row sound-mute"><span>🔕 השתקת צליל ההודעות</span><input type="checkbox" class="toggle" id="sndMute" ${state._msgSoundMuted ? 'checked' : ''} /></label>
     <div class="sound-list">${MSG_SOUNDS.map((x, i) => `<button type="button" class="sound-row${i === cur ? ' on' : ''}" data-snd="${i}"><span>${i === cur ? '✓ ' : ''}${escapeHtml(x.n)}</span><span class="hint">▶</span></button>`).join('')}</div>`;
   document.body.appendChild(pop);
@@ -9671,7 +9671,9 @@ function openSoundPicker(role, btn){
     pop.remove(); await setMsgSoundPref(role, { dndUntil: until });
     showToast(until ? '⛔ מצב אל תפריע הופעל' : 'מצב אל תפריע בוטל');
   });
-  { const ar = state._autoReply || {}; pop.querySelector('#arText').value = ar.text || 'אני לא זמין כרגע, אחזור אליך בהקדם 🙏'; pop.querySelector('#arMode').value = ar.mode || 'dnd'; }
+  { const ar = state._autoReply || {}; pop.querySelector('#arText').value = ar.text || 'אני לא זמין כרגע, אחזור אליך בהקדם 🙏'; pop.querySelector('#arMode').value = ar.mode || 'always'; }
+  const arWarn = () => { pop.querySelector('#arWarn').hidden = !(pop.querySelector('#arOn').checked && pop.querySelector('#arMode').value === 'dnd' && !chatDnd()); };
+  arWarn(); pop.querySelector('#arMode').addEventListener('change', arWarn); pop.querySelector('#arOn').addEventListener('change', arWarn);
   const saveAr = async () => { const v = { on: pop.querySelector('#arOn').checked, text: pop.querySelector('#arText').value.trim().slice(0, 300) || 'אני לא זמין כרגע, אחזור אליך בהקדם 🙏', mode: pop.querySelector('#arMode').value }; await setMsgSoundPref(role, { autoReply: v }); };
   pop.querySelector('#arOn').onchange = async e => { await saveAr(); showToast(e.target.checked ? '↩ המענה האוטומטי הופעל' : 'המענה האוטומטי כובה'); };
   pop.querySelector('#arText').onchange = saveAr; pop.querySelector('#arMode').onchange = saveAr;
