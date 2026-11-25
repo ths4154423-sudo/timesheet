@@ -10918,7 +10918,7 @@ function openStatusViewer(role, owner, items){
     let busy = false;
     const sendReply = async (text, isReact) => {
       const it = items[idx]; if(!it || !text || busy) return;
-      busy = true; setTimeout(() => { busy = false; }, 800);
+      busy = true; setTimeout(() => { busy = false; }, isReact ? 250 : 800);
       const snip = '⭕ סטטוס · ' + (it.type === 'image' ? '📷 ' + (it.text || 'תמונה') : it.type === 'anim' ? '💭 ' + ((it.lines || [])[0] || 'סטטוס מונפש') : (it.text || '')).slice(0, 80);
       const cid = chatIdWith(me, owner), nm = { id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [], text, reply: { id: 'st_' + it.id, from: owner, snip }, statusReply: { id: it.id, ...(it.type === 'image' ? { fileId: it.fileId } : {}) } };
       const fresh = await loadChat(cid) || { msgs: [] };
@@ -10927,10 +10927,14 @@ function openStatusViewer(role, owner, items){
         nm.statusReply.react = true;
         const prev = (fresh.msgs || []).find(m => m.from === me && !m.deleted && m.statusReply && m.statusReply.id === it.id && m.statusReply.react);
         if(prev){
-          if(prev.text === text){ showToast('כבר הגבת ' + text); return; }
-          prev.text = text; prev.at = todayStr() + 'T' + nowTimeStr(); prev.seenBy = [];
+          // כל לחיצה מוסיפה עוד אימוג׳י לאותה הודעה (למשל ❤️❤️❤️), עד 12
+          const seg = t => { try{ return [...new Intl.Segmenter('he', { granularity: 'grapheme' }).segment(t)].map(x => x.segment); }catch(e){ return Array.from(t); } };
+          const parts = seg(prev.text || '');
+          if(parts.length >= 12){ showToast('אפשר עד 12 אימוג׳י בתגובה אחת'); return; }
+          prev.text = (prev.text || '') + text; prev.at = todayStr() + 'T' + nowTimeStr(); prev.seenBy = [];
           const ok = await saveDoc(() => setDoc(doc(db, 'chats', cid), { msgs: fresh.msgs }, { merge: true }), 'statusReact');
-          showToast(ok === true ? 'התגובה עודכנה ל' + text : 'התגובה לא נשלחה'); paintMyReact(text); return;
+          if(ok !== true) showToast('התגובה לא נשלחה'); else { showToast('הגבת ' + prev.text); if(parts.length === 0) pushNotify({ kind: 'chat', chatId: cid, msgId: prev.id }); }
+          paintMyReact(text); return;
         }
       }
       const ok = await saveDoc(() => setDoc(doc(db, 'chats', cid), { msgs: [...(fresh.msgs || []), nm].slice(-CHAT_MAX), members: [me, owner] }, { merge: true }), 'statusReply');
