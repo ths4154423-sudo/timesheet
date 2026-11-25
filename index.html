@@ -10914,7 +10914,7 @@ function openStatusViewer(role, owner, items){
   if(rf){
     const inp = rf.querySelector('input');
     inp.addEventListener('focus', () => { paused = true; rf.classList.add('typing'); });
-    inp.addEventListener('blur', () => { if(!inp.value.trim()){ paused = false; rf.classList.remove('typing'); } });
+    inp.addEventListener('blur', () => { setTimeout(() => { if(!inp.value.trim() && document.activeElement !== inp){ paused = false; rf.classList.remove('typing'); } }, 150); });
     let busy = false;
     const sendReply = async (text, isReact) => {
       const it = items[idx]; if(!it || !text || busy) return;
@@ -10950,15 +10950,26 @@ function openStatusViewer(role, owner, items){
     };
     state._stOnShow = loadMyReact;
     rf.onsubmit = async e => { e.preventDefault(); const t = inp.value.trim(); if(!t) return; inp.value = ''; inp.blur(); paused = false; rf.classList.remove('typing'); await sendReply(t); };
-    rf.querySelectorAll('[data-srx]').forEach(b => b.onclick = async e => { e.preventDefault(); e.stopPropagation(); b.classList.add('pop'); setTimeout(() => b.classList.remove('pop'), 500); await sendReply(b.dataset.srx, true); });
+    // לחיצה על אימוג׳י מוסיפה אותו לתיבת התגובה (לא שולחת). נשלח רק בלחיצה על שליחה
+    rf.querySelectorAll('[data-srx]').forEach(b => b.onclick = e => {
+      e.preventDefault(); e.stopPropagation(); b.classList.add('pop'); setTimeout(() => b.classList.remove('pop'), 400);
+      const a = inp.selectionStart ?? inp.value.length, z = inp.selectionEnd ?? a;
+      inp.value = inp.value.slice(0, a) + b.dataset.srx + inp.value.slice(z);
+      const pos = a + b.dataset.srx.length; inp.focus(); try{ inp.setSelectionRange(pos, pos); }catch(x){}
+      paused = true; rf.classList.add('typing');
+    });
+    // כל עוד יש טקסט בתיבה – הסטטוס לא ממשיך ולא נסגר
+    inp.addEventListener('input', () => { paused = true; rf.classList.add('typing'); });
     ['pointerdown', 'click'].forEach(ev => rf.addEventListener(ev, e => e.stopPropagation()));
+    rf.querySelectorAll('[data-srx]').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
   }
   document.addEventListener('keydown', onKey);
   ov.querySelector('.st-close').onclick = close;
-  ov.querySelector('.st-tap.next').onclick = () => { idx++; show(); };
-  ov.querySelector('.st-tap.prev').onclick = () => { idx = Math.max(0, idx - 1); show(); };
+  const typingNow = () => { const i2 = ov.querySelector('.st-reply input'); return !!(i2 && (i2.value.trim() || document.activeElement === i2)); };
+  ov.querySelector('.st-tap.next').onclick = () => { if(typingNow()){ ov.querySelector('.st-reply input').blur(); return; } idx++; show(); };
+  ov.querySelector('.st-tap.prev').onclick = () => { if(typingNow()){ ov.querySelector('.st-reply input').blur(); return; } idx = Math.max(0, idx - 1); show(); };
   ['pointerdown'].forEach(ev => body.addEventListener(ev, () => { paused = true; }));
-  ['pointerup', 'pointerleave'].forEach(ev => body.addEventListener(ev, () => { paused = false; }));
+  ['pointerup', 'pointerleave'].forEach(ev => body.addEventListener(ev, () => { const i2 = ov.querySelector('.st-reply input'); if(i2 && (i2.value.trim() || document.activeElement === i2)) return; paused = false; }));
   const del = ov.querySelector('.st-del');
   if(del) del.onclick = async () => {
     paused = true;
