@@ -1514,6 +1514,22 @@ html.a11y-spacing body{ line-height:1.9 !important; } html.a11y-spacing p, html.
 html.a11y-still *, html.a11y-still *::before, html.a11y-still *::after{ animation:none !important; transition:none !important; scroll-behavior:auto !important; }
 html.a11y-cursor, html.a11y-cursor *{ cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24'%3E%3Cpath d='M3 2l7 19 2.5-7.5L20 11z' fill='%23000' stroke='%23fff' stroke-width='1.5'/%3E%3C/svg%3E") 2 2, auto !important; }
 @media (prefers-reduced-motion: reduce){ *, *::before, *::after{ animation-duration:.01ms !important; transition-duration:.01ms !important; } }
+/* פס חדשות */
+#newsTicker{ position:fixed; left:0; right:0; bottom:0; z-index:390; height:34px; display:flex; align-items:center; background:#12293F; color:#fff; font-size:13.5px; box-shadow:0 -2px 10px rgba(0,0,0,.15); }
+body.has-news{ padding-bottom:40px; }
+body.v2 #newsTicker{ bottom:88px; left:14px; right:14px; border-radius:12px; height:32px; }
+body.v2.has-news{ padding-bottom:132px; }
+body.v2.v2light #newsTicker{ background:#1B2A3F; }
+body:has(.wa-full) #newsTicker, body:has(.wa-room) #newsTicker{ display:none; }
+.nt-tag{ flex:0 0 auto; background:#E5484D; color:#fff; font-weight:800; font-size:12px; height:100%; display:flex; align-items:center; padding:0 10px; border-radius:0 0 0 0; }
+body.v2 .nt-tag{ border-radius:0 12px 12px 0; }
+.nt-win{ flex:1; overflow:hidden; position:relative; height:100%; display:flex; align-items:center; -webkit-mask-image:linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); mask-image:linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
+.nt-track{ display:inline-flex; align-items:center; gap:14px; white-space:nowrap; padding-inline-start:100%; animation:ntRun 90s linear infinite; }
+.nt-track i{ font-style:normal; color:#E5484D; font-size:9px; }
+#newsTicker:hover .nt-track, #newsTicker.paused .nt-track{ animation-play-state:paused; }
+@keyframes ntRun{ from{ transform:translateX(0); } to{ transform:translateX(50%); } }
+.nt-pause{ flex:0 0 auto; border:none; background:rgba(255,255,255,.12); color:#fff; width:30px; height:26px; border-radius:8px; margin:0 4px; cursor:pointer; font-size:12px; }
+html.a11y-still .nt-track{ animation:none !important; padding-inline-start:10px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -2330,6 +2346,7 @@ function applyEmployeeTheme(settings){
   root.setProperty('--surface', surface);
   root.setProperty('--line', line);
   applyUiV2(!!settings.uiV2);
+  applyNewsTicker(!settings.hideNews);
   document.body.classList.toggle('v2light', !!settings.uiV2 && !settings.v2Dark);
 }
 // ================= נגישות: תפריט התאמות (נשמר במכשיר) + הצהרת נגישות =================
@@ -2400,6 +2417,28 @@ async function showA11yStatement(){
 }
 applyA11y();
 document.getElementById('a11yBtn').onclick = openA11y;
+
+// ================= פס חדשות רץ בתחתית (כותרות "כאן") – לעובדים, אפשר להסתיר בהגדרות =================
+function applyNewsTicker(on){
+  on = on && !!state.currentEmployee && !state.currentEmployee.chatOnly;
+  let tk = document.getElementById('newsTicker');
+  if(!on){ if(tk) tk.remove(); document.body.classList.remove('has-news'); clearInterval(state._newsT); return; }
+  if(tk) return;
+  tk = document.createElement('div'); tk.id = 'newsTicker'; tk.setAttribute('role', 'region'); tk.setAttribute('aria-label', 'כותרות חדשות');
+  tk.innerHTML = `<span class="nt-tag">חדשות כאן</span><div class="nt-win"><div class="nt-track" id="ntTrack"><span>טוען כותרות...</span></div></div><button type="button" class="nt-pause" id="ntPause" aria-label="עצירת הפס">⏸</button>`;
+  document.body.appendChild(tk); document.body.classList.add('has-news');
+  tk.querySelector('#ntPause').onclick = e => { const p = tk.classList.toggle('paused'); e.currentTarget.textContent = p ? '▶' : '⏸'; e.currentTarget.setAttribute('aria-label', p ? 'הפעלת הפס' : 'עצירת הפס'); };
+  const load = async () => {
+    const r = await bridge('news', { idToken: await empIdToken() });
+    const tr = document.getElementById('ntTrack'); if(!tr) return;
+    if(!r || !r.items || !r.items.length){ if(!tr.dataset.ok){ tk.remove(); document.body.classList.remove('has-news'); } return; }
+    tr.dataset.ok = '1';
+    const html = r.items.map(t => `<span>${escapeHtml(t)}</span>`).join('<i>◆</i>');
+    tr.innerHTML = html + '<i>◆</i>' + html;
+    tr.style.animationDuration = Math.max(40, r.items.join(' ').length * 0.22) + 's';
+  };
+  load(); clearInterval(state._newsT); state._newsT = setInterval(() => { if(!document.getElementById('newsTicker')){ clearInterval(state._newsT); return; } load(); }, 10 * 60 * 1000);
+}
 
 // ================= העיצוב החדש (v2): שכבת עיצוב שאפשר להדליק ולכבות לכל עובד =================
 function applyUiV2(on){
@@ -2539,6 +2578,7 @@ async function maybeV2Promo(emp, st){
   ov.querySelector('.v2p-no').onclick = () => choose(false);
 }
 function resetTheme(){
+  applyNewsTicker(false);
   document.body.classList.remove('v2', 'v2pre', 'v2light'); { const n = document.getElementById('v2nav'); if(n) n.remove(); }
   ['--brass', '--brass-dark', '--brass-text', '--paper', '--paper-alt', '--ink', '--ink-soft', '--surface', '--line'].forEach(v => {
     document.documentElement.style.removeProperty(v);
@@ -7959,6 +7999,14 @@ const EMPLOYEE_SETTINGS_DEFS = [
     type: 'checkbox',
     label: '🌙 העיצוב החדש – בגרסה כהה',
     hint: 'רק אם העיצוב החדש פעיל: רקע כהה מלא במקום הגרסה הבהירה.',
+    default: false
+  },
+  {
+    key: 'hideNews',
+    category: 'appearance',
+    type: 'checkbox',
+    label: 'הסתרת פס החדשות',
+    hint: 'פס כותרות החדשות ("כאן") שרץ בתחתית המסך לא יוצג.',
     default: false
   },
   {
