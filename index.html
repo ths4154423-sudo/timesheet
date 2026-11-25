@@ -3061,6 +3061,8 @@ async function renderEmployeeLogin(){
       state._justLoggedIn = true;   // החלון 'עיצוב חדש' מופיע אחרי כל כניסה עם קוד
       state.employees = [emp];
       if(emp.chatOnly){ renderEmployeeDashboard(emp); return; }
+      // מיד אחרי הקשת הקוד – לפני שהאתר נפתח – חלון "למעבר לדירתא"
+      await new Promise(res => showDirataPopup(res));
       const hoursData = await loadHours(emp.id);
       if(hoursData === null){
         renderEmployeeDashboard(emp, null, false);
@@ -3220,7 +3222,7 @@ function showStaleOpenNotice(emp, stale){
 }
 
 // חלון קופץ אחרי התחלת יום עבודה: כפתור מעבר לאתר דירתא (נפתח בלשונית חדשה)
-function showDirataPopup(){
+function showDirataPopup(onDone){
   const overlay = document.createElement('div');
   overlay.className = 'confirm-overlay';
   overlay.innerHTML = `
@@ -3232,7 +3234,7 @@ function showDirataPopup(){
     </div>
   `;
   document.body.appendChild(overlay);
-  const close = () => overlay.remove();
+  const close = () => { if(!overlay.isConnected) return; overlay.remove(); if(onDone) onDone(); };
   overlay.querySelector('#dirataGo').addEventListener('click', () => setTimeout(close, 50));
   overlay.querySelector('#dirataClose').onclick = close;
   overlay.onclick = (e) => { if(e.target === overlay) close(); };
@@ -6985,7 +6987,6 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
       showToast('יום העבודה התחיל בהצלחה');
       if(month !== tm) state._empMonth = tm;
       renderEmployeeDashboard(emp, null, fresh);
-      showDirataPopup();
     };
   }
 
