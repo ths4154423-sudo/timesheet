@@ -1083,6 +1083,30 @@ body.wa-dark .lk-themes button, body.wa-dark .lk-up{ background:#2A3942; } body.
 body.wa-dark .wa-emoji{ background:#233138; } body.wa-dark .wa-em-tabs button{ background:#2A3942; color:#AEBAC1; } body.wa-dark .wa-em-tabs button.on{ background:#005C4B; color:#E9EDEF; }
 body.wa-dark .wa-em-grid button:hover{ background:#2A3942; } body.wa-dark .wa-st-grid button, body.wa-dark .wa-sticker{ background:#1F2C33; }
 body.wa-dark .wa-rate, body.wa-dark .wa-ack-who{ background:rgba(255,255,255,.1); color:#D1D7DB; }
+.wa-c-mark{ min-width:14px !important; width:14px; height:14px; padding:0 !important; }
+.wa-tray-edit{ position:absolute; bottom:2px; right:2px; font-size:12px; background:rgba(255,255,255,.9); border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+.ie-ov{ position:fixed; inset:0; z-index:10010; background:#0B141A; display:flex; flex-direction:column; color:#fff; }
+.ie-bar{ display:flex; align-items:center; gap:6px; padding:10px 12px; background:#111B21; }
+.ie-bar button{ border:none; background:rgba(255,255,255,.1); color:#fff; width:40px; height:40px; border-radius:50%; font-size:18px; cursor:pointer; }
+.ie-bar button.on{ background:#00A884; }
+.ie-bar .ie-ok{ width:auto; padding:0 16px; border-radius:20px; background:#00A884; font:inherit; font-weight:700; font-size:15px; }
+.ie-title{ flex:1; font-weight:600; }
+.ie-stage{ flex:1; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:8px; }
+.ie-cv{ touch-action:none; max-width:100%; max-height:100%; box-shadow:0 2px 14px rgba(0,0,0,.5); cursor:crosshair; }
+.ie-crop{ position:absolute; border:2px dashed #fff; background:rgba(255,255,255,.12); box-shadow:0 0 0 9999px rgba(0,0,0,.45); pointer-events:none; }
+.ie-crop[hidden]{ display:none; }
+.ie-tools{ padding:12px; background:#111B21; display:flex; justify-content:center; }
+.ie-colors{ display:flex; gap:12px; } .ie-colors[hidden], .ie-cropbar[hidden]{ display:none; }
+.ie-colors button{ width:32px; height:32px; border-radius:50%; border:3px solid transparent; cursor:pointer; box-shadow:0 0 0 1px rgba(255,255,255,.3); }
+.ie-colors button.on{ border-color:#fff; transform:scale(1.15); }
+.ie-cropbar{ display:flex; align-items:center; gap:10px; font-size:14px; }
+.ie-cropbar button{ border:none; border-radius:16px; padding:7px 14px; font:inherit; cursor:pointer; background:#00A884; color:#fff; }
+.ie-cropbar button[data-ie=cropx]{ background:rgba(255,255,255,.15); }
+.headsup .hu-acts{ margin-top:6px; } .headsup .hu-acts[hidden]{ display:none; }
+.hu-rep{ border:none; background:rgba(0,168,132,.14); color:#008069; border-radius:14px; padding:4px 12px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.hu-form{ display:flex; gap:6px; margin-top:6px; } .hu-form[hidden]{ display:none; }
+.hu-form input{ flex:1; border:1px solid #D1D7DB; border-radius:16px; padding:6px 12px; font:inherit; font-size:14px; min-width:0; }
+.hu-form button{ border:none; background:#00A884; color:#fff; border-radius:16px; padding:6px 14px; font:inherit; font-weight:600; cursor:pointer; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8290,7 +8314,13 @@ async function renderChatHome(role){
       ticks = `<span class="wa-ticks wa-list-ticks${seen ? ' seen' : ''}">${WAI.ticks}</span>`;
     }
     return { c, last, un, prev, ticks };
-  }).sort((a, b) => (a.c.self ? -1 : b.c.self ? 1 : a.c.id === 'team' ? -1 : b.c.id === 'team' ? 1 : String(b.last ? b.last.at : '').localeCompare(String(a.last ? a.last.at : ''))));
+  }).sort((a, b) => {
+    if(a.c.self) return -1; if(b.c.self) return 1;
+    const pins = state._chatPins || [], pa = pins.indexOf(chatIdWith(me, a.c.id)), pb = pins.indexOf(chatIdWith(me, b.c.id));
+    if(pa >= 0 || pb >= 0) return pa < 0 ? 1 : pb < 0 ? -1 : pa - pb;
+    if(a.c.id === 'team') return -1; if(b.c.id === 'team') return 1;
+    return String(b.last ? b.last.at : '').localeCompare(String(a.last ? a.last.at : ''));
+  });
   const coUser = role !== 'mgr' && state.currentEmployee && state.currentEmployee.chatOnly;
   target.innerHTML = `<div class="wa-full" id="waFull">
     <div class="wa-full-head">
@@ -8314,8 +8344,8 @@ async function renderChatHome(role){
       ${rows.map(r => `
         <button type="button" class="wa-contact${chatArchived(chatIdWith(me, r.c.id)) ? ' wa-archived' : ''}" data-chat-open="${r.c.id}" data-cid="${chatIdWith(me, r.c.id)}">
           <span class="wa-avatar${r.c.group ? ' group' : ''}${r.c.self ? ' self' : ''}"${r.c.group || r.c.self ? '' : ` data-av="${r.c.id}"`}>${r.c.self ? '📝' : r.c.group ? WAI.group : escapeHtml((r.c.name || '?').trim().charAt(0))}</span>
-          <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(r.c.name)}</b><span class="wa-c-time">${chatMuted(chatIdWith(me, r.c.id)) ? '<span class="wa-mute-ic">🔕</span> ' : ''}${r.last ? chatTime(r.last.at) : ''}</span></span>
-            <span class="wa-c-bottom">${r.ticks}<span class="wa-c-prev" data-prev-for="${chatIdWith(me, r.c.id)}" data-prev-orig="${escapeHtml(r.prev)}">${getDraft(me, chatIdWith(me, r.c.id)) ? `<span class="wa-draft">טיוטה:</span> ${escapeHtml(getDraft(me, chatIdWith(me, r.c.id)).slice(0, 60))}` : escapeHtml(r.prev)}</span>${r.un ? `<span class="wa-c-unread">${r.un}</span>` : ''}</span></span>
+          <span class="wa-c-main"><span class="wa-c-top"><b>${escapeHtml(r.c.name)}</b><span class="wa-c-time">${(state._chatPins || []).includes(chatIdWith(me, r.c.id)) ? '<span class="wa-mute-ic">📌</span> ' : ''}${chatMuted(chatIdWith(me, r.c.id)) ? '<span class="wa-mute-ic">🔕</span> ' : ''}${r.last ? chatTime(r.last.at) : ''}</span></span>
+            <span class="wa-c-bottom">${r.ticks}<span class="wa-c-prev" data-prev-for="${chatIdWith(me, r.c.id)}" data-prev-orig="${escapeHtml(r.prev)}">${getDraft(me, chatIdWith(me, r.c.id)) ? `<span class="wa-draft">טיוטה:</span> ${escapeHtml(getDraft(me, chatIdWith(me, r.c.id)).slice(0, 60))}` : escapeHtml(r.prev)}</span>${r.un ? `<span class="wa-c-unread">${r.un}</span>` : (state._chatUnreadMarks || []).includes(chatIdWith(me, r.c.id)) ? '<span class="wa-c-unread wa-c-mark"></span>' : ''}</span></span>
         </button>`).join('')}
     </div>
     <div id="waMonitorSlot"></div>
@@ -8347,13 +8377,26 @@ async function renderChatHome(role){
     const menu = () => {
       document.querySelectorAll('.att-menu').forEach(x => x.remove());
       const cid = b.dataset.cid, arch = chatArchived(cid), mm = document.createElement('div'); mm.className = 'att-menu';
-      mm.innerHTML = `<button type="button">${arch ? '📤&nbsp; הוצאה מהארכיון' : '🗄&nbsp; העברה לארכיון'}</button>`;
+      const pinned = (state._chatPins || []).includes(cid), marked = (state._chatUnreadMarks || []).includes(cid);
+      mm.innerHTML = `<button type="button" data-lm="pin">${pinned ? '📌&nbsp; ביטול הצמדה' : '📌&nbsp; הצמדה למעלה'}</button><button type="button" data-lm="unread">${marked ? '✔&nbsp; סימון כנקרא' : '🔵&nbsp; סימון כלא נקרא'}</button><button type="button" data-lm="arch">${arch ? '📤&nbsp; הוצאה מהארכיון' : '🗄&nbsp; העברה לארכיון'}</button>`;
       document.body.appendChild(mm);
       const r0 = b.getBoundingClientRect();
       mm.style.top = Math.min(window.innerHeight - mm.offsetHeight - 8, r0.top + r0.height / 2) + 'px'; mm.style.left = Math.max(8, r0.left + r0.width / 2 - mm.offsetWidth / 2) + 'px';
       const close = e => { if(!mm.contains(e.target)){ mm.remove(); document.removeEventListener('click', close, true); } };
       setTimeout(() => document.addEventListener('click', close, true), 0);
-      mm.querySelector('button').onclick = async () => {
+      mm.querySelector('[data-lm=pin]').onclick = async () => {
+        mm.remove();
+        const list = (state._chatPins || []).filter(x => x !== cid);
+        if(!pinned){ if(list.length >= 5) return showToast('אפשר להצמיד עד 5 שיחות'); list.push(cid); }
+        await setMsgSoundPref(role, { chatPins: list }); showToast(pinned ? 'ההצמדה בוטלה' : 'השיחה הוצמדה למעלה'); renderChatHome(role);
+      };
+      mm.querySelector('[data-lm=unread]').onclick = async () => {
+        mm.remove();
+        const list = (state._chatUnreadMarks || []).filter(x => x !== cid);
+        if(!marked) list.push(cid);
+        await setMsgSoundPref(role, { chatUnreadMarks: list }); renderChatHome(role);
+      };
+      mm.querySelector('[data-lm=arch]').onclick = async () => {
         mm.remove();
         const list = (state._chatArchive || []).filter(x => x !== cid);
         if(!arch) list.push(cid);
@@ -8790,7 +8833,8 @@ async function renderChatRoom(role, otherId){
   const tray = document.getElementById('chatTray');
   const paintTray = () => {
     tray.hidden = !pending.length;
-    tray.innerHTML = pending.map((f, i) => `<div class="wa-tray-item">${/^image\//.test(f.type) ? `<img src="${f._url}" alt="" />` : `<span class="wa-tray-file">📄<small>${escapeHtml(f.name.slice(0, 18))}</small></span>`}<button type="button" data-tray-x="${i}" aria-label="הסרה">✕</button></div>`).join('');
+    tray.innerHTML = pending.map((f, i) => `<div class="wa-tray-item">${/^image\//.test(f.type) ? `<img src="${f._url}" alt="" data-tray-ed="${i}" title="לחצו לעריכה: חיתוך, סיבוב, ציור" style="cursor:pointer;" /><span class="wa-tray-edit">✏️</span>` : `<span class="wa-tray-file">📄<small>${escapeHtml(f.name.slice(0, 18))}</small></span>`}<button type="button" data-tray-x="${i}" aria-label="הסרה">✕</button></div>`).join('');
+    tray.querySelectorAll('[data-tray-ed]').forEach(im => im.onclick = () => openImageEditor(pending[+im.dataset.trayEd], f2 => { const k = +im.dataset.trayEd; if(pending[k] && pending[k]._url) URL.revokeObjectURL(pending[k]._url); f2._url = URL.createObjectURL(f2); pending[k] = f2; paintTray(); }));
     tray.querySelectorAll('[data-tray-x]').forEach(b => b.onclick = () => { const f = pending.splice(+b.dataset.trayX, 1)[0]; if(f && f._url) URL.revokeObjectURL(f._url); paintTray(); input.focus(); });
   };
   const addPending = files => {
@@ -9149,6 +9193,7 @@ async function renderChatRoom(role, otherId){
     };
   };
   applyRoomWall(roomEl, id);
+  if((state._chatUnreadMarks || []).includes(id)) setMsgSoundPref(role, { chatUnreadMarks: state._chatUnreadMarks.filter(x => x !== id) });
   document.getElementById('chatWallBtn').onclick = () => openChatLook(role, id);
   // ---- ייצוא השיחה (טקסט או הדפסה ל-PDF)
   const exportChat = kind => {
@@ -9354,6 +9399,19 @@ async function startChatNotifier(role){
     }catch(e){}
   });
 }
+// תגובה מהירה מתוך החלון הקופץ – בלי להיכנס לשיחה (עם ציטוט של ההודעה)
+async function quickReply(role, id, d, m, text){
+  const me = chatMe(role);
+  const snip = m.text ? m.text.slice(0, 90) : m.fileId ? '📎 ' + (m.fileName || 'קובץ') : m.files ? '📷 ' + m.files.length + ' קבצים' : m.audioId ? '🎙 הודעה קולית' : '';
+  const nm = { id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [], text, reply: { id: m.id, from: m.from, snip } };
+  const fresh = await loadChat(id); if(!fresh) return false;
+  const msgs = [...(fresh.msgs || []), nm].slice(-CHAT_MAX);
+  (msgs.find(x => x.id === m.id) || {}).seenBy && !msgs.find(x => x.id === m.id).seenBy.includes(me) && msgs.find(x => x.id === m.id).seenBy.push(me);
+  const extra = id === 'team' || /^g_/.test(id) ? {} : { members: id.split('__') };
+  const ok = await saveDoc(() => setDoc(doc(db, 'chats', id), { msgs, ...extra }, { merge: true }), 'chatQuickReply');
+  if(ok === true){ pushNotify({ kind: 'chat', chatId: id, msgId: nm.id }); refreshChatBadge(role); }
+  return ok === true;
+}
 function notifyChat(role, id, d, m){
   const who = state._chatNames[m.from] || 'הודעה חדשה';
   const where = id === 'team' ? 'כל הצוות' : /^g_/.test(id) ? (d.name || 'קבוצה') : '';
@@ -9362,7 +9420,7 @@ function notifyChat(role, id, d, m){
   if(document.visibilityState === 'visible') headsUp(who, where, body, () => {
     const other = id === 'team' || /^g_/.test(id) ? id : id.split('__').find(x => x !== chatMe(role));
     if(role === 'mgr'){ renderAdminDashboard('chat'); setTimeout(() => renderChatRoom('mgr', other), 300); } else renderChatRoom('emp', other);
-  });
+  }, text => quickReply(role, id, d, m, text));
   showDesktopNote(where ? where + ' · ' + who : who, body, () => {
     const other = id === 'team' || /^g_/.test(id) ? id : id.split('__').find(x => x !== chatMe(role));
     if(role === 'mgr'){ renderAdminDashboard('chat'); setTimeout(() => renderChatRoom('mgr', other), 300); }
@@ -9452,7 +9510,7 @@ function openSoundPicker(role, btn){
 }
 function soundKeyDoc(role){ return role === 'mgr' ? 'mgr-prefs' : (state.currentEmployee && state.currentEmployee.id); }
 async function loadMsgSoundPref(role){
-  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0; state._chatMutes = d.chatMutes || {}; state._chatArchive = d.chatArchive || []; state._msgReminders = d.msgReminders || []; state._chatLook = { theme: d.chatTheme || '', wall: d.chatWall || '' }; state._chatWalls = d.chatWalls || {}; applyChatLook();
+  try{ const id = soundKeyDoc(role); if(!id) return; const snap = await getDoc(doc(db, 'settings', id)); const d = snap.exists() ? snap.data() : {}; state._msgSoundMuted = !!d.muteMsgSound; state._msgSound = Number(d.msgSound) || 0; state._chatMutes = d.chatMutes || {}; state._chatArchive = d.chatArchive || []; state._msgReminders = d.msgReminders || []; state._chatLook = { theme: d.chatTheme || '', wall: d.chatWall || '' }; state._chatWalls = d.chatWalls || {}; state._chatPins = d.chatPins || []; state._chatUnreadMarks = d.chatUnreadMarks || []; applyChatLook();
     const b = document.getElementById('msgSoundBtn'); if(b) b.textContent = state._msgSoundMuted ? '🔕' : '🔔'; }catch(e){}
 }
 async function setMsgSoundPref(role, patch){
@@ -9461,6 +9519,8 @@ async function setMsgSoundPref(role, patch){
   if('chatMutes' in patch) state._chatMutes = patch.chatMutes;
   if('chatArchive' in patch) state._chatArchive = patch.chatArchive;
   if('msgReminders' in patch) state._msgReminders = patch.msgReminders;
+  if('chatPins' in patch) state._chatPins = patch.chatPins;
+  if('chatUnreadMarks' in patch) state._chatUnreadMarks = patch.chatUnreadMarks;
   if('chatWalls' in patch){ state._chatWalls = patch.chatWalls; const r = document.querySelector('.wa-room'); if(r && state._chatOpenId) applyRoomWall(r, state._chatOpenId); }
   if('chatTheme' in patch || 'chatWall' in patch){ state._chatLook = { ...(state._chatLook || {}), ...('chatTheme' in patch ? { theme: patch.chatTheme } : {}), ...('chatWall' in patch ? { wall: patch.chatWall } : {}) }; applyChatLook(); }
   const id = soundKeyDoc(role); if(!id) return;
@@ -9810,21 +9870,88 @@ function startTaskSoundWatch(role){
 }
 
 // התראה קופצת בתוך האתר כמו בטלפון: פס שיורד מלמעלה עם שם וטקסט; נגיעה פותחת, החלקה למעלה סוגרת
-function headsUp(who, where, body, onOpen){
+function headsUp(who, where, body, onOpen, onReply){
   document.querySelectorAll('.headsup').forEach(x => x.remove());
   const el = document.createElement('div'); el.className = 'headsup';
-  el.innerHTML = `<div class="hu-av"></div><div class="hu-main"><div class="hu-top"><b></b><span class="hu-app">דירתא · עכשיו</span></div><div class="hu-body"></div></div>`;
+  el.innerHTML = `<div class="hu-av"></div><div class="hu-main"><div class="hu-top"><b></b><span class="hu-app">דירתא · עכשיו</span></div><div class="hu-body"></div>
+    ${onReply ? '<div class="hu-acts"><button type="button" class="hu-rep">↩ תגובה מהירה</button></div><form class="hu-form" hidden><input type="text" maxlength="1000" placeholder="כתבו תשובה..." /><button type="submit">שליחה</button></form>' : ''}</div>`;
   el.querySelector('.hu-av').textContent = (who || '?').charAt(0);
   el.querySelector('b').textContent = where ? where + ' · ' + who : who;
   el.querySelector('.hu-body').textContent = body || '';
   document.body.appendChild(el);
   requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
   const hide = () => { el.classList.remove('in'); setTimeout(() => el.remove(), 350); };
-  const t = setTimeout(hide, 4500);
-  el.onclick = () => { clearTimeout(t); hide(); if(onOpen) onOpen(); };
+  let t = setTimeout(hide, onReply ? 7000 : 4500);
+  el.onclick = e => { if(e.target.closest('.hu-acts, .hu-form')) return; clearTimeout(t); hide(); if(onOpen) onOpen(); };
+  if(onReply){
+    const form = el.querySelector('.hu-form'), inp = form.querySelector('input');
+    el.querySelector('.hu-rep').onclick = e => { e.stopPropagation(); clearTimeout(t); el.querySelector('.hu-acts').hidden = true; form.hidden = false; el.classList.add('replying'); inp.focus(); };
+    inp.addEventListener('keydown', e => { if(e.key === 'Escape'){ hide(); } });
+    form.onsubmit = async e => { e.preventDefault(); e.stopPropagation(); const v = inp.value.trim(); if(!v) return; form.querySelector('button').disabled = true; const ok = await onReply(v); if(ok){ hide(); showToast('התשובה נשלחה'); } else { form.querySelector('button').disabled = false; showToast('התשובה לא נשלחה'); } };
+  }
   let sy = null;
   el.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
   el.addEventListener('touchmove', e => { if(sy !== null && e.touches[0].clientY - sy < -25){ sy = null; clearTimeout(t); hide(); } }, { passive: true });
+}
+
+// ================= עריכת תמונה לפני שליחה: סיבוב, חיתוך, ציור =================
+function openImageEditor(file, onDone){
+  if(!file) return;
+  const img = new Image(), url = URL.createObjectURL(file);
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    const k0 = Math.min(1, 2048 / Math.max(img.width, img.height));
+    let base = document.createElement('canvas'); base.width = Math.round(img.width * k0); base.height = Math.round(img.height * k0);
+    base.getContext('2d').drawImage(img, 0, 0, base.width, base.height);
+    const hist = [];
+    const snap = () => { const c = document.createElement('canvas'); c.width = base.width; c.height = base.height; c.getContext('2d').drawImage(base, 0, 0); hist.push(c); if(hist.length > 15) hist.shift(); };
+    const COLORS = ['#E53935', '#FFEB3B', '#43A047', '#1E88E5', '#FFFFFF', '#111111'];
+    let mode = 'draw', color = COLORS[0], crop = null;
+    const ov = document.createElement('div'); ov.className = 'ie-ov';
+    ov.innerHTML = `<div class="ie-bar"><button type="button" data-ie="x" title="ביטול">✕</button><span class="ie-title">עריכת תמונה</span>
+        <button type="button" data-ie="undo" title="ביטול פעולה">↶</button><button type="button" data-ie="rot" title="סיבוב">⟳</button><button type="button" data-ie="crop" title="חיתוך">✂</button><button type="button" data-ie="draw" class="on" title="ציור">✏️</button><button type="button" data-ie="ok" class="ie-ok">✓ סיום</button></div>
+      <div class="ie-stage"><canvas class="ie-cv"></canvas><div class="ie-crop" hidden></div></div>
+      <div class="ie-tools"><div class="ie-colors">${COLORS.map(c => `<button type="button" data-col="${c}" style="background:${c}"${c === color ? ' class="on"' : ''}></button>`).join('')}</div>
+        <div class="ie-cropbar" hidden><span>גוררים על התמונה כדי לבחור את האזור</span><button type="button" data-ie="cropok">חיתוך</button><button type="button" data-ie="cropx">ביטול</button></div></div>`;
+    document.body.appendChild(ov);
+    const cv = ov.querySelector('.ie-cv'), stage = ov.querySelector('.ie-stage'), box = ov.querySelector('.ie-crop');
+    const fit = () => { const W = stage.clientWidth - 16, H = stage.clientHeight - 16, k = Math.min(W / base.width, H / base.height, 1); cv.width = base.width; cv.height = base.height; cv.style.width = Math.round(base.width * k) + 'px'; cv.style.height = Math.round(base.height * k) + 'px'; cv.getContext('2d').drawImage(base, 0, 0); };
+    const redraw = () => { const g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height); g.drawImage(base, 0, 0); };
+    fit(); window.addEventListener('resize', fit);
+    const pt = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * base.width / r.width, y: (e.clientY - r.top) * base.height / r.height, cx: e.clientX - stage.getBoundingClientRect().left, cy: e.clientY - stage.getBoundingClientRect().top }; };
+    let drawing = false, last = null, cs = null;
+    cv.addEventListener('pointerdown', e => {
+      e.preventDefault(); cv.setPointerCapture(e.pointerId);
+      const p = pt(e);
+      if(mode === 'draw'){ snap(); drawing = true; last = p; const g = base.getContext('2d'); g.fillStyle = color; g.beginPath(); g.arc(p.x, p.y, Math.max(3, base.width / 220), 0, 7); g.fill(); redraw(); }
+      else if(mode === 'crop'){ cs = p; crop = null; box.hidden = false; Object.assign(box.style, { left: p.cx + 'px', top: p.cy + 'px', width: '0px', height: '0px' }); }
+    });
+    cv.addEventListener('pointermove', e => {
+      const p = pt(e);
+      if(drawing){ const g = base.getContext('2d'); g.strokeStyle = color; g.lineWidth = Math.max(6, base.width / 110); g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); g.moveTo(last.x, last.y); g.lineTo(p.x, p.y); g.stroke(); last = p; redraw(); }
+      else if(cs){ const x1 = Math.max(0, Math.min(cs.x, p.x)), y1 = Math.max(0, Math.min(cs.y, p.y)), x2 = Math.min(base.width, Math.max(cs.x, p.x)), y2 = Math.min(base.height, Math.max(cs.y, p.y));
+        crop = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+        Object.assign(box.style, { left: Math.min(cs.cx, p.cx) + 'px', top: Math.min(cs.cy, p.cy) + 'px', width: Math.abs(p.cx - cs.cx) + 'px', height: Math.abs(p.cy - cs.cy) + 'px' }); }
+    });
+    const up = () => { drawing = false; cs = null; };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    const setMode = m => { mode = m; ov.querySelectorAll('[data-ie=draw],[data-ie=crop]').forEach(b => b.classList.toggle('on', b.dataset.ie === m)); ov.querySelector('.ie-colors').hidden = m !== 'draw'; ov.querySelector('.ie-cropbar').hidden = m !== 'crop'; box.hidden = true; crop = null; };
+    ov.querySelectorAll('[data-col]').forEach(b => b.onclick = () => { color = b.dataset.col; ov.querySelectorAll('[data-col]').forEach(x => x.classList.toggle('on', x === b)); setMode('draw'); });
+    const close = () => { window.removeEventListener('resize', fit); ov.remove(); };
+    ov.querySelectorAll('[data-ie]').forEach(b => b.onclick = () => {
+      const a = b.dataset.ie;
+      if(a === 'x') close();
+      else if(a === 'draw' || a === 'crop') setMode(a);
+      else if(a === 'undo'){ const h = hist.pop(); if(h){ base = h; fit(); } }
+      else if(a === 'rot'){ snap(); const c = document.createElement('canvas'); c.width = base.height; c.height = base.width; const g = c.getContext('2d'); g.translate(c.width / 2, c.height / 2); g.rotate(Math.PI / 2); g.drawImage(base, -base.width / 2, -base.height / 2); base = c; fit(); }
+      else if(a === 'cropx') setMode('draw');
+      else if(a === 'cropok'){ if(!crop || crop.w < 10 || crop.h < 10) return showToast('בוחרים אזור על התמונה'); snap(); const c = document.createElement('canvas'); c.width = Math.round(crop.w); c.height = Math.round(crop.h); c.getContext('2d').drawImage(base, crop.x, crop.y, crop.w, crop.h, 0, 0, c.width, c.height); base = c; setMode('draw'); fit(); }
+      else if(a === 'ok'){ base.toBlob(bl => { if(!bl) return showToast('שגיאה בשמירת התמונה'); close(); onDone(new File([bl], (file.name || 'תמונה').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' })); }, 'image/jpeg', .9); }
+    });
+    setMode('draw');
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); showToast('לא הצלחנו לפתוח את התמונה'); };
+  img.src = url;
 }
 
 // ================= אימוג׳י, מדבקות, נראה לאחרונה =================
