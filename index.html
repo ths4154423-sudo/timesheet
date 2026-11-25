@@ -9953,21 +9953,24 @@ function openImageEditor(file, onDone){
         <button type="button" data-ie="undo" title="ביטול פעולה">↶</button><button type="button" data-ie="rot" title="סיבוב">⟳</button><button type="button" data-ie="crop" title="חיתוך">✂</button><button type="button" data-ie="draw" class="on" title="ציור">✏️</button><button type="button" data-ie="ok" class="ie-ok">✓ סיום</button></div>
       <div class="ie-stage"><canvas class="ie-cv"></canvas><div class="ie-crop" hidden></div></div>
       <div class="ie-tools"><div class="ie-colors">${COLORS.map(c => `<button type="button" data-col="${c}" style="background:${c}"${c === color ? ' class="on"' : ''}></button>`).join('')}</div>
-        <div class="ie-cropbar" hidden><span>גוררים על התמונה כדי לבחור את האזור</span><button type="button" data-ie="cropok">חיתוך</button><button type="button" data-ie="cropx">ביטול</button></div></div>`;
+        <div class="ie-cropbar" hidden><span>גוררים על התמונה כדי לסמן את האזור, ואז "חיתוך" (או ✓ סיום)</span><button type="button" data-ie="cropok">חיתוך</button><button type="button" data-ie="cropx">ביטול</button></div></div>`;
     document.body.appendChild(ov);
     const cv = ov.querySelector('.ie-cv'), stage = ov.querySelector('.ie-stage'), box = ov.querySelector('.ie-crop');
-    const fit = () => { const W = stage.clientWidth - 16, H = stage.clientHeight - 16, k = Math.min(W / base.width, H / base.height, 1); cv.width = base.width; cv.height = base.height; cv.style.width = Math.round(base.width * k) + 'px'; cv.style.height = Math.round(base.height * k) + 'px'; cv.getContext('2d').drawImage(base, 0, 0); };
+    const fit = () => { const W = stage.clientWidth - 16, H = stage.clientHeight - 16, k = Math.min(W / base.width, H / base.height, 3); cv.width = base.width; cv.height = base.height; cv.style.width = Math.round(base.width * k) + 'px'; cv.style.height = Math.round(base.height * k) + 'px'; cv.getContext('2d').drawImage(base, 0, 0); };
     const redraw = () => { const g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height); g.drawImage(base, 0, 0); };
     fit(); window.addEventListener('resize', fit);
-    const pt = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * base.width / r.width, y: (e.clientY - r.top) * base.height / r.height, cx: e.clientX - stage.getBoundingClientRect().left, cy: e.clientY - stage.getBoundingClientRect().top }; };
+    const pt = e => { const r = cv.getBoundingClientRect(), sr = stage.getBoundingClientRect(); const cxs = Math.max(r.left, Math.min(r.right, e.clientX)), cys = Math.max(r.top, Math.min(r.bottom, e.clientY));
+      return { x: (cxs - r.left) * base.width / r.width, y: (cys - r.top) * base.height / r.height, cx: cxs - sr.left, cy: cys - sr.top }; };
     let drawing = false, last = null, cs = null;
-    cv.addEventListener('pointerdown', e => {
-      e.preventDefault(); cv.setPointerCapture(e.pointerId);
+    stage.style.touchAction = 'none';
+    stage.addEventListener('pointerdown', e => {
+      if(mode === 'draw' && e.target !== cv) return;
+      e.preventDefault(); try{ stage.setPointerCapture(e.pointerId); }catch(x){}
       const p = pt(e);
       if(mode === 'draw'){ snap(); drawing = true; last = p; const g = base.getContext('2d'); g.fillStyle = color; g.beginPath(); g.arc(p.x, p.y, Math.max(3, base.width / 220), 0, 7); g.fill(); redraw(); }
       else if(mode === 'crop'){ cs = p; crop = null; box.hidden = false; Object.assign(box.style, { left: p.cx + 'px', top: p.cy + 'px', width: '0px', height: '0px' }); }
     });
-    cv.addEventListener('pointermove', e => {
+    stage.addEventListener('pointermove', e => {
       const p = pt(e);
       if(drawing){ const g = base.getContext('2d'); g.strokeStyle = color; g.lineWidth = Math.max(6, base.width / 110); g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); g.moveTo(last.x, last.y); g.lineTo(p.x, p.y); g.stroke(); last = p; redraw(); }
       else if(cs){ const x1 = Math.max(0, Math.min(cs.x, p.x)), y1 = Math.max(0, Math.min(cs.y, p.y)), x2 = Math.min(base.width, Math.max(cs.x, p.x)), y2 = Math.min(base.height, Math.max(cs.y, p.y));
@@ -9975,7 +9978,8 @@ function openImageEditor(file, onDone){
         Object.assign(box.style, { left: Math.min(cs.cx, p.cx) + 'px', top: Math.min(cs.cy, p.cy) + 'px', width: Math.abs(p.cx - cs.cx) + 'px', height: Math.abs(p.cy - cs.cy) + 'px' }); }
     });
     const up = () => { drawing = false; cs = null; };
-    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+    const applyCrop = () => { if(!crop || crop.w < 10 || crop.h < 10) return false; snap(); const c = document.createElement('canvas'); c.width = Math.round(crop.w); c.height = Math.round(crop.h); c.getContext('2d').drawImage(base, crop.x, crop.y, crop.w, crop.h, 0, 0, c.width, c.height); base = c; setMode('draw'); fit(); showToast('התמונה נחתכה'); return true; };
     const setMode = m => { mode = m; ov.querySelectorAll('[data-ie=draw],[data-ie=crop]').forEach(b => b.classList.toggle('on', b.dataset.ie === m)); ov.querySelector('.ie-colors').hidden = m !== 'draw'; ov.querySelector('.ie-cropbar').hidden = m !== 'crop'; box.hidden = true; crop = null; };
     ov.querySelectorAll('[data-col]').forEach(b => b.onclick = () => { color = b.dataset.col; ov.querySelectorAll('[data-col]').forEach(x => x.classList.toggle('on', x === b)); setMode('draw'); });
     const close = () => { window.removeEventListener('resize', fit); ov.remove(); };
@@ -9986,8 +9990,9 @@ function openImageEditor(file, onDone){
       else if(a === 'undo'){ const h = hist.pop(); if(h){ base = h; fit(); } }
       else if(a === 'rot'){ snap(); const c = document.createElement('canvas'); c.width = base.height; c.height = base.width; const g = c.getContext('2d'); g.translate(c.width / 2, c.height / 2); g.rotate(Math.PI / 2); g.drawImage(base, -base.width / 2, -base.height / 2); base = c; fit(); }
       else if(a === 'cropx') setMode('draw');
-      else if(a === 'cropok'){ if(!crop || crop.w < 10 || crop.h < 10) return showToast('בוחרים אזור על התמונה'); snap(); const c = document.createElement('canvas'); c.width = Math.round(crop.w); c.height = Math.round(crop.h); c.getContext('2d').drawImage(base, crop.x, crop.y, crop.w, crop.h, 0, 0, c.width, c.height); base = c; setMode('draw'); fit(); }
-      else if(a === 'ok'){ base.toBlob(bl => { if(!bl) return showToast('שגיאה בשמירת התמונה'); close(); onDone(new File([bl], (file.name || 'תמונה').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' })); }, 'image/jpeg', .9); }
+      else if(a === 'cropok'){ if(!applyCrop()) return showToast('גוררים על התמונה כדי לבחור את האזור'); }
+      else if(a === 'ok'){
+        if(mode === 'crop' && crop && crop.w >= 10 && crop.h >= 10) applyCrop(); base.toBlob(bl => { if(!bl) return showToast('שגיאה בשמירת התמונה'); close(); onDone(new File([bl], (file.name || 'תמונה').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' })); }, 'image/jpeg', .9); }
     });
     setMode('draw');
   };
