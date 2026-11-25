@@ -8910,7 +8910,8 @@ async function renderChatRoom(role, otherId){
     const m = Object.assign({ id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [] }, extra);
     if(replyTo){ m.reply = replyTo; setReply(null); }
     // תצוגה מקדימה לקישור: הגשר מביא את הכותרת והתמונה של העמוד (עד 4 שניות; אם לא – נשלח בלי)
-    const lpUrl = !m.lp && typeof m.text === 'string' && (m.text.match(/https?:\/\/[^\s<>"']+/) || [])[0];
+    let lpUrl = !m.lp && typeof m.text === 'string' && (m.text.match(/https?:\/\/[^\s<>"']+/i) || m.text.match(/\b(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:co\.il|org\.il|gov\.il|ac\.il|net\.il|muni\.il|com|net|org|info|biz|io|app|il)\b(?:\/[^\s<>"']*)?/i) || [])[0];
+    if(lpUrl && !/^https?:/i.test(lpUrl)) lpUrl = 'https://' + lpUrl.toLowerCase();
     if(lpUrl){ try{ const tok = role === 'mgr' ? await auth.currentUser.getIdToken() : await empIdToken();
       const r = await Promise.race([bridge('link-preview', { idToken: tok, url: lpUrl }), new Promise(res => setTimeout(() => res(null), 4000))]);
       if(r && r.title) m.lp = { url: lpUrl, title: String(r.title).slice(0, 140), ...(r.desc ? { desc: String(r.desc).slice(0, 200) } : {}), ...(r.img ? { img: String(r.img).slice(0, 600) } : {}) }; }catch(e){} }
