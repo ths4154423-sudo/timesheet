@@ -1233,6 +1233,8 @@ body.wa-dark .wa-em-search input{ background:#2A3942 !important; color:#E9EDEF; 
 .st-reply.typing{ background:rgba(0,0,0,.6); }
 .st-view .st-cap{ bottom:130px; }
 .st-rx button.mine{ background:rgba(0,168,132,.85); box-shadow:0 0 0 2px #fff; }
+.wa-miss{ color:#E53935; font-weight:600; }
+.wa-row.out .wa-miss{ color:#C62828; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8712,7 +8714,7 @@ function chatBubblesHtml(ch, me, isGroup, members){
         ${me === '__viewer__' ? '' : `<div class="wa-cc-btns">${m.contact.id && m.contact.id !== me ? `<button type="button" data-cc-chat="${escapeHtml(m.contact.id)}">💬 הודעה</button>` : ''}${m.contact.phone ? `<a href="tel:${escapeHtml(m.contact.phone)}">📞 התקשרות</a>` : ''}</div>`}` : ''}
       ${m.loc ? `<div class="wa-loc"><div class="wa-loc-pin">📍</div><div class="wa-loc-main"><b>מיקום</b><span><bdi>${m.loc.lat.toFixed(5)}, ${m.loc.lng.toFixed(5)}</bdi>${m.loc.acc ? ' · דיוק ' + Math.round(m.loc.acc) + ' מ׳' : ''}</span>
         <span class="wa-loc-btns"><a href="https://waze.com/ul?ll=${m.loc.lat},${m.loc.lng}&navigate=yes" target="_blank" rel="noopener">🚗 Waze</a><a href="https://www.google.com/maps?q=${m.loc.lat},${m.loc.lng}" target="_blank" rel="noopener">🗺️ גוגל מפות</a></span></div></div>` : ''}
-      ${m.text ? `<div class="wa-text">${m.call && !mine && /לא נענתה/.test(m.text) ? '<span style="color:#E53935;">📞 שיחה שלא נענתה מ' + escapeHtml(state._chatNames[m.from] || '') + '</span>' : linkify(m.text)}</div>` : ''}
+      ${m.text ? `<div class="wa-text">${m.call && /לא נענתה/.test(m.text) ? `<span class="wa-miss">${/🎥|וידאו/.test(m.text) ? '🎥 שיחת וידאו' : '📞 שיחה'} ${mine ? 'יוצאת · לא נענתה' : 'שלא נענתה מ' + escapeHtml(state._chatNames[m.from] || '')}</span>` : linkify(m.text)}</div>` : ''}
       ${m.lp && m.lp.title ? `<a class="wa-lp" href="${escapeHtml(m.lp.url)}" target="_blank" rel="noopener">${m.lp.img ? `<img src="${escapeHtml(m.lp.img)}" alt="" loading="lazy" onerror="this.remove()" />` : ''}<span class="wa-lp-t">${escapeHtml(m.lp.title)}</span>${m.lp.desc ? `<span class="wa-lp-d">${escapeHtml(m.lp.desc)}</span>` : ''}<span class="wa-lp-h" dir="ltr">${escapeHtml((m.lp.url.match(/^https?:\/\/([^/]+)/) || [])[1] || '')}</span></a>` : ''}
       ${m.ack ? (mine ? `<button type="button" class="wa-ack-who" data-ack-who="${m.id}">✔ אישרו ${ackN} מתוך ${ackOthers.length}${m.ackReminded && ackN < ackOthers.length ? ' · 🔔 נשלחה תזכורת' : ''}</button>` : me === '__viewer__' ? '' : (m.acks || {})[me] ? '<div class="wa-ack-done">✔ אישרת קריאה</div>' : `<button type="button" class="wa-ack-btn" data-ack="${m.id}">קראתי ✔</button>`) : ''}
       <span class="wa-time">${m.scheduled ? '<i class="wa-edited">⏰</i>' : ''}${m.edited ? '<i class="wa-edited">נערכה</i>' : ''}${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
@@ -9910,7 +9912,14 @@ async function callLogToChat(chatId, from, text){
     const fresh = await loadChat(chatId); if(!fresh) return;
     const m = { id: uid(), from, at: todayStr() + 'T' + nowTimeStr(), seenBy: [], text, call: true };
     await setDoc(doc(db, 'chats', chatId), { msgs: [...(fresh.msgs || []), m].slice(-CHAT_MAX) }, { merge: true });
+    if(/לא נענתה/.test(text)) pushNotify({ kind: 'chat', chatId, msgId: m.id });
   }catch(e){}
+}
+// שיחה שלא נענתה (נדחתה / אין מענה / המתקשר ניתק לפני מענה) – נרשמת פעם אחת, ומופיעה אצל שני הצדדים
+function logMissedCall(c){
+  if(!c || c.loggedMiss || c.startedAt || !c.outgoing) return;
+  c.loggedMiss = true;
+  callLogToChat(c.chatId, c.me, c.video ? '🎥 שיחת וידאו שלא נענתה' : '📞 שיחה שלא נענתה');
 }
 function callScreen(name, statusTxt, inCall, video, localStream){
   callOverlay(`${video ? '<video id="callRemoteVid" class="call-remote" autoplay playsinline></video><video id="callLocalVid" class="call-local" autoplay playsinline muted></video>' : ''}<div class="call-box${video ? ' video' : ''}">
@@ -9972,13 +9981,15 @@ async function startCall(role, otherId, chatId, video){
     const d = snap.data() || {};
     if(d.answer && !pc.currentRemoteDescription){ try{ await pc.setRemoteDescription(d.answer); }catch(e){} const el = document.getElementById('callStatus'); if(el && !activeCall.startedAt) el.textContent = 'מתחבר...'; }
     applyCands(d);
-    if(d.status === 'declined'){ const el = document.getElementById('callStatus'); if(el) el.textContent = 'השיחה נדחתה'; callLogToChat(chatId, me, '📞 שיחה שלא נענתה'); setTimeout(() => endCall(null), 1500); }
+    if(d.status === 'declined'){ const el = document.getElementById('callStatus'); if(el) el.textContent = 'השיחה נדחתה'; logMissedCall(activeCall); setTimeout(() => endCall(null), 1500); }
     if(d.status === 'ended') endCall(null);
   });
-  activeCall.noAnswer = setTimeout(() => { if(activeCall && activeCall.id === callId && !activeCall.startedAt){ setDoc(callRef, { status: 'missed' }, { merge: true }).catch(() => {}); callLogToChat(chatId, me, '📞 שיחה שלא נענתה'); const el = document.getElementById('callStatus'); if(el) el.textContent = 'אין מענה'; setTimeout(() => endCall(null), 1500); } }, 45000);
+  activeCall.noAnswer = setTimeout(() => { if(activeCall && activeCall.id === callId && !activeCall.startedAt){ setDoc(callRef, { status: 'missed' }, { merge: true }).catch(() => {}); logMissedCall(activeCall); const el = document.getElementById('callStatus'); if(el) el.textContent = 'אין מענה'; setTimeout(() => endCall(null), 1500); } }, 45000);
 }
 async function endCall(newStatus){
-  const c = activeCall; if(!c) return; activeCall = null;
+  const c = activeCall; if(!c) return;
+  if(c.outgoing && !c.startedAt){ logMissedCall(c); if(!newStatus || newStatus === 'ended') newStatus = 'missed'; }
+  activeCall = null;
   ringStop(); clearTimeout(c.noAnswer); clearInterval(c.timer);
   if(c.unsub) try{ c.unsub(); }catch(e){}
   try{ c.pc && c.pc.close(); }catch(e){}
