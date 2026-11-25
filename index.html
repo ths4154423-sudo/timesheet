@@ -8478,8 +8478,8 @@ async function renderChatRoom(role, otherId){
       <div class="wa-replybar" id="chatReplyBar" hidden><div class="wa-quote"><b id="chatReplyWho"></b><span id="chatReplySnip"></span></div><button type="button" class="wa-back" id="chatReplyX" aria-label="ביטול">✕</button></div>
       <div class="wa-compose">
         <div class="wa-inputwrap">
-          <button type="button" class="wa-in-btn" id="chatEmojiBtn" title="אימוג׳י ומדבקות" aria-label="אימוג׳י ומדבקות">${WAI.smile}</button>
           <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
+          <button type="button" class="wa-in-btn" id="chatEmojiBtn" title="אימוג׳י ומדבקות" aria-label="אימוג׳י ומדבקות">${WAI.smile}</button>
           <button type="button" class="wa-in-btn" id="chatMoreBtn" title="סקר / הודעה מתוזמנת" aria-label="עוד">${WAI.plus}</button>
           <button type="button" class="wa-in-btn" id="chatAttachBtn" title="צירוף" aria-label="צירוף">${WAI.attach}</button>
           <button type="button" class="wa-in-btn" id="chatCamBtn" title="מצלמה" aria-label="מצלמה">${WAI.cam}</button>
@@ -8572,7 +8572,7 @@ async function renderChatRoom(role, otherId){
     el.hidden = !on;
     const txt = on ? (isGroup ? (state._chatNames[typing.who] || '') + ' ' : '') + (typing.kind === 'recording' ? 'מקליט הודעה...' : 'מקליד...') : '';
     if(on) el.querySelector('.wa-typing-txt').textContent = txt;
-    const sub = document.getElementById('chatSub'); if(sub) sub.textContent = on ? txt : (!isGroup && !selfChat && typeof presence !== 'undefined' && presence) ? presenceText(presence) : (custom ? members.map(x => x === me ? 'אתה' : (state._chatNames[x] || '')).filter(Boolean).join(', ') : isGroup ? members.length + ' משתתפים' : '');
+    const sub = document.getElementById('chatSub'); if(sub) sub.textContent = on ? txt : (!isGroup && !selfChat && lastSeenOf()) ? presenceText(lastSeenOf()) : (custom ? members.map(x => x === me ? 'אתה' : (state._chatNames[x] || '')).filter(Boolean).join(', ') : isGroup ? members.length + ' משתתפים' : '');
   };
   const markSeen = async () => {
     if(!chatUnread(cur, me)) return;
@@ -9142,7 +9142,14 @@ async function renderChatRoom(role, otherId){
     w.document.close();
   };
   // ---- נראה לאחרונה (רק בשיחה אחד על אחד)
-  let presence = null, unsubPres = () => {};
+  var presence = null, unsubPres = () => {};
+  // אם איש הקשר עוד לא פתח את הגרסה החדשה – משערים לפי הפעילות שלו בשיחה (הודעה ששלח, או מתי קרא/שמע הודעה שלי)
+  function lastSeenOf(){
+    let best = presence || 0;
+    const toMs = t => { if(!t) return 0; const x = Date.parse(String(t).replace(' ', 'T') + '+02:00'); return isNaN(x) ? 0 : x; };
+    (cur.msgs || []).forEach(m => { if(m.from === otherId) best = Math.max(best, toMs(m.at)); const sa = (m.seenAt || {})[otherId], pa = (m.playedAt || {})[otherId]; best = Math.max(best, toMs(sa), toMs(pa)); });
+    return best || null;
+  }
   if(!isGroup && !selfChat){ try{ unsubPres = onSnapshot(doc(db, 'statuses', otherId), sn => { presence = sn.exists() ? (sn.data().seen || null) : null; paintTyping(); }, () => {}); }catch(e){} }
   // ---- מדיה, קבצים וקישורים בשיחה
   document.getElementById('chatMediaBtn').onclick = () => {
