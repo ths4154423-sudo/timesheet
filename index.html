@@ -1146,6 +1146,16 @@ body.wa-dark .st-list .st-name{ color:#E9EDEF; } body.wa-dark .st-list .st-item:
 .gi-row{ display:flex !important; align-items:center; gap:10px; flex-direction:row !important; }
 body.wa-dark .wa-lp{ background:rgba(255,255,255,.07); } body.wa-dark .wa-lp-d{ color:#AEBAC1; }
 body.wa-dark .dnd-btns button{ background:#2A3942; color:#E9EDEF; border-color:#3B4A54; }
+.wa-lpbar{ flex:0 0 auto; display:flex; align-items:center; gap:10px; background:#F0F2F5; padding:8px 12px 0; }
+.wa-lpbar[hidden]{ display:none; }
+.wa-lpbar > img{ width:64px; height:64px; object-fit:cover; border-radius:8px; flex:0 0 64px; }
+.wa-lpb-ic{ width:48px; height:48px; flex:0 0 48px; border-radius:8px; background:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; }
+.wa-lpb-main{ flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; background:#fff; border-radius:8px; padding:6px 10px; border-right:4px solid #00A884; }
+.wa-lpb-main b{ font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wa-lpb-main span{ font-size:12.5px; color:#54656F; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wa-lpb-main small{ font-size:11.5px; color:#8696A0; text-align:right; }
+.wa-lpb-load{ font-size:13px; color:#667781; padding:6px 4px; }
+body.wa-dark .wa-lpbar{ background:#202C33; } body.wa-dark .wa-lpb-main, body.wa-dark .wa-lpb-ic{ background:#2A3942; color:#E9EDEF; } body.wa-dark .wa-lpb-main span{ color:#AEBAC1; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8608,6 +8618,7 @@ async function renderChatRoom(role, otherId){
       <button type="button" class="wa-jump" id="chatJump" hidden aria-label="לסוף השיחה"><span class="wa-jump-n" id="chatJumpN" hidden></span>⌄</button>
       <div class="wa-tray" id="chatTray" hidden></div>
       <div class="wa-replybar" id="chatReplyBar" hidden><div class="wa-quote"><b id="chatReplyWho"></b><span id="chatReplySnip"></span></div><button type="button" class="wa-back" id="chatReplyX" aria-label="ביטול">✕</button></div>
+      <div class="wa-lpbar" id="chatLpBar" hidden></div>
       <div class="wa-compose">
         <div class="wa-inputwrap">
           <textarea rows="1" maxlength="1000" placeholder="הקלד הודעה" id="chatInput"></textarea>
@@ -8910,11 +8921,9 @@ async function renderChatRoom(role, otherId){
     const m = Object.assign({ id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [] }, extra);
     if(replyTo){ m.reply = replyTo; setReply(null); }
     // תצוגה מקדימה לקישור: הגשר מביא את הכותרת והתמונה של העמוד (עד 4 שניות; אם לא – נשלח בלי)
-    let lpUrl = !m.lp && typeof m.text === 'string' && (m.text.match(/https?:\/\/[^\s<>"']+/i) || m.text.match(/\b(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:co\.il|org\.il|gov\.il|ac\.il|net\.il|muni\.il|com|net|org|info|biz|io|app|il)\b(?:\/[^\s<>"']*)?/i) || [])[0];
-    if(lpUrl && !/^https?:/i.test(lpUrl)) lpUrl = 'https://' + lpUrl.toLowerCase();
-    if(lpUrl){ try{ const tok = role === 'mgr' ? await auth.currentUser.getIdToken() : await empIdToken();
-      const r = await Promise.race([bridge('link-preview', { idToken: tok, url: lpUrl }), new Promise(res => setTimeout(() => res(null), 4000))]);
-      if(r && r.title) m.lp = { url: lpUrl, title: String(r.title).slice(0, 140), ...(r.desc ? { desc: String(r.desc).slice(0, 200) } : {}), ...(r.img ? { img: String(r.img).slice(0, 600) } : {}) }; }catch(e){} }
+    const lpUrl = !m.lp && typeof m.text === 'string' ? lpFind(m.text) : null;
+    if(lpUrl && lpUrl !== lpDismissed){ const r = await lpFetch(lpUrl, 4000); if(r) m.lp = r; }
+    lpDismissed = null; paintLp(null);
     pinned = true; cur = { ...cur, msgs: [...(cur.msgs || []), m] }; paint();
     const toEnd = () => { pinned = true; body.scrollTop = body.scrollHeight; }; toEnd(); requestAnimationFrame(toEnd); [80, 300, 800].forEach(ms => setTimeout(toEnd, ms));
     input.style.height = '';
@@ -8931,6 +8940,22 @@ async function renderChatRoom(role, otherId){
   input.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey && !touchKb){ e.preventDefault(); document.getElementById('chatSend').click(); } });
   { const dr = getDraft(me, id); if(dr){ input.value = dr; setTimeout(() => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; input.setSelectionRange(dr.length, dr.length); }, 0); } }
   input.addEventListener('input', () => { if(!editing) setDraft(me, id, input.value); });
+  // תצוגה מקדימה לקישור כבר בזמן הכתיבה (מעל שדה ההודעה), עם ✕ כדי לשלוח בלעדיה
+  let lpDismissed = null, lpT = null;
+  const lpBar = document.getElementById('chatLpBar');
+  const paintLp = (r, loading) => {
+    if(!r && !loading){ lpBar.hidden = true; lpBar.innerHTML = ''; return; }
+    lpBar.hidden = false;
+    lpBar.innerHTML = loading ? `<div class="wa-lpb-load">🔗 טוען תצוגה מקדימה...</div>` : `${r.img ? `<img src="${escapeHtml(r.img)}" alt="" onerror="this.remove()" />` : '<span class="wa-lpb-ic">🔗</span>'}<div class="wa-lpb-main"><b>${escapeHtml(r.title)}</b>${r.desc ? `<span>${escapeHtml(r.desc)}</span>` : ''}<small dir="ltr">${escapeHtml((r.url.match(/^https?:\/\/([^/]+)/) || [])[1] || '')}</small></div><button type="button" class="wa-back" id="chatLpX" title="בלי תצוגה מקדימה" aria-label="בלי תצוגה מקדימה">✕</button>`;
+    const x = document.getElementById('chatLpX'); if(x) x.onclick = () => { lpDismissed = r.url; paintLp(null); input.focus(); };
+  };
+  input.addEventListener('input', () => {
+    clearTimeout(lpT);
+    const u = lpFind(input.value);
+    if(!u || u === lpDismissed || editing){ paintLp(null); return; }
+    if(state._lpCache && u in state._lpCache){ paintLp(state._lpCache[u]); return; }
+    lpT = setTimeout(async () => { paintLp(null, true); const r = await lpFetch(u, 6000); if(lpFind(input.value) === u && u !== lpDismissed) paintLp(r); }, 600);
+  });
   // קבצים שממתינים לשליחה (נבחרו או הודבקו): מוצגים מעל שדה הכתיבה, ונשלחים רק בלחיצה על Enter או על כפתור השליחה
   let pending = [];
   const tray = document.getElementById('chatTray');
@@ -10235,6 +10260,23 @@ async function checkMsgReminders(role){
 }
 
 // ================= עזרי צ׳אט: השתקה, הודעות מתוזמנות, סקרים, הודעה ← משימה =================
+// קישור בתוך טקסט (גם בלי https://), ותצוגה מקדימה מהגשר עם מטמון
+function lpFind(t){
+  let u = (String(t || '').match(/https?:\/\/[^\s<>"']+/i) || String(t || '').match(/\b(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:co\.il|org\.il|gov\.il|ac\.il|net\.il|muni\.il|com|net|org|info|biz|io|app|il)\b(?:\/[^\s<>"']*)?/i) || [])[0];
+  if(!u) return null;
+  u = u.replace(/[.,!?)]+$/, '');
+  return /^https?:/i.test(u) ? u : 'https://' + u.toLowerCase();
+}
+async function lpFetch(url, ms){
+  state._lpCache = state._lpCache || {};
+  if(url in state._lpCache) return state._lpCache[url];
+  try{
+    const r = await Promise.race([bridge('link-preview', { idToken: await empIdToken(), url }), new Promise(res => setTimeout(() => res(null), ms || 4000))]);
+    if(!r) return null;   // לא נשמר במטמון – אולי יצליח בניסיון הבא
+    const v = r.title ? { url, title: String(r.title).slice(0, 140), ...(r.desc ? { desc: String(r.desc).slice(0, 200) } : {}), ...(r.img ? { img: String(r.img).slice(0, 600) } : {}) } : null;
+    state._lpCache[url] = v; return v;
+  }catch(e){ return null; }
+}
 function chatArchived(id){ return (state._chatArchive || []).includes(id); }
 function chatMuted(id){ const v = (state._chatMutes || {})[id]; return v === 'forever' || (!!v && v > todayStr() + 'T' + nowTimeStr().slice(0, 5)); }
 // הודעה מתוזמנת שהגיע זמנה עוברת להודעות. כל משתתף מחובר יכול לעשות את זה (וגם הגשר כל דקה) – בלי כפילויות
