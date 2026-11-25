@@ -1480,6 +1480,8 @@ body.v2.v2light .v2day span{ color:#5E718A; } body.v2.v2light .v2day b{ color:#1
 body.v2.v2light #v2nav{ background:rgba(255,255,255,.92) !important; border:1px solid #E1E9F2; box-shadow:0 10px 30px rgba(27,42,63,.14); }
 body.v2.v2light #v2nav button{ color:#6B7F98; } body.v2.v2light #v2nav button.on{ color:#059669; background:#DDF7EC; }
 body.v2.v2light .pill{ background:#DDF7EC; color:#047857; }
+.wa-bubble.swipe-ready::after{ content:'↩'; position:absolute; top:50%; right:calc(100% + 14px); transform:translateY(-50%); width:30px; height:30px; border-radius:50%; background:rgba(0,0,0,.08); display:flex; align-items:center; justify-content:center; font-size:16px; color:#54656F; }
+.wa-row.in .wa-bubble.swipe-ready::after, .wa-row.out .wa-bubble.swipe-ready::after{ right:auto; left:-44px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -2403,6 +2405,7 @@ function startV2Hero(emp, st, hoursData){
 // "פרסומת" חד-פעמית: מציגה לעובד שיש עיצוב חדש ומאפשרת לעבור אליו (או להישאר)
 async function maybeV2Promo(emp, st){
   if(!emp || emp.chatOnly || st.uiV2 || !state._justLoggedIn) return;
+  if(todayStr() > '2026-12-03') return;   // ה"פרסומת" מוצגת שבוע אחד בלבד
   if(document.querySelector('.confirm-overlay, .welcome-splash, .splash')) return setTimeout(() => maybeV2Promo(emp, st), 2500);
   state._justLoggedIn = false;
   const ov = document.createElement('div'); ov.className = 'confirm-overlay v2promo-ov';
@@ -9281,6 +9284,22 @@ async function renderChatRoom(role, otherId){
       let lp = null;
       el.addEventListener('touchstart', () => { lpFired = false; lp = setTimeout(() => { lp = null; lpFired = true; if(navigator.vibrate) navigator.vibrate(15); sel ? toggleSel(el.dataset.mid) : startSel(el.dataset.mid); }, 480); }, { passive: true });
       ['touchend', 'touchmove', 'touchcancel'].forEach(t => el.addEventListener(t, () => { clearTimeout(lp); }, { passive: true }));
+      // החלקה ימינה על הודעה (בטלפון) = תגובה להודעה, כמו בוואטסאפ
+      let sx = null, sy = 0, dx = 0, swiping = false;
+      el.addEventListener('touchstart', ev => { if(sel) return; sx = ev.touches[0].clientX; sy = ev.touches[0].clientY; dx = 0; swiping = false; }, { passive: true });
+      el.addEventListener('touchmove', ev => {
+        if(sx === null) return;
+        const mx = ev.touches[0].clientX - sx, my = ev.touches[0].clientY - sy;
+        if(!swiping && Math.abs(my) > 12 && Math.abs(my) > Math.abs(mx)){ sx = null; return; }
+        if(mx > 8 && Math.abs(mx) > Math.abs(my)){ swiping = true; dx = Math.min(mx, 90); el.style.transform = `translateX(${dx}px)`; el.style.transition = 'none'; el.classList.toggle('swipe-ready', dx > 60); }
+      }, { passive: true });
+      const endSwipe = () => {
+        if(sx === null && !swiping) return;
+        const go = swiping && dx > 60; sx = null; swiping = false;
+        el.style.transition = 'transform .2s ease'; el.style.transform = ''; el.classList.remove('swipe-ready');
+        if(go){ const m = (cur.msgs || []).find(x => x.id === el.dataset.mid); if(m && !m.deleted){ if(navigator.vibrate) navigator.vibrate(12); setReply(m); } }
+      };
+      el.addEventListener('touchend', endSwipe, { passive: true }); el.addEventListener('touchcancel', endSwipe, { passive: true });
     });
     body.querySelectorAll('[data-jump]').forEach(q => q.onclick = () => { const t = body.querySelector(`[data-row="${q.dataset.jump}"]`); if(t){ t.scrollIntoView({ block: 'center', behavior: 'smooth' }); t.classList.add('wa-flash'); setTimeout(() => t.classList.remove('wa-flash'), 1200); } });
     paintTyping(); paintSel();
