@@ -1391,6 +1391,18 @@ function loadSession(){
     return s ? JSON.parse(s) : null;
   }catch(e){ return null; }
 }
+// ניתוק: קודם מסמנים "לא מחובר" בצ׳אט (כדי שלא יופיע "מחובר עכשיו"), ורק אז מתנתקים
+async function logoutAuth(a){
+  const n = state._chatNotif;
+  clearInterval(state._beatTimer); clearInterval(state._remindTimer);
+  if(n){ try{ await Promise.race([setDoc(doc(db, 'statuses', n.me), { seen: trueNow().getTime(), off: true }, { merge: true }), new Promise(r => setTimeout(r, 1500))]); }catch(e){}
+    (n.unsubs || []).forEach(u => { try{ u(); }catch(e){} }); state._chatNotif = null; }
+  try{ sessionStorage.removeItem('route'); }catch(e){}
+  return signOut(a || auth);
+}
+// המסך האחרון (לשחזור אחרי רענון): נשמר בכרטיסייה בלבד
+function setRoute(r){ try{ sessionStorage.setItem('route', JSON.stringify(r)); }catch(e){} }
+function getRoute(){ try{ return JSON.parse(sessionStorage.getItem('route') || 'null'); }catch(e){ return null; } }
 function clearSession(){
   try{ localStorage.removeItem('timesheet_session'); }catch(e){}
   try{ sessionStorage.removeItem('timesheet_session'); sessionStorage.removeItem('tabRole'); }catch(e){}
@@ -2285,13 +2297,13 @@ async function init(){
         if(res.emp){
           saveSession({ role: 'employee', empId: user.uid, emp: res.emp });
           state.employees = [res.emp];
-          renderEmployeeDashboard(res.emp);
+          restoreEmpRoute(res.emp);
           return;
         }
         // בלי אינטרנט: ממשיכים עם הפרטים שנשמרו בכניסה האחרונה
         if(res.error === 'network' && session.emp){
           state.employees = [session.emp];
-          renderEmployeeDashboard(session.emp);
+          restoreEmpRoute(session.emp);
           return;
         }
       }
@@ -2306,7 +2318,9 @@ async function init(){
       if(!(await ensureEmployeesLoaded())) return;
       state.isAdmin = true;
       state.adminEmail = user.email;
-      renderAdminDashboard('dashboard');
+      { const r = getRoute(); const tab = r && r.role === 'mgr' && r.tab ? r.tab : 'dashboard';
+        renderAdminDashboard(tab);
+        if(tab === 'chat' && r.room) setTimeout(() => renderChatRoom('mgr', r.room), 500); }
       return;
     }
     if(tryTrustedDeviceAdminLogin()) return;
@@ -2314,6 +2328,15 @@ async function init(){
   });
 }
 
+// אחרי רענון: חוזרים למסך שהעובד היה בו (צ׳אט / שיחה / משימות / הגדרות)
+async function restoreEmpRoute(emp){
+  const r = getRoute();
+  await renderEmployeeDashboard(emp);
+  if(!r || r.role !== 'emp' || !r.page || r.page === 'dash') return;
+  if(r.page === 'chat'){ if(r.room) renderChatRoom('emp', r.room); else if(!emp.chatOnly) renderChatHome('emp'); }
+  else if(r.page === 'tasks') renderEmployeeTasks(emp);
+  else if(r.page === 'settings') renderEmployeeSettings(emp);
+}
 // טוען את רשימת העובדים המלאה - רק למנהל מחובר
 async function ensureEmployeesLoaded(){
   const list = await loadEmployees();
@@ -3777,6 +3800,7 @@ const ADMIN_TABS = [
 function renderAdminDashboard(tab){
   if(shabbatGuard()) return;
   if(!canSeeTab(tab)) tab = 'dashboard';
+  setRoute({ role: 'mgr', tab });
   resetTheme();
   setHeader('פאנל ניהול', '<button class="logout-link" id="logoutBtn" title="התנתקות"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><polyline points="8 7 3 12 8 17"/><line x1="3" y1="12" x2="15" y2="12"/></svg>התנתקות</button>');
   document.body.classList.add('admin-mode');
@@ -3816,7 +3840,7 @@ function renderAdminDashboard(tab){
     // בדפדפן שבו פתוחה גם כרטיסייה של עובד: אפשר לחזור לדף הראשי בלי להתנתק מהניהול,
     // כדי שהכרטיסיות האחרות של הניהול יישארו מחוברות
     const full = await showConfirmModal('להתנתק מהניהול? אם תבחר "רק לדף הראשי", הניהול יישאר מחובר בכרטיסיות אחרות.', { yes: 'התנתקות', no: 'רק לדף הראשי', danger: false });
-    if(full){ try{ await signOut(authAdmin); }catch(e){ console.error('sign-out error', e); } }
+    if(full){ try{ await logoutAuth(authAdmin); }catch(e){ console.error('sign-out error', e); } }
     try{ sessionStorage.removeItem('tabRole'); }catch(e){}
     renderLanding();
   };
@@ -5855,6 +5879,7 @@ async function renderAdminSettings(){
 async function renderEmployeeDashboard(emp, editingId, useCache){
   if(emp && emp.chatOnly){ state.currentEmployee = emp; startChatNotifier('emp'); return renderChatHome('emp'); }
   if(shabbatGuard()) return;
+  setRoute({ role: 'emp', page: 'dash' });
   stopLiveTimer();
   stopLiveMoneyTimer();
   stopClockFieldTimers();
@@ -5891,9 +5916,9 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
         </div>
       `;
       document.getElementById('retryLoadBtn').onclick = () => renderEmployeeDashboard(emp, editingId, false);
-      document.getElementById('reloginBtn').onclick = () => { state.currentEmployee = null; clearSession(); signOut(auth).catch(() => {}); renderEmployeeLogin(); };
+      document.getElementById('reloginBtn').onclick = () => { state.currentEmployee = null; clearSession(); logoutAuth().catch(() => {}); renderEmployeeLogin(); };
       // החיבור שייך לעובד אחר (למשל נכנס עובד אחר בכרטיסייה אחרת) – מבקשים להיכנס מחדש
-      if(state._lastLoadErr === 'permission-denied' && auth.currentUser && auth.currentUser.uid !== emp.id){ clearSession(); signOut(auth).catch(() => {}); showToast('בכרטיסייה הזו צריך להיכנס מחדש עם הקוד'); renderEmployeeLogin(); }
+      if(state._lastLoadErr === 'permission-denied' && auth.currentUser && auth.currentUser.uid !== emp.id){ clearSession(); logoutAuth().catch(() => {}); showToast('בכרטיסייה הזו צריך להיכנס מחדש עם הקוד'); renderEmployeeLogin(); }
       return;
     }
   }
@@ -6124,7 +6149,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
           </div>` : `<div class="hint" style="font-size:13.5px;">אין ימי חופשה או מחלה ב${monthLabel(month)}.</div>`}
       </div>
     `;
-    document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; state._entriesPage = false; clearSession(); signOut(auth).catch(e => console.error('sign-out error', e)); renderLanding(); };
+    document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; state._entriesPage = false; clearSession(); logoutAuth().catch(e => console.error('sign-out error', e)); renderLanding(); };
     document.getElementById('settingsBtn').onclick = () => { state._entriesPage = false; renderEmployeeSettings(emp); };
     const pdfBtn = document.getElementById('empPdfBtn');
     if(pdfBtn) pdfBtn.onclick = () => openPayslip(emp, month).catch(e => { console.error(e); showToast('לא הצלחנו להכין את הדוח'); });
@@ -6397,7 +6422,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     </div>
   `;
 
-  document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); signOut(auth).catch(e => console.error('sign-out error', e)); renderLanding(); };
+  document.getElementById('logoutBtn').onclick = () => { stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog(); state.currentEmployee = null; clearSession(); logoutAuth().catch(e => console.error('sign-out error', e)); renderLanding(); };
   document.getElementById('settingsBtn').onclick = () => renderEmployeeSettings(emp);
   if(staleOpen.length && !editingEntry && state._staleNoticeShown !== emp.id + todayStr()){
     state._staleNoticeShown = emp.id + todayStr();
@@ -7264,6 +7289,7 @@ const EMPLOYEE_SETTINGS_DEFS = [
 // The main "הגדרות" screen: just a menu of categories. Add a category above and give some
 // defs that category's key to make it appear here automatically.
 async function renderEmployeeSettings(emp){
+  setRoute({ role: 'emp', page: 'settings' });
   stopLiveTimer();
   stopLiveMoneyTimer();
   stopClockFieldTimers();
@@ -7559,6 +7585,7 @@ async function checkEmpTasks(emp){
 }
 
 async function renderEmployeeTasks(emp, soft){
+  setRoute({ role: 'emp', page: 'tasks' });
   stopLiveTimer(); stopLiveMoneyTimer(); stopClockFieldTimers(); stopBreakWatchdog();
   setHeader('משימות', '<button class="btn ghost small" id="tasksBackBtn">חזרה</button>');
   document.getElementById('tasksBackBtn').onclick = () => renderEmployeeDashboard(emp);
@@ -8243,9 +8270,10 @@ async function renderChatHome(role){
     const co = state.currentEmployee && state.currentEmployee.chatOnly;
     setHeader(co ? 'שלום, ' + state.currentEmployee.name : 'צ׳אט', co ? '<button class="logout-link" id="chatBackBtn" title="התנתקות"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><polyline points="8 7 3 12 8 17"/><line x1="3" y1="12" x2="15" y2="12"/></svg>התנתקות</button>' : '<button class="btn ghost small" id="chatBackBtn">חזרה</button>');
     document.getElementById('chatBackBtn').onclick = co
-      ? () => { state.currentEmployee = null; clearSession(); signOut(auth).catch(() => {}); renderLanding(); }
+      ? () => { state.currentEmployee = null; clearSession(); logoutAuth().catch(() => {}); renderLanding(); }
       : () => renderEmployeeDashboard(state.currentEmployee); }
   target.innerHTML = '<div class="empty-state">טוען...</div>';
+  if(role !== 'mgr') setRoute({ role: 'emp', page: 'chat' }); else setRoute({ role: 'mgr', tab: 'chat' });
   if(!state._chatArchive) await loadMsgSoundPref(role);
   const contacts0 = await chatContacts(role);
   const groups = await myChatGroups(me);
@@ -8310,7 +8338,7 @@ async function renderChatHome(role){
   const fc = document.getElementById('waFullClose');
   if(fc) fc.onclick = () => role === 'mgr' ? renderAdminDashboard('dashboard') : renderEmployeeDashboard(state.currentEmployee);
   const fl = document.getElementById('waFullLogout');
-  if(fl) fl.onclick = () => { state.currentEmployee = null; clearSession(); signOut(auth).catch(() => {}); renderLanding(); };
+  if(fl) fl.onclick = () => { state.currentEmployee = null; clearSession(); logoutAuth().catch(() => {}); renderLanding(); };
   target.querySelectorAll('[data-chat-open]').forEach(b => b.onclick = () => { if(b._lp){ b._lp = false; return; } renderChatRoom(role, b.dataset.chatOpen); });
   // ארכיון: לחיצה ארוכה (טלפון) או קליק ימני (מחשב) על שיחה ברשימה
   const archT = document.getElementById('chatArchToggle');
@@ -8449,6 +8477,7 @@ async function renderChatRoom(role, otherId){
   if(state._chatWatch){ try{ state._chatWatch(); }catch(e){} state._chatWatch = null; }
   const me = chatMe(role), id = chatIdWith(me, otherId), custom = /^g_/.test(otherId), isGroup = otherId === 'team' || custom;
   state._chatOpenId = id;
+  setRoute(role === 'mgr' ? { role: 'mgr', tab: 'chat', room: otherId } : { role: 'emp', page: 'chat', room: otherId });
   const allContacts = await chatContacts(role);
   const target = role === 'mgr' ? document.getElementById('tabContent') : app;
   const g = custom ? await loadChat(id) : null;
@@ -8572,7 +8601,7 @@ async function renderChatRoom(role, otherId){
     el.hidden = !on;
     const txt = on ? (isGroup ? (state._chatNames[typing.who] || '') + ' ' : '') + (typing.kind === 'recording' ? 'מקליט הודעה...' : 'מקליד...') : '';
     if(on) el.querySelector('.wa-typing-txt').textContent = txt;
-    const sub = document.getElementById('chatSub'); if(sub) sub.textContent = on ? txt : (!isGroup && !selfChat && lastSeenOf()) ? presenceText(lastSeenOf()) : (custom ? members.map(x => x === me ? 'אתה' : (state._chatNames[x] || '')).filter(Boolean).join(', ') : isGroup ? members.length + ' משתתפים' : '');
+    const sub = document.getElementById('chatSub'); if(sub) sub.textContent = on ? txt : (!isGroup && !selfChat && lastSeenOf()) ? presenceText(lastSeenOf(), presOff || !presence) : (custom ? members.map(x => x === me ? 'אתה' : (state._chatNames[x] || '')).filter(Boolean).join(', ') : isGroup ? members.length + ' משתתפים' : '');
   };
   const markSeen = async () => {
     if(!chatUnread(cur, me)) return;
@@ -9142,7 +9171,7 @@ async function renderChatRoom(role, otherId){
     w.document.close();
   };
   // ---- נראה לאחרונה (רק בשיחה אחד על אחד)
-  var presence = null, unsubPres = () => {};
+  var presence = null, presOff = false, unsubPres = () => {};
   // אם איש הקשר עוד לא פתח את הגרסה החדשה – משערים לפי הפעילות שלו בשיחה (הודעה ששלח, או מתי קרא/שמע הודעה שלי)
   function lastSeenOf(){
     let best = presence || 0;
@@ -9150,7 +9179,7 @@ async function renderChatRoom(role, otherId){
     (cur.msgs || []).forEach(m => { if(m.from === otherId) best = Math.max(best, toMs(m.at)); const sa = (m.seenAt || {})[otherId], pa = (m.playedAt || {})[otherId]; best = Math.max(best, toMs(sa), toMs(pa)); });
     return best || null;
   }
-  if(!isGroup && !selfChat){ try{ unsubPres = onSnapshot(doc(db, 'statuses', otherId), sn => { presence = sn.exists() ? (sn.data().seen || null) : null; paintTyping(); }, () => {}); }catch(e){} }
+  if(!isGroup && !selfChat){ try{ unsubPres = onSnapshot(doc(db, 'statuses', otherId), sn => { presence = sn.exists() ? (sn.data().seen || null) : null; presOff = sn.exists() && sn.data().off === true; paintTyping(); }, () => {}); }catch(e){} }
   // ---- מדיה, קבצים וקישורים בשיחה
   document.getElementById('chatMediaBtn').onclick = () => {
     const msgs = visibleMsgs(cur, me).filter(m => !m.deleted);
@@ -9276,9 +9305,12 @@ async function startChatNotifier(role){
   registerPush();
   { const lp = new URLSearchParams(location.search); if(lp.get('chat') || lp.get('tasks')){ const l = location.href; history.replaceState(null, '', location.pathname); setTimeout(() => openFromLink(l), 800); } }
   // נראה לאחרונה: כל דקה (כשהאתר מוצג) נשמרת השעה ב-statuses/<אני>.seen
-  const beat = () => { if(document.visibilityState === 'visible') setDoc(doc(db, 'statuses', me), { seen: trueNow().getTime() }, { merge: true }).catch(() => {}); };
+  const beat = () => { if(document.visibilityState === 'visible' && state._chatNotif) setDoc(doc(db, 'statuses', me), { seen: trueNow().getTime(), off: false }, { merge: true }).catch(() => {}); };
   clearInterval(state._beatTimer); state._beatTimer = setInterval(beat, 60000); beat();
-  if(!state._beatVis){ state._beatVis = true; document.addEventListener('visibilitychange', () => { if(state._chatNotif && document.visibilityState === 'visible') setDoc(doc(db, 'statuses', state._chatNotif.me), { seen: trueNow().getTime() }, { merge: true }).catch(() => {}); }); }
+  if(!state._beatVis){ state._beatVis = true;
+    const mark = off => { if(state._chatNotif) setDoc(doc(db, 'statuses', state._chatNotif.me), { seen: trueNow().getTime(), off }, { merge: true }).catch(() => {}); };
+    document.addEventListener('visibilitychange', () => mark(document.visibilityState !== 'visible'));
+    window.addEventListener('pagehide', () => mark(true)); }
   clearInterval(state._remindTimer);
   state._remindTimer = setInterval(() => checkMsgReminders(role), 30000); setTimeout(() => checkMsgReminders(role), 4000);
   if(state._chatNotif && state._chatNotif.me === me) return;
@@ -9793,9 +9825,9 @@ const CHAT_STICKERS = [
   { e: '🙏', t: 'תודה רבה', c: '#7A55D1' }, { e: '👍', t: 'מעולה', c: '#F59E0B' }, { e: '📞', t: 'תתקשר אליי', c: '#0EA5E9' }, { e: '☕', t: 'בהפסקה', c: '#92400E' },
   { e: '🤝', t: 'מסכים', c: '#0D9488' }, { e: '❓', t: 'יש שאלה', c: '#9333EA' }, { e: '🌞', t: 'בוקר טוב', c: '#EAB308' }, { e: '🏁', t: 'סיימתי להיום', c: '#DC2626' }
 ];
-function presenceText(ms){
+function presenceText(ms, off){
   const now = trueNow().getTime(), diff = now - ms;
-  if(diff < 2.5 * 60000) return 'מחובר/ת עכשיו';
+  if(!off && diff < 2.5 * 60000) return 'מחובר/ת עכשיו';
   const d = new Date(ms), il = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' })), p2 = x => String(x).padStart(2, '0');
   const ds = il.getFullYear() + '-' + p2(il.getMonth() + 1) + '-' + p2(il.getDate()), hm = p2(il.getHours()) + ':' + p2(il.getMinutes());
   const y = new Date(ilNow().getTime() - 86400000), yds = y.getFullYear() + '-' + p2(y.getMonth() + 1) + '-' + p2(y.getDate());
