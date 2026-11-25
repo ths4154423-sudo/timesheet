@@ -2346,7 +2346,7 @@ function applyEmployeeTheme(settings){
   root.setProperty('--surface', surface);
   root.setProperty('--line', line);
   applyUiV2(!!settings.uiV2);
-  applyNewsTicker(!settings.hideNews);
+  applyNewsTicker(false);   // פס החדשות הוסר
   document.body.classList.toggle('v2light', !!settings.uiV2 && !settings.v2Dark);
 }
 // ================= נגישות: תפריט התאמות (נשמר במכשיר) + הצהרת נגישות =================
@@ -7999,14 +7999,6 @@ const EMPLOYEE_SETTINGS_DEFS = [
     type: 'checkbox',
     label: '🌙 העיצוב החדש – בגרסה כהה',
     hint: 'רק אם העיצוב החדש פעיל: רקע כהה מלא במקום הגרסה הבהירה.',
-    default: false
-  },
-  {
-    key: 'hideNews',
-    category: 'appearance',
-    type: 'checkbox',
-    label: 'הסתרת פס החדשות',
-    hint: 'פס כותרות החדשות ("כאן") שרץ בתחתית המסך לא יוצג.',
     default: false
   },
   {
