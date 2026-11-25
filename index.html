@@ -1336,6 +1336,71 @@ body.v2pre .login-card h1{ font-size:24px; }
 body.v2 #v2nav{ backdrop-filter:saturate(1.4) blur(6px); background:color-mix(in srgb, var(--surface) 92%, transparent); }
 body.v2 .punch-card-x input:not([type=checkbox]):not([type=radio]):not([type=color]), body.v2 .punch-card-x select{ background:rgba(255,255,255,.08) !important; color:#fff !important; border:1.5px solid rgba(255,255,255,.22) !important; }
 body.v2 .punch-card-x input::-webkit-calendar-picker-indicator{ filter:invert(1); }
+/* ================= העיצוב החדש – כהה ויוקרתי (סגנון 1) ================= */
+body.v2{ --paper:#0B1220; --paper-alt:rgba(255,255,255,.06); --surface:#121B2C; --ink:#E8EEF6; --ink-soft:#8EA2BC; --line:rgba(255,255,255,.12); --brass:#34D399; --brass-dark:#10B981; --brass-text:#05261A; --muted:#8EA2BC; --danger:#F87171;
+  background:radial-gradient(900px 520px at 85% -12%, #1E3A5F 0%, transparent 60%), radial-gradient(700px 400px at -10% 30%, rgba(14,165,233,.10), transparent 60%), #0B1220 !important; background-attachment:fixed !important; color:var(--ink); }
+body.v2 .topbar{ background:transparent !important; border:none !important; box-shadow:none !important; padding:6px 2px; margin-bottom:6px; }
+body.v2 .topbar .header-logo{ filter:brightness(1.05); }
+body.v2 #headerSubtitle{ color:#fff; font-size:21px; font-weight:800; }
+body.v2 #hebDateLine{ color:#7F93AD !important; }
+body.v2 .card, body.v2 .collapsible-header, body.v2 [data-open-category], body.v2 .task-item, body.v2 .empty-state{ background:rgba(255,255,255,.05) !important; border:1px solid rgba(255,255,255,.09) !important; box-shadow:none !important; color:var(--ink); backdrop-filter:blur(10px); }
+body.v2 .card h3, body.v2 .card h2, body.v2 .card b, body.v2 .name{ color:#fff; }
+body.v2 .hint, body.v2 .subtitle{ color:#8EA2BC !important; }
+body.v2 input:not([type=checkbox]):not([type=radio]):not([type=color]), body.v2 select, body.v2 textarea{ background:rgba(255,255,255,.06) !important; color:#fff !important; border:1px solid rgba(255,255,255,.14) !important; color-scheme:dark; }
+body.v2 option{ background:#121B2C; color:#fff; }
+body.v2 .btn.ghost, body.v2 .logout-link, body.v2 #headerActions .btn{ background:rgba(255,255,255,.06) !important; color:#fff !important; border:1px solid rgba(255,255,255,.16) !important; }
+body.v2 .btn.brass{ background:linear-gradient(135deg,#34D399,#10B981) !important; color:#05261A !important; border:none !important; box-shadow:0 8px 24px rgba(16,185,129,.30); font-weight:800; }
+body.v2 .btn.danger{ background:rgba(248,113,113,.12) !important; color:#FCA5A5 !important; border:1px solid rgba(248,113,113,.35) !important; }
+body.v2 table th{ background:rgba(255,255,255,.05); color:#C9D6E6; } body.v2 table td{ border-color:rgba(255,255,255,.08) !important; }
+body.v2 a{ color:#5EEAD4; }
+body.v2 .pill{ background:rgba(52,211,153,.14); color:#34D399; }
+/* כרטיס הנוכחות הופך לפס פעולות זכוכיתי מתחת לשעון */
+body.v2 .punch-card-x{ background:rgba(255,255,255,.04) !important; border:1px solid rgba(255,255,255,.09) !important; box-shadow:none !important; }
+body.v2 .punch-card-x > h3{ display:none; }
+body.v2 .punch-card-x input:not([type=checkbox]):not([type=radio]):not([type=color]){ background:rgba(255,255,255,.06) !important; }
+body.v2 .punch-card-x .btn.brass{ min-height:58px; border-radius:18px; font-size:17px; }
+body.v2 .punch-card-x .btn.ghost{ min-height:54px; border-radius:18px; font-size:16px; font-weight:700; }
+body.v2 #entriesList tr{ background:rgba(255,255,255,.05) !important; border:1px solid rgba(255,255,255,.09) !important; box-shadow:none !important; }
+/* השעון העגול */
+body.v2 #app:has(> .v2hero){ display:flex; flex-direction:column; }
+body.v2 #app > .v2hero{ order:-2; }
+.v2hero{ text-align:center; padding:4px 0 14px; }
+.v2h-ring{ position:relative; width:min(250px, 70vw); aspect-ratio:1; margin:6px auto 10px; }
+.v2h-ring svg{ width:100%; height:100%; transform:rotate(-90deg); }
+.v2h-track{ fill:none; stroke:rgba(255,255,255,.07); stroke-width:14; }
+.v2h-prog{ fill:none; stroke:url(#v2gr); stroke-width:14; stroke-linecap:round; transition:stroke-dashoffset 1s linear; filter:drop-shadow(0 0 8px rgba(52,211,153,.35)); }
+.v2h-c{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.v2h-l{ color:#7F93AD; font-size:13.5px; }
+.v2h-t{ font-size:clamp(44px, 14vw, 58px); font-weight:800; letter-spacing:1px; line-height:1.1; background:linear-gradient(180deg,#fff,#9FE7C8); -webkit-background-clip:text; background-clip:text; color:transparent; font-variant-numeric:tabular-nums; }
+.v2h-m{ margin-top:6px; background:rgba(52,211,153,.12); color:#34D399; border-radius:99px; padding:3px 12px; font-weight:700; font-size:14px; }
+.v2h-m[hidden]{ display:none; }
+.v2h-st{ display:flex; justify-content:center; align-items:center; gap:8px; color:#9FB2C8; font-size:14px; }
+.v2d{ width:9px; height:9px; border-radius:50%; background:#34D399; box-shadow:0 0 10px #34D399; animation:v2pulse 1.6s infinite; }
+.v2d.brk{ background:#FBBF24; box-shadow:0 0 10px #FBBF24; }
+@keyframes v2pulse{ 50%{ opacity:.35; } }
+.v2hero.brk .v2h-prog{ stroke:#FBBF24; filter:drop-shadow(0 0 8px rgba(251,191,36,.4)); }
+.v2hero.brk .v2h-t{ background:linear-gradient(180deg,#fff,#FDE68A); -webkit-background-clip:text; background-clip:text; }
+.v2hero.idle .v2h-t{ background:linear-gradient(180deg,#fff,#C9D6E6); -webkit-background-clip:text; background-clip:text; }
+/* סרגל ניווט צף */
+body.v2 #v2nav{ bottom:14px; left:14px; right:14px; border-radius:22px; background:rgba(18,28,46,.88) !important; border:1px solid rgba(255,255,255,.1); box-shadow:0 10px 30px rgba(0,0,0,.4); padding:8px 0; backdrop-filter:blur(14px); }
+body.v2 #v2nav button{ color:#7F93AD; }
+body.v2 #v2nav button.on{ color:#34D399; background:rgba(52,211,153,.12); }
+body.v2 #v2nav button.on::after{ display:none; }
+body.v2{ padding-bottom:100px; }
+/* מסך הכניסה במכשיר שבחר בעיצוב החדש */
+body.v2pre:not(.v2){ --paper:#0B1220; --paper-alt:rgba(255,255,255,.06); --surface:#121B2C; --ink:#E8EEF6; --line:rgba(255,255,255,.12); background:radial-gradient(900px 520px at 85% -12%, #1E3A5F 0%, transparent 60%), #0B1220 !important; color:#E8EEF6; }
+body.v2pre:not(.v2) .topbar{ background:transparent !important; border:none !important; box-shadow:none !important; }
+body.v2pre:not(.v2) .login-card{ background:rgba(255,255,255,.05) !important; border:1px solid rgba(255,255,255,.1) !important; color:#E8EEF6; }
+body.v2pre:not(.v2) .login-card input, body.v2pre:not(.v2) .login-card select{ background:rgba(255,255,255,.06) !important; color:#fff !important; border:1px solid rgba(255,255,255,.14) !important; color-scheme:dark; }
+body.v2pre:not(.v2) .login-card .btn.brass{ background:linear-gradient(135deg,#34D399,#10B981) !important; color:#05261A !important; }
+body.v2pre:not(.v2) .login-card .btn.ghost{ background:rgba(255,255,255,.06); color:#fff; border-color:rgba(255,255,255,.2); }
+body.v2pre:not(.v2) .hint, body.v2pre:not(.v2) .subtitle{ color:#8EA2BC !important; }
+body.v2 #headerSubtitle{ color:#fff !important; opacity:1 !important; }
+body.v2 .card .collapsible-header{ background:transparent !important; border:none !important; backdrop-filter:none; padding:4px 2px; }
+body.v2 #headerActions .logout-link{ padding:6px 12px; border-radius:12px; width:auto; }
+body.v2 .punch-card-x .timer-row, body.v2 .punch-card-x .timer-row + *:has(.coin-spin){ display:none !important; }
+body.v2 .punch-card-x > p:first-of-type{ display:none; }
+.v2p-mock{ background:#0B1220 !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -2177,6 +2242,47 @@ function applyUiV2(on){
   };
   clearInterval(state._v2navT); state._v2navT = setInterval(() => { if(!document.body.classList.contains('v2')){ clearInterval(state._v2navT); return; } sync(); }, 1500); sync();
 }
+// ================= העיצוב החדש: שעון עגול גדול בראש המסך (מתעדכן כל שנייה) =================
+function v2HeroHtml(){
+  return `<div class="v2hero" id="v2hero">
+    <div class="v2h-ring"><svg viewBox="0 0 250 250"><defs><linearGradient id="v2gr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34D399"/><stop offset="1" stop-color="#0EA5E9"/></linearGradient></defs>
+      <circle cx="125" cy="125" r="108" class="v2h-track"/><circle cx="125" cy="125" r="108" class="v2h-prog" id="v2hProg" stroke-dasharray="678.6" stroke-dashoffset="678.6"/></svg>
+      <div class="v2h-c"><div class="v2h-l" id="v2hLbl">זמן עבודה היום</div><div class="v2h-t" id="v2hTime">0:00</div><div class="v2h-m" id="v2hMoney"></div></div></div>
+    <div class="v2h-st" id="v2hSt"></div></div>`;
+}
+function startV2Hero(emp, st, hoursData){
+  clearInterval(state._v2HeroT);
+  const goal = getDailyGoal(st, emp), fixed = emp.payType === 'fixed', rate = Number(emp.rate) || 0;
+  const sec = t => { const [h, m, s2] = String(t || '0:0:0').split(':').map(Number); return (h || 0) * 3600 + (m || 0) * 60 + (s2 || 0); };
+  const tick = () => {
+    const el = document.getElementById('v2hero'); if(!el){ clearInterval(state._v2HeroT); return; }
+    const today = (hoursData[currentMonthStr()] || []).filter(e => e && e.date === todayStr());
+    const n = ilNow(), nowS = n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds();
+    let worked = 0, open = null, onBrk = null;
+    today.forEach(e => {
+      if(!e.start) return;
+      const end = e.end ? sec(e.end) : nowS;
+      let w = Math.max(0, end - sec(e.start));
+      (e.breaks || []).forEach(b => { if(!b.start) return; const be = b.end ? sec(b.end) : nowS; w -= Math.max(0, be - sec(b.start)); if(!b.end && !e.end) onBrk = b; });
+      worked += Math.max(0, w); if(!e.end) open = e;
+    });
+    const h = Math.floor(worked / 3600), m = Math.floor(worked % 3600 / 60);
+    document.getElementById('v2hTime').textContent = h + ':' + String(m).padStart(2, '0');
+    const money = worked / 3600 * rate;
+    const mEl = document.getElementById('v2hMoney');
+    mEl.textContent = fixed ? (open ? 'ממשיכים 💪' : '') : '₪' + Math.round(money).toLocaleString('he-IL') + ' הרווחת';
+    mEl.hidden = !mEl.textContent;
+    const ratio = goal.type === 'hours' ? worked / 3600 / goal.value : money / goal.value;
+    document.getElementById('v2hProg').setAttribute('stroke-dashoffset', String(678.6 * (1 - Math.max(0, Math.min(1, ratio || 0)))));
+    const stEl = document.getElementById('v2hSt'); el.classList.toggle('brk', !!onBrk); el.classList.toggle('idle', !open);
+    stEl.innerHTML = onBrk ? `<span class="v2d brk"></span>בהפסקה מאז ${String(onBrk.start).slice(0, 5)}`
+      : open ? `<span class="v2d"></span>בעבודה מאז ${String(open.start).slice(0, 5)}`
+      : worked ? `✔ סיימת להיום · ${h}:${String(m).padStart(2, '0')} שעות` : 'עוד לא התחלת היום · לוחצים "התחלת יום עבודה"';
+    document.getElementById('v2hLbl').textContent = onBrk ? 'בהפסקה' : 'זמן עבודה היום';
+  };
+  tick(); state._v2HeroT = setInterval(tick, 1000);
+}
+
 // "פרסומת" חד-פעמית: מציגה לעובד שיש עיצוב חדש ומאפשרת לעבור אליו (או להישאר)
 async function maybeV2Promo(emp, st){
   if(!emp || emp.chatOnly || st.uiV2 || !state._justLoggedIn) return;
@@ -2186,13 +2292,13 @@ async function maybeV2Promo(emp, st){
   ov.innerHTML = `<div class="v2promo">
     <div class="v2p-badge">✨ חדש!</div>
     <h2>יש לנו עיצוב חדש</h2>
-    <p>מראה מודרני ונקי יותר – אפשר לעבור אליו עכשיו, ולחזור לעיצוב הרגיל בכל רגע.</p>
+    <p>מראה כהה ויוקרתי עם שעון עגול גדול – אפשר לעבור אליו עכשיו, ולחזור לעיצוב הרגיל בכל רגע.</p>
     <div class="v2p-mock">
       <div class="v2p-card"><div class="v2p-top"><span>בעבודה מאז 08:12</span><span class="v2p-pill">● בעבודה</span></div><div class="v2p-time">6:24</div><div class="v2p-btns"><span>☕ הפסקה</span><span class="g">■ סיום יום</span></div></div>
       <div class="v2p-row"><b>24</b><span>08:05 – 16:40</span><em>8:05</em></div>
       <div class="v2p-nav"><span class="on">🏠</span><span>💬</span><span>✔</span><span>⚙️</span></div>
     </div>
-    <ul><li>כרטיס נוכחות כהה ובולט</li><li>רישומי החודש ככרטיסים נוחים לטלפון</li><li>סרגל ניווט בתחתית המסך</li></ul>
+    <ul><li>שעון עגול שמתמלא לאורך היום</li><li>עיצוב כהה ונעים לעיניים</li><li>סרגל ניווט צף בתחתית המסך</li></ul>
     <button type="button" class="btn brass v2p-go">✨ לעבור לעיצוב החדש</button>
     <button type="button" class="btn ghost v2p-no">להישאר בעיצוב הרגיל</button>
     <div class="hint" style="font-size:12px; margin-top:8px;">אפשר לשנות בכל רגע: הגדרות ← עיצוב ותצוגה</div></div>`;
@@ -6228,6 +6334,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
   setHeader('שלום, ' + emp.name, (empSettings.hideMirror ? '' : '<span class="mirror-grp" style="display:inline-flex; gap:2px;"><button class="btn ghost small" id="mirrorBtn" title="מראה">🪞 מראה</button><button class="btn ghost small" id="hideMirrorBtn" title="הסתרת המראה" style="padding-inline:8px;">✕</button></span> ') + '<button class="btn ghost small" id="chatBtn">💬 צ׳אט<span id="chatBadge" class="tasks-badge"></span></button> <button class="btn ghost small" id="tasksBtn">✔ משימות<span id="tasksBadge" class="tasks-badge"></span></button> <button class="btn ghost small" id="settingsBtn">⚙️ הגדרות</button> <button class="logout-link" id="logoutBtn" title="התנתקות"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><polyline points="8 7 3 12 8 17"/><line x1="3" y1="12" x2="15" y2="12"/></svg>התנתקות</button>');
   setTimeout(() => maybeBirthdayGreeting(emp), 600);
   setTimeout(() => maybeV2Promo(emp, empSettings), 2200);
+  setTimeout(() => { if(empSettings.uiV2) startV2Hero(emp, empSettings, hoursData); }, 0);
   const month = state._empMonth || currentMonthStr();
 
   const passedFresh = useCache && typeof useCache === 'object' ? useCache : null;
@@ -6593,6 +6700,7 @@ async function renderEmployeeDashboard(emp, editingId, useCache){
     </div>`;
     })()}
 
+    ${empSettings.uiV2 ? v2HeroHtml() : ''}
     <div class="card punch-card-x">
       <h3>כרטיס נוכחות היום</h3>
       ${!openEntry ? `
