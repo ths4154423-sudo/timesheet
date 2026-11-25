@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="שעון נוכחות">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Heebo:wght@300;400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Heebo:wght@300;400;500;700&family=IBM+Plex+Mono:wght@500;600&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
 <style>
   :root{
     --paper: #EAF3FB;
@@ -1181,6 +1181,26 @@ body.wa-dark .wa-filters button{ background:#202C33; color:#AEBAC1; } body.wa-da
 .wa-k-ic{ width:24px; display:inline-flex; align-items:center; justify-content:center; color:#54656F; font-size:17px; }
 .wa-k-ic svg{ width:20px; height:20px; }
 body.wa-dark .wa-kmenu button{ color:#E9EDEF; } body.wa-dark .wa-k-ic{ color:#AEBAC1; }
+/* ---- אימוג׳י ומדבקות בעיצוב מקצועי (Noto Color Emoji, כמו באנדרואיד) ---- */
+.wa-text, .wa-bubble, .wa-c-prev, .wa-emoji, .wa-sticker, .wa-st-grid, .wa-inputwrap textarea, .wa-rx-show, .wa-menu-rx, .hu-body, .st-bigtxt, .st-al{ font-family:'Heebo', Arial, 'Noto Color Emoji', sans-serif; }
+.wa-emoji{ padding:0; overflow:hidden; border-radius:14px; box-shadow:0 10px 32px rgba(11,20,26,.22); }
+.wa-em-tabs{ gap:0; margin:0; border-bottom:1px solid #E9EDEF; }
+.wa-em-tabs button{ border-radius:0; background:none !important; padding:10px; font-weight:500; color:#667781 !important; border-bottom:3px solid transparent; }
+.wa-em-tabs button.on{ color:#008069 !important; border-bottom-color:#008069; font-weight:600; }
+.wa-em-grid{ grid-template-columns:repeat(auto-fill, minmax(38px, 1fr)); padding:8px; gap:2px; }
+.wa-em-grid button{ font-size:25px; height:40px; font-family:'Noto Color Emoji', sans-serif; transition:transform .12s, background .12s; }
+.wa-em-grid button:hover{ transform:scale(1.18); background:#F0F2F5; }
+.wa-st-grid{ grid-template-columns:repeat(auto-fill, minmax(136px, 1fr)); gap:8px; padding:10px; }
+.wa-st-grid button{ border:none !important; background:color-mix(in srgb, var(--stc) 9%, #fff) !important; border-radius:12px; padding:10px 8px; flex-direction:row; justify-content:flex-start; gap:8px; transition:background .15s, transform .12s; }
+.wa-st-grid button:hover{ background:color-mix(in srgb, var(--stc) 16%, #fff) !important; transform:translateY(-1px); }
+.wa-st-grid span{ font-size:22px; font-family:'Noto Color Emoji', sans-serif; width:34px; height:34px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+.wa-st-grid b{ font-size:13.5px; font-weight:600; font-family:'Heebo', Arial, sans-serif; white-space:nowrap; color:var(--stc) !important; }
+.wa-sticker{ transform:none; border:none; flex-direction:row; gap:10px; padding:10px 16px 10px 18px; border-radius:22px; background:linear-gradient(135deg, var(--stc), color-mix(in srgb, var(--stc) 72%, #000)); box-shadow:0 4px 14px color-mix(in srgb, var(--stc) 35%, transparent); }
+.wa-sticker span{ font-size:26px; font-family:'Noto Color Emoji', sans-serif; width:42px; height:42px; border-radius:50%; background:rgba(255,255,255,.95); display:flex; align-items:center; justify-content:center; }
+.wa-sticker b{ font-family:'Heebo', Arial, sans-serif; color:#fff !important; font-size:16px; font-weight:600; letter-spacing:.2px; }
+body.wa-dark .wa-em-tabs{ border-color:#2A3942; } body.wa-dark .wa-em-tabs button.on{ color:#00A884 !important; border-bottom-color:#00A884; }
+body.wa-dark .wa-st-grid button{ background:color-mix(in srgb, var(--stc) 22%, #1F2C33) !important; } body.wa-dark .wa-st-grid b{ color:#E9EDEF !important; }
+body.wa-dark .wa-sticker{ background:linear-gradient(135deg, var(--stc), color-mix(in srgb, var(--stc) 72%, #000)); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -10242,9 +10262,9 @@ function openImageEditor(file, onDone){
 try{ state._voiceRate = Number(localStorage.getItem('voiceRate')) || 1; }catch(e){}
 const CHAT_EMOJI = '😀 😃 😄 😁 😊 🙂 😉 😍 🥰 😘 😋 😎 🤩 🥳 😇 🤗 🤔 🤨 😐 😶 🙄 😏 😮 😲 😴 😌 😕 😟 😢 😭 😤 😩 🤯 😳 🥺 🙏 👍 👎 👌 ✌️ 🤞 👏 🙌 💪 🤝 👋 ✋ 👀 ❤️ 🧡 💛 💚 💙 💜 🤍 💯 ✅ ✔️ ❌ ⚠️ ❓ ❗ ⭐ 🌟 ✨ 🔥 🎉 🎊 🎁 🏆 🥇 📌 📎 📞 📱 💻 🖨️ 📄 📝 📅 ⏰ ⏳ 🕐 🚗 🚚 🏢 🏠 ☕ 🍰 🌞 🌙 ☔ 💡 🔧 🛠️ 📦 💰 🛒'.split(' ');
 const CHAT_STICKERS = [
-  { e: '✅', t: 'קיבלתי', c: '#16A34A' }, { e: '✔️', t: 'בוצע', c: '#00A884' }, { e: '🚗', t: 'בדרך', c: '#2F7BE0' }, { e: '⏳', t: 'עוד רגע', c: '#64748B' },
-  { e: '🙏', t: 'תודה רבה', c: '#7A55D1' }, { e: '👍', t: 'מעולה', c: '#F59E0B' }, { e: '📞', t: 'תתקשר אליי', c: '#0EA5E9' }, { e: '☕', t: 'בהפסקה', c: '#92400E' },
-  { e: '🤝', t: 'מסכים', c: '#0D9488' }, { e: '❓', t: 'יש שאלה', c: '#9333EA' }, { e: '🌞', t: 'בוקר טוב', c: '#EAB308' }, { e: '🏁', t: 'סיימתי להיום', c: '#DC2626' }
+  { e: '✅', t: 'קיבלתי', c: '#128C7E' }, { e: '✔️', t: 'בוצע', c: '#0F766E' }, { e: '🚗', t: 'בדרך', c: '#1D4ED8' }, { e: '⏳', t: 'עוד רגע', c: '#475569' },
+  { e: '🙏', t: 'תודה רבה', c: '#6D28D9' }, { e: '👍', t: 'מעולה', c: '#B45309' }, { e: '📞', t: 'תתקשר אליי', c: '#0369A1' }, { e: '☕', t: 'בהפסקה', c: '#78350F' },
+  { e: '🤝', t: 'מסכים', c: '#115E59' }, { e: '❓', t: 'יש שאלה', c: '#7E22CE' }, { e: '☀️', t: 'בוקר טוב', c: '#A16207' }, { e: '🏁', t: 'סיימתי להיום', c: '#B91C1C' }
 ];
 function presenceText(ms, off){
   const now = trueNow().getTime(), diff = now - ms;
