@@ -1163,6 +1163,17 @@ body.wa-dark .wa-lpbar{ background:#202C33; } body.wa-dark .wa-lpb-main, body.wa
 .sound-pop{ max-height:80vh; overflow-y:auto; }
 body.wa-themed:not(.wa-dark) .wa-filters button.on{ background:var(--wa-out); color:var(--wa-head); }
 body.wa-dark .wa-filters button{ background:#202C33; color:#AEBAC1; } body.wa-dark .wa-filters button.on{ background:#0A332C; color:#00A884; }
+.task-att-share{ margin-inline-start:6px !important; }
+.ss-ov{ position:fixed; inset:0; z-index:10010; background:#000; display:flex; flex-direction:column; color:#fff; }
+.ss-bar{ display:flex; align-items:center; gap:8px; padding:10px 12px; }
+.ss-bar button{ border:none; background:rgba(255,255,255,.12); color:#fff; width:42px; height:42px; border-radius:50%; font-size:18px; cursor:pointer; }
+.ss-n{ font-size:14px; opacity:.8; }
+.ss-stage{ flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
+.ss-stage img{ max-width:100%; max-height:100%; object-fit:contain; opacity:0; }
+.ss-stage img.in{ animation:ssIn .7s ease forwards; }
+@keyframes ssIn{ from{ opacity:0; transform:scale(1.04); } to{ opacity:1; transform:none; } }
+.ss-load{ position:absolute; font-size:14px; opacity:.7; } .ss-load[hidden]{ display:none; }
+.ss-prog{ height:3px; background:rgba(255,255,255,.2); } .ss-prog i{ display:block; height:100%; width:0; background:#00A884; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -7814,11 +7825,28 @@ async function renderAdminTasks(soft){
 // קובץ או תמונה שהמנהל צירף למשימה
 function taskAttachHtml(t){
   const a = t && t.attach; if(!a) return '';
-  return /^image\//.test(a.fileType || '') ? `<img class="task-att-img" data-att-img="${a.fileId}" alt="" title="${escapeHtml(a.fileName || '')}" />`
-    : `<button type="button" class="btn ghost small" data-att-file="${a.fileId}" data-att-name="${escapeHtml(a.fileName || 'קובץ')}">📎 ${escapeHtml((a.fileName || 'קובץ').slice(0, 20))}</button>`;
+  const share = `<button type="button" class="btn ghost small task-att-share" data-att-share="${a.fileId}" data-att-name="${escapeHtml(a.fileName || 'קובץ')}" data-att-type="${escapeHtml(a.fileType || '')}" title="שיתוף בצ׳אט">↪ לצ׳אט</button>`;
+  return (/^image\//.test(a.fileType || '') ? `<img class="task-att-img" data-att-img="${a.fileId}" alt="" title="${escapeHtml(a.fileName || '')}" />`
+    : `<button type="button" class="btn ghost small" data-att-file="${a.fileId}" data-att-name="${escapeHtml(a.fileName || 'קובץ')}">📎 ${escapeHtml((a.fileName || 'קובץ').slice(0, 20))}</button>`) + share;
+}
+// שיתוף קובץ (למשל קובץ מצורף של משימה) לשיחה אחת או יותר בצ׳אט
+async function shareFileToChat(att){
+  const role = state.currentEmployee ? 'emp' : 'mgr', me = chatMe(role);
+  const contacts = (await chatContacts(role)).filter(c => c.id !== me), groups = await myChatGroups(me);
+  const pick = await chatPickMembers([...contacts.map(c => ({ id: c.id, name: c.name })), ...groups.map(g => ({ id: g.id, name: '👥 ' + (g.name || 'קבוצה') }))], [], false, 'שיתוף בצ׳אט אל...');
+  if(!pick || !pick.ids.length) return;
+  for(const target of pick.ids){
+    const cid = chatIdWith(me, target), fresh = await loadChat(cid) || { msgs: [] };
+    const nm = { id: uid(), from: me, at: todayStr() + 'T' + nowTimeStr(), seenBy: [], fileId: att.fileId, fileName: att.fileName, fileType: att.fileType || '', text: '📋 קובץ ממשימה' };
+    const extra = /^g_/.test(cid) || cid === 'team' ? {} : { members: [me, target] };
+    const ok = await saveDoc(() => setDoc(doc(db, 'chats', cid), { msgs: [...(fresh.msgs || []), nm].slice(-CHAT_MAX), ...extra }, { merge: true }), 'shareToChat');
+    if(ok === true) pushNotify({ kind: 'chat', chatId: cid, msgId: nm.id });
+  }
+  showToast(pick.ids.length > 1 ? 'הקובץ שותף ב-' + pick.ids.length + ' שיחות' : 'הקובץ שותף בצ׳אט');
 }
 function bindTaskAttachments(root){
   root.querySelectorAll('[data-att-img]').forEach(async img => { const f = await loadTaskFile(img.dataset.attImg); if(f){ img.src = f.data; img.onclick = ev => { ev.stopPropagation(); openLightbox(f.data, f.name); }; } });
+  root.querySelectorAll('[data-att-share]').forEach(b => b.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); shareFileToChat({ fileId: b.dataset.attShare, fileName: b.dataset.attName, fileType: b.dataset.attType }); });
   root.querySelectorAll('[data-att-file]').forEach(b => b.onclick = async ev => { ev.preventDefault(); ev.stopPropagation(); const f = await loadTaskFile(b.dataset.attFile); if(!f) return showToast('לא הצלחנו לטעון את הקובץ'); openChatFile(f, b.dataset.attName); });
 }
 // סיכום חודשי של המשימות לכל עובד: כמה קיבל, כמה ביצע
@@ -8603,7 +8631,7 @@ function chatBubblesHtml(ch, me, isGroup, members){
         <span class="wa-loc-btns"><a href="https://waze.com/ul?ll=${m.loc.lat},${m.loc.lng}&navigate=yes" target="_blank" rel="noopener">🚗 Waze</a><a href="https://www.google.com/maps?q=${m.loc.lat},${m.loc.lng}" target="_blank" rel="noopener">🗺️ גוגל מפות</a></span></div></div>` : ''}
       ${m.text ? `<div class="wa-text">${m.call && !mine && /לא נענתה/.test(m.text) ? '<span style="color:#E53935;">📞 שיחה שלא נענתה מ' + escapeHtml(state._chatNames[m.from] || '') + '</span>' : linkify(m.text)}</div>` : ''}
       ${m.lp && m.lp.title ? `<a class="wa-lp" href="${escapeHtml(m.lp.url)}" target="_blank" rel="noopener">${m.lp.img ? `<img src="${escapeHtml(m.lp.img)}" alt="" loading="lazy" onerror="this.remove()" />` : ''}<span class="wa-lp-t">${escapeHtml(m.lp.title)}</span>${m.lp.desc ? `<span class="wa-lp-d">${escapeHtml(m.lp.desc)}</span>` : ''}<span class="wa-lp-h" dir="ltr">${escapeHtml((m.lp.url.match(/^https?:\/\/([^/]+)/) || [])[1] || '')}</span></a>` : ''}
-      ${m.ack ? (mine ? `<button type="button" class="wa-ack-who" data-ack-who="${m.id}">✔ אישרו ${ackN} מתוך ${ackOthers.length}</button>` : me === '__viewer__' ? '' : (m.acks || {})[me] ? '<div class="wa-ack-done">✔ אישרת קריאה</div>' : `<button type="button" class="wa-ack-btn" data-ack="${m.id}">קראתי ✔</button>`) : ''}
+      ${m.ack ? (mine ? `<button type="button" class="wa-ack-who" data-ack-who="${m.id}">✔ אישרו ${ackN} מתוך ${ackOthers.length}${m.ackReminded && ackN < ackOthers.length ? ' · 🔔 נשלחה תזכורת' : ''}</button>` : me === '__viewer__' ? '' : (m.acks || {})[me] ? '<div class="wa-ack-done">✔ אישרת קריאה</div>' : `<button type="button" class="wa-ack-btn" data-ack="${m.id}">קראתי ✔</button>`) : ''}
       <span class="wa-time">${m.scheduled ? '<i class="wa-edited">⏰</i>' : ''}${m.edited ? '<i class="wa-edited">נערכה</i>' : ''}${chatTime(m.at)}${mine ? ` <span class="wa-ticks${seenAll ? ' seen' : ''}">${WAI.ticks}</span>` : ''}</span>
     </div>${reactHtml}</div>`;
   }).join('');
@@ -8831,6 +8859,7 @@ async function renderChatRoom(role, otherId){
     if(m){ document.getElementById('chatReplyWho').textContent = m.from === me ? 'אתה' : (state._chatNames[m.from] || ''); document.getElementById('chatReplySnip').textContent = replyTo.snip; input.focus(); }
   };
   document.getElementById('chatReplyX').onclick = () => setReply(null);
+  if(state._pendingReply){ const pr = state._pendingReply; state._pendingReply = null; replyTo = pr; const bar = document.getElementById('chatReplyBar'); bar.hidden = false; document.getElementById('chatReplyWho').textContent = state._chatNames[pr.from] || ''; document.getElementById('chatReplySnip').textContent = pr.snip; setTimeout(() => input.focus(), 100); }
   const saveMsgs = async (mutate, label) => {
     const fresh = await loadChat(id); if(!fresh) return showToast('שגיאה בטעינה');
     if(mutate(fresh.msgs || []) === false) return;
@@ -8858,6 +8887,7 @@ async function renderChatRoom(role, otherId){
     pop.innerHTML = `<div class="wa-menu-rx">${['👍', '❤️', '😂', '😮', '🙏', '👏'].map(e => `<button type="button" data-rx="${e}"${(m.reactions || {})[me] === e ? ' class="on"' : ''}>${e}</button>`).join('')}</div>`
       + (onlyReacts ? '' : `<div class="wa-menu-list">
         <button type="button" data-act="reply">↩&nbsp; השב</button>
+        ${isGroup && m.from !== me ? '<button type="button" data-act="privreply">💬&nbsp; השב בפרטי</button>' : ''}
         <button type="button" data-act="sel">☑&nbsp; בחירה</button>
         <button type="button" data-act="remind">⏰&nbsp; תזכיר לי</button>
         ${m.from === me && m.text && !m.call ? '<button type="button" data-act="edit">✏️&nbsp; עריכה</button>' : ''}
@@ -8879,6 +8909,7 @@ async function renderChatRoom(role, otherId){
       const act = x.dataset.act;
       if(act === 'reply') setReply(m);
       else if(act === 'sel') startSel(m.id);
+      else if(act === 'privreply'){ state._pendingReply = { id: m.id, from: m.from, snip: '(מ' + name + ') ' + snipOf(m) }; renderChatRoom(role, m.from); }
       else if(act === 'remind') remindMsg(role, id, m);
       else if(act === 'edit'){ setReply(null); editing = m.id; input.value = m.text; input.focus(); input.dispatchEvent(new Event('input')); stEl.textContent = '✏️ עורכים הודעה · Esc לביטול'; }
       else if(act === 'pin'){
@@ -9398,7 +9429,7 @@ async function renderChatRoom(role, otherId){
     const ov = document.createElement('div'); ov.className = 'wa-media';
     ov.innerHTML = `<div class="wa-room-head"><button type="button" class="wa-back" data-md-x aria-label="חזרה">${WAI.back}</button><b style="flex:1;">מדיה, קבצים וקישורים</b><button type="button" class="wa-back" data-exp="txt" title="ייצוא השיחה לקובץ טקסט" style="font-size:13px; width:auto; padding:0 10px; border-radius:16px;">⬇ טקסט</button><button type="button" class="wa-back" data-exp="pdf" title="הדפסה / שמירה כ-PDF" style="font-size:13px; width:auto; padding:0 10px; border-radius:16px;">🖨 PDF</button></div>
       <div class="wa-md-tabs"><button type="button" data-md-tab="i" class="on">תמונות (${imgs.length})</button><button type="button" data-md-tab="d">קבצים (${docs.length})</button><button type="button" data-md-tab="l">קישורים (${links.length})</button></div>
-      <div class="wa-md-body" data-md-pane="i">${imgs.length ? `<div class="wa-md-grid">${imgs.slice(0, 120).map((x, k) => `<button type="button" class="wa-md-cell" data-md-img="${k}"><img alt="" data-md-src="${x.fileId}" /></button>`).join('')}</div>` : '<p class="hint" style="text-align:center;">אין תמונות בשיחה</p>'}</div>
+      <div class="wa-md-body" data-md-pane="i">${imgs.length > 1 ? '<button type="button" class="btn brass small" data-md-show style="margin:0 0 8px;">▶ מצגת</button>' : ''}${imgs.length ? `<div class="wa-md-grid">${imgs.slice(0, 120).map((x, k) => `<button type="button" class="wa-md-cell" data-md-img="${k}"><img alt="" data-md-src="${x.fileId}" /></button>`).join('')}</div>` : '<p class="hint" style="text-align:center;">אין תמונות בשיחה</p>'}</div>
       <div class="wa-md-body" data-md-pane="d" hidden>${docs.length ? docs.map((x, k) => `<button type="button" class="wa-md-row" data-md-doc="${k}"><span>${x.audioId ? '🎙' : /^video\//.test(x.fileType || '') ? '🎬' : /^audio\//.test(x.fileType || '') ? '🎵' : '📄'}</span><b>${escapeHtml(x.fileName || 'קובץ')}</b><small>${fmt(x.at)}</small></button>`).join('') : '<p class="hint" style="text-align:center;">אין קבצים בשיחה</p>'}</div>
       <div class="wa-md-body" data-md-pane="l" hidden>${links.length ? links.map(x => `<a class="wa-md-row" href="${escapeHtml(/^https?:/.test(x.u) ? x.u : 'https://' + x.u)}" target="_blank" rel="noopener"><span>🔗</span><b dir="ltr">${escapeHtml(x.u)}</b><small>${fmt(x.at)}</small></a>`).join('') : '<p class="hint" style="text-align:center;">אין קישורים בשיחה</p>'}</div>`;
     document.body.appendChild(ov);
@@ -9407,6 +9438,7 @@ async function renderChatRoom(role, otherId){
     ov.querySelectorAll('[data-md-tab]').forEach(b => b.onclick = () => { ov.querySelectorAll('[data-md-tab]').forEach(x => x.classList.toggle('on', x === b)); ov.querySelectorAll('[data-md-pane]').forEach(p2 => p2.hidden = p2.dataset.mdPane !== b.dataset.mdTab); });
     ov.querySelectorAll('[data-md-src]').forEach(async img => { const f = await loadTaskFile(img.dataset.mdSrc); if(f) img.src = f.data; });
     const ids = imgs.map(x => x.fileId);
+    const shw = ov.querySelector('[data-md-show]'); if(shw) shw.onclick = () => slideShow(ids.slice().reverse());
     ov.querySelectorAll('[data-md-img]').forEach(b => b.onclick = async () => { const k = +b.dataset.mdImg; const f = await loadTaskFile(ids[k]); if(f) openLightbox(f.data, f.name, { ids, idx: k }); });
     ov.querySelectorAll('[data-md-doc]').forEach(b => b.onclick = async () => {
       const x = docs[+b.dataset.mdDoc];
@@ -10074,6 +10106,38 @@ function headsUp(who, where, body, onOpen, onReply){
   let sy = null;
   el.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
   el.addEventListener('touchmove', e => { if(sy !== null && e.touches[0].clientY - sy < -25){ sy = null; clearTimeout(t); hide(); } }, { passive: true });
+}
+
+// ================= מצגת תמונות: כל תמונה 3.5 שניות, עם עצירה, הקודמת/הבאה =================
+function slideShow(ids){
+  if(!ids.length) return;
+  let i = 0, playing = true, t = null;
+  const ov = document.createElement('div'); ov.className = 'ss-ov';
+  ov.innerHTML = `<div class="ss-bar"><button type="button" data-ss="x" aria-label="סגירה">✕</button><span class="ss-n"></span><span style="flex:1"></span><button type="button" data-ss="prev" aria-label="הקודמת">⟩</button><button type="button" data-ss="play" aria-label="עצירה">⏸</button><button type="button" data-ss="next" aria-label="הבאה">⟨</button></div><div class="ss-stage"><img alt="" /><div class="ss-load">טוען...</div></div><div class="ss-prog"><i></i></div>`;
+  document.body.appendChild(ov);
+  const img = ov.querySelector('img'), prog = ov.querySelector('.ss-prog i'), ld = ov.querySelector('.ss-load');
+  const cache = {};
+  const load = async k => { const id = ids[(k + ids.length) % ids.length]; if(!cache[id]){ const f = await loadTaskFile(id); cache[id] = f ? f.data : ''; } return cache[id]; };
+  const show = async () => {
+    clearTimeout(t); ld.hidden = false;
+    const src = await load(i); if(!document.body.contains(ov)) return;
+    img.classList.remove('in'); void img.offsetWidth; img.src = src; img.classList.add('in'); ld.hidden = true;
+    ov.querySelector('.ss-n').textContent = (i + 1) + ' מתוך ' + ids.length;
+    load(i + 1);
+    prog.style.transition = 'none'; prog.style.width = '0'; void prog.offsetWidth;
+    if(playing){ prog.style.transition = 'width 3.5s linear'; prog.style.width = '100%'; t = setTimeout(() => { i = (i + 1) % ids.length; show(); }, 3500); }
+  };
+  const close = () => { clearTimeout(t); document.removeEventListener('keydown', key); ov.remove(); };
+  const key = e => { if(e.key === 'Escape') close(); if(e.key === 'ArrowLeft'){ i = (i + 1) % ids.length; show(); } if(e.key === 'ArrowRight'){ i = (i - 1 + ids.length) % ids.length; show(); } if(e.key === ' '){ e.preventDefault(); ov.querySelector('[data-ss=play]').click(); } };
+  document.addEventListener('keydown', key);
+  ov.querySelectorAll('[data-ss]').forEach(b => b.onclick = () => {
+    const a = b.dataset.ss;
+    if(a === 'x') close();
+    else if(a === 'next'){ i = (i + 1) % ids.length; show(); }
+    else if(a === 'prev'){ i = (i - 1 + ids.length) % ids.length; show(); }
+    else { playing = !playing; b.textContent = playing ? '⏸' : '▶'; show(); }
+  });
+  show();
 }
 
 // ================= עריכת תמונה לפני שליחה: סיבוב, חיתוך, ציור =================
