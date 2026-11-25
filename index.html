@@ -9391,14 +9391,15 @@ async function renderChatRoom(role, otherId){
   applyRoomWall(roomEl, id);
   // כל כפתורי הכותרת עוברים לתפריט ☰ (הכפתורים המקוריים נשארים מוסתרים, והתפריט לוחץ עליהם)
   { const head = roomEl.querySelector('.wa-room-head');
-    const keep = ['chatRoomBack'];
+    const keep = ['chatRoomBack', 'chatCall', 'chatVideo'];
     const src = document.createElement('div'); src.className = 'wa-hsrc'; src.hidden = true;
     [...head.children].filter(el => el.classList.contains('wa-back') && !keep.includes(el.id)).forEach(el => src.appendChild(el));
     head.appendChild(src);
     const kb = document.createElement('button'); kb.type = 'button'; kb.className = 'wa-back'; kb.id = 'chatKebab'; kb.title = 'תפריט'; kb.setAttribute('aria-label', 'תפריט');
     kb.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>';
     head.appendChild(kb);
-    const ORDER = ['chatCall', 'chatVideo', 'chatTel', 'chatSearchBtn', 'chatMediaBtn', 'chatMuteBtn', 'chatWallBtn', 'chatGroupInfo', 'chatAddMembers', 'chatClear'];
+    ['chatVideo', 'chatCall'].forEach(k => { const el = document.getElementById(k); if(el) head.insertBefore(el, kb); });
+    const ORDER = ['chatTel', 'chatSearchBtn', 'chatMediaBtn', 'chatMuteBtn', 'chatWallBtn', 'chatGroupInfo', 'chatAddMembers', 'chatClear'];
     const LABEL = { chatCall: 'שיחה קולית', chatVideo: 'שיחת וידאו', chatTel: 'התקשרות לטלפון', chatSearchBtn: 'חיפוש בשיחה', chatMediaBtn: 'מדיה, קבצים וקישורים', chatWallBtn: 'תמונת רקע לשיחה', chatGroupInfo: 'פרטי הקבוצה', chatAddMembers: 'הוספת משתתפים', chatClear: 'ניקוי הצ׳אט' };
     kb.onclick = ev => {
       ev.stopPropagation();
