@@ -1401,6 +1401,32 @@ body.v2 #headerActions .logout-link{ padding:6px 12px; border-radius:12px; width
 body.v2 .punch-card-x .timer-row, body.v2 .punch-card-x .timer-row + *:has(.coin-spin){ display:none !important; }
 body.v2 .punch-card-x > p:first-of-type{ display:none; }
 .v2p-mock{ background:#0B1220 !important; }
+/* העיצוב החדש – כמו בתמונה: כפתורים גדולים מתחת לשעון, יעד, 3 נתונים, ימים אחרונים */
+body.v2 #app > .avatar-row, body.v2 #app > .readout, body.v2 #app > #goalCard, body.v2 #app > .top-actions .subtitle{ display:none !important; }
+body.v2 .punch-card-x:not(.v2show){ display:none !important; }
+body.v2 #app > .top-actions{ order:1; justify-content:center; }
+.v2acts{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:18px 0 6px; }
+.v2b1{ height:58px; border-radius:18px; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06); color:#fff; font:inherit; font-size:16px; font-weight:700; cursor:pointer; }
+.v2b2{ height:58px; border-radius:18px; border:none; background:linear-gradient(135deg,#34D399,#10B981); color:#05261A; font:inherit; font-size:16px; font-weight:800; box-shadow:0 8px 24px rgba(16,185,129,.35); cursor:pointer; }
+.v2b2.wide{ grid-column:1 / -1; height:62px; font-size:17.5px; }
+.v2b2.brk{ background:linear-gradient(135deg,#FCD34D,#F59E0B); color:#3A2600; box-shadow:0 8px 24px rgba(245,158,11,.35); }
+.v2more{ display:block; margin:2px auto 14px; border:none; background:none; color:#7F93AD; font:inherit; font-size:13px; cursor:pointer; text-decoration:underline; }
+.v2goal, .v2recent{ text-align:right; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.09); border-radius:22px; padding:16px; margin-bottom:12px; }
+.v2recent:empty{ display:none; }
+.v2row{ display:flex; justify-content:space-between; align-items:center; }
+.v2lbl{ color:#7F93AD; font-size:12.5px; } .v2big{ font-size:24px; font-weight:800; color:#fff; }
+.v2bar{ height:8px; border-radius:9px; background:rgba(255,255,255,.08); margin-top:10px; overflow:hidden; } .v2bar i{ display:block; height:100%; background:linear-gradient(90deg,#F59E0B,#FCD34D); border-radius:9px; transition:width .6s; }
+.v2k3{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px; text-align:right; }
+.v2k3 div{ background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:12px 10px; }
+.v2k3 b{ display:block; font-size:18px; color:#fff; font-family:'Heebo',sans-serif !important; letter-spacing:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.v2day{ display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid rgba(255,255,255,.06); } .v2day:last-child{ border:none; }
+.v2dd{ width:42px; height:42px; border-radius:12px; background:rgba(255,255,255,.06); display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; }
+.v2day span{ flex:1; color:#9FB2C8; font-size:13px; direction:ltr; text-align:right; } .v2day b{ font-size:15px; color:#fff; }
+body.v2 .topbar .header-logo{ width:44px; height:44px; border-radius:14px; }
+body.v2 #headerActions{ gap:6px; }
+body.v2 #headerActions .mirror-grp .btn, body.v2 #headerActions .logout-link{ font-size:12.5px; padding:5px 10px; }
+body.v2 #headerActions{ display:flex !important; flex-wrap:wrap; gap:6px; justify-content:flex-end; align-items:center; max-width:220px; }
+body.v2 #headerActions > *{ flex:0 0 auto !important; width:auto !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -2248,7 +2274,12 @@ function v2HeroHtml(){
     <div class="v2h-ring"><svg viewBox="0 0 250 250"><defs><linearGradient id="v2gr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34D399"/><stop offset="1" stop-color="#0EA5E9"/></linearGradient></defs>
       <circle cx="125" cy="125" r="108" class="v2h-track"/><circle cx="125" cy="125" r="108" class="v2h-prog" id="v2hProg" stroke-dasharray="678.6" stroke-dashoffset="678.6"/></svg>
       <div class="v2h-c"><div class="v2h-l" id="v2hLbl">זמן עבודה היום</div><div class="v2h-t" id="v2hTime">0:00</div><div class="v2h-m" id="v2hMoney"></div></div></div>
-    <div class="v2h-st" id="v2hSt"></div></div>`;
+    <div class="v2h-st" id="v2hSt"></div>
+    <div class="v2acts" id="v2acts"></div>
+    <button type="button" class="v2more" id="v2more">⋯ אפשרויות נוספות (שעת סיום, השהיה, תיקון)</button>
+    <div class="v2goal" id="v2goal"></div>
+    <div class="v2k3" id="v2k3"></div>
+    <div class="v2recent" id="v2recent"></div></div>`;
 }
 function startV2Hero(emp, st, hoursData){
   clearInterval(state._v2HeroT);
@@ -2266,6 +2297,7 @@ function startV2Hero(emp, st, hoursData){
       (e.breaks || []).forEach(b => { if(!b.start) return; const be = b.end ? sec(b.end) : nowS; w -= Math.max(0, be - sec(b.start)); if(!b.end && !e.end) onBrk = b; });
       worked += Math.max(0, w); if(!e.end) open = e;
     });
+    state._v2worked = worked;
     const h = Math.floor(worked / 3600), m = Math.floor(worked % 3600 / 60);
     document.getElementById('v2hTime').textContent = h + ':' + String(m).padStart(2, '0');
     const money = worked / 3600 * rate;
@@ -2280,7 +2312,38 @@ function startV2Hero(emp, st, hoursData){
       : worked ? `✔ סיימת להיום · ${h}:${String(m).padStart(2, '0')} שעות` : 'עוד לא התחלת היום · לוחצים "התחלת יום עבודה"';
     document.getElementById('v2hLbl').textContent = onBrk ? 'בהפסקה' : 'זמן עבודה היום';
   };
-  tick(); state._v2HeroT = setInterval(tick, 1000);
+  // כפתורים גדולים שמפעילים את הכפתורים המקוריים (כך כל ההיגיון הקיים נשמר)
+  let actKey = '';
+  const paintActs = (open, onBrk) => {
+    const key = onBrk ? 'brk' : open ? 'work' : 'idle'; if(key === actKey) return; actKey = key;
+    const box = document.getElementById('v2acts'); if(!box) return;
+    const click = sel => { const el = document.querySelector(sel); if(!el) return showToast('הפעולה לא זמינה כרגע'); if(el.tagName === 'FORM'){ if(el.requestSubmit) el.requestSubmit(); else el.querySelector('button[type=submit]').click(); } else el.click(); };
+    box.innerHTML = key === 'idle' ? `<button type="button" class="v2b2 wide" data-a="#clockInForm">▶ התחלת יום עבודה</button>`
+      : key === 'brk' ? `<button type="button" class="v2b2 wide brk" data-a="#endBreakBtn">▶ סיום הפסקה</button>`
+      : `<button type="button" class="v2b1" data-a="#startBreakBtn">☕ הפסקה</button><button type="button" class="v2b2" data-a="#clockOutForm">■ סיום יום</button>`;
+    box.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { if(b.dataset.a === '#clockOutForm'){ const t = document.getElementById('clockOutTime'); if(t) t.value = nowTimeStr(); } click(b.dataset.a); });
+  };
+  const more = document.getElementById('v2more');
+  if(more) more.onclick = () => { const pc = document.querySelector('.punch-card-x'); if(!pc) return; const on = pc.classList.toggle('v2show'); more.textContent = on ? '▲ הסתרת האפשרויות' : '⋯ אפשרויות נוספות (שעת סיום, השהיה, תיקון)'; if(on) pc.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
+  // יעד, 3 נתונים וימים אחרונים
+  const paintInfo = (worked) => {
+    const fmtH = x => { const hh = Math.floor(x), mm = Math.round((x - hh) * 60); return hh + ':' + String(mm === 60 ? 0 : mm).padStart(2, '0'); };
+    const money = worked / 3600 * rate, val = goal.type === 'hours' ? worked / 3600 : money, pct = Math.min(100, Math.round(val / goal.value * 100) || 0);
+    const g = document.getElementById('v2goal');
+    if(g) g.innerHTML = `<div class="v2row"><span class="v2lbl">🎯 יעד יומי</span><span class="v2lbl">${pct}%</span></div><div class="v2row"><span class="v2big">${goal.type === 'hours' ? fmtH(val) : '₪' + Math.round(val).toLocaleString('he-IL')}</span><span class="v2lbl">מתוך ${goal.type === 'hours' ? goal.value + ' שעות' : '₪' + goal.value}</span></div><div class="v2bar"><i style="width:${pct}%"></i></div>`;
+    const mon = state._empMonth || currentMonthStr(), list = (hoursData[mon] || []).filter(e => e && e.start);
+    const days = new Set(list.map(e => e.date)).size;
+    const pay = (document.getElementById('readoutPay') || {}).textContent || '', hrs = (document.getElementById('readoutHours') || {}).textContent || '';
+    const k = document.getElementById('v2k3');
+    if(k) k.innerHTML = `<div><span class="v2lbl">${mon === currentMonthStr() ? 'החודש' : monthLabel(mon)}</span><b>${pay}</b></div><div><span class="v2lbl">שעות</span><b>${hrs}</b></div><div><span class="v2lbl">ימים</span><b>${days}</b></div>`;
+    const done = list.filter(e => e.end).sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start)).slice(0, 3);
+    const r = document.getElementById('v2recent');
+    if(r) r.innerHTML = done.length ? `<div class="v2lbl" style="margin-bottom:4px">ימים אחרונים</div>${done.map(e => { const hh = computeEntryHours(e); return `<div class="v2day"><div class="v2dd">${Number(e.date.slice(8, 10))}</div><span>${hhmm(e.start)} – ${hhmm(e.end)}</span><b>${hh !== null ? fmtHours(hh) : ''}</b></div>`; }).join('')}` : '';
+  };
+  let infoT = 0;
+  const tick2 = () => { tick(); const el = document.getElementById('v2hero'); if(!el) return; const open = el.classList.contains('idle') ? null : 1; paintActs(open, el.classList.contains('brk')); if(Date.now() - infoT > 15000){ infoT = Date.now(); paintInfo(state._v2worked || 0); } };
+  tick2(); state._v2HeroT = setInterval(tick2, 1000);
+  setTimeout(() => paintInfo(state._v2worked || 0), 400);
 }
 
 // "פרסומת" חד-פעמית: מציגה לעובד שיש עיצוב חדש ומאפשרת לעבור אליו (או להישאר)
