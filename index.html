@@ -1294,6 +1294,48 @@ body.v2 .collapsible-header{ border-radius:20px; }
 .v2p-nav{ background:#fff; border-radius:12px; display:flex; justify-content:space-around; padding:6px; font-size:16px; } .v2p-nav .on{ border-bottom:2px solid #3D9A6C; }
 body.v2 #app:has(> .punch-card-x){ display:flex; flex-direction:column; }
 body.v2 #app > .punch-card-x{ order:-1; margin-top:4px; }
+/* ================= העיצוב החדש – שאר המסכים ================= */
+body.v2 .topbar, body.v2pre .topbar{ background:var(--surface); border:1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius:20px; padding:12px 14px; margin:4px 0 14px; box-shadow:0 4px 16px rgba(18,41,63,.06); border-bottom:1px solid color-mix(in srgb, var(--line) 70%, transparent) !important; align-items:center; }
+body.v2 .topbar .header-logo, body.v2pre .topbar .header-logo{ border-radius:10px; }
+body.v2 #headerSubtitle{ font-weight:700; font-size:16px; opacity:1; }
+body.v2 #headerActions .btn.ghost, body.v2 #headerActions .logout-link{ border-radius:12px; }
+/* שדות */
+body.v2 input:not([type=checkbox]):not([type=radio]):not([type=color]), body.v2 select, body.v2 textarea, body.v2pre .login-card input, body.v2pre .login-card select{ background:var(--surface) !important; border:1.5px solid color-mix(in srgb, var(--line) 85%, transparent) !important; border-radius:12px !important; min-height:46px; }
+body.v2 textarea{ min-height:0; }
+body.v2 input:focus, body.v2 select:focus, body.v2 textarea:focus{ outline:none; border-color:var(--brass-dark) !important; box-shadow:0 0 0 3px color-mix(in srgb, var(--brass) 25%, transparent); }
+body.v2 .field label, body.v2 label{ font-weight:600; }
+body.v2 .btn.ghost{ border-radius:12px; border-width:1.5px; }
+body.v2 .btn.ghost.small{ border-radius:10px; }
+body.v2 .btn.danger{ border-radius:12px; }
+/* מעבר חודש וגרפים */
+body.v2 input[type=month]{ font-weight:700; text-align:center; }
+body.v2 canvas{ border-radius:12px; }
+body.v2 .card .actions .btn.ghost.small.active, body.v2 .chart-type .on{ background:var(--brass); color:var(--brass-text); border-color:var(--brass); }
+/* כרטיסים מתקפלים (ייבוא, הוספה ידנית, רישומי החודש) */
+body.v2 .collapsible-header{ padding:16px 18px; font-weight:700; }
+body.v2 .collapsible-header .chevron{ width:28px; height:28px; border-radius:50%; background:var(--paper-alt); display:inline-flex; align-items:center; justify-content:center; }
+/* הגדרות */
+body.v2 [data-open-category]{ background:var(--surface) !important; border:1px solid color-mix(in srgb, var(--line) 70%, transparent) !important; border-radius:16px !important; padding:14px 16px !important; box-shadow:0 2px 8px rgba(18,41,63,.04); transition:transform .12s, box-shadow .12s; }
+body.v2 [data-open-category]:hover{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(18,41,63,.08); }
+body.v2 [data-open-category] > span:last-child{ width:30px; height:30px; border-radius:50%; background:var(--paper-alt); display:inline-flex; align-items:center; justify-content:center; font-size:16px !important; }
+body.v2 .avatar-row .avatar, body.v2 .avatar-row .avatar-placeholder{ box-shadow:0 2px 10px rgba(18,41,63,.12); }
+/* משימות */
+body.v2 .task-item{ background:var(--surface); border:1px solid color-mix(in srgb, var(--line) 70%, transparent) !important; border-radius:14px; padding:10px 12px !important; margin-bottom:8px; box-shadow:0 2px 6px rgba(18,41,63,.04); }
+body.v2 .task-row.done{ opacity:.65; }
+/* בקשות, מדריך, תיק עובד, יעד, צינתוק */
+body.v2 .list-item{ border-radius:14px; }
+body.v2 .pill{ border-radius:999px; }
+body.v2 .empty-state{ border-radius:16px; background:var(--surface); border:1px dashed color-mix(in srgb, var(--line) 90%, transparent); }
+/* ימי חופשה ומחלה ותיבות פנימיות */
+body.v2 .card [style*="background:var(--paper-alt)"]{ border-radius:14px !important; }
+/* מסך הכניסה עם הקוד */
+body.v2pre .login-card{ border-radius:24px; border:1px solid color-mix(in srgb, var(--line) 70%, transparent); box-shadow:0 14px 40px rgba(18,41,63,.12); padding:30px 24px; }
+body.v2pre .login-card .btn.brass{ min-height:52px; border-radius:14px; font-size:16.5px; font-weight:800; }
+body.v2pre .login-card h1{ font-size:24px; }
+/* מצב כהה + עיצוב חדש: רקע הכרטיסים כהה */
+body.v2 #v2nav{ backdrop-filter:saturate(1.4) blur(6px); background:color-mix(in srgb, var(--surface) 92%, transparent); }
+body.v2 .punch-card-x input:not([type=checkbox]):not([type=radio]):not([type=color]), body.v2 .punch-card-x select{ background:rgba(255,255,255,.08) !important; color:#fff !important; border:1.5px solid rgba(255,255,255,.22) !important; }
+body.v2 .punch-card-x input::-webkit-calendar-picker-indicator{ filter:invert(1); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -2111,6 +2153,8 @@ function applyEmployeeTheme(settings){
 function applyUiV2(on){
   on = on && !!state.currentEmployee && !state.currentEmployee.chatOnly;
   document.body.classList.toggle('v2', on);
+  document.body.classList.toggle('v2pre', on);
+  try{ if(state.currentEmployee) localStorage.setItem('uiV2', on ? '1' : ''); }catch(e){}
   let nav = document.getElementById('v2nav');
   if(!on){ if(nav) nav.remove(); clearInterval(state._v2navT); return; }
   if(!nav){
@@ -2164,7 +2208,7 @@ async function maybeV2Promo(emp, st){
   ov.querySelector('.v2p-no').onclick = () => choose(false);
 }
 function resetTheme(){
-  document.body.classList.remove('v2'); { const n = document.getElementById('v2nav'); if(n) n.remove(); }
+  document.body.classList.remove('v2', 'v2pre'); { const n = document.getElementById('v2nav'); if(n) n.remove(); }
   ['--brass', '--brass-dark', '--brass-text', '--paper', '--paper-alt', '--ink', '--ink-soft', '--surface', '--line'].forEach(v => {
     document.documentElement.style.removeProperty(v);
   });
@@ -2676,6 +2720,7 @@ function renderLanding(){
   if(shabbatGuard()) return;
   state.view = 'landing';
   resetTheme();
+  try{ document.body.classList.toggle('v2pre', !!localStorage.getItem('uiV2')); }catch(e){}
   setHeader('רישום שעות עבודה ושכר', '');
   app.innerHTML = `
     <div class="center-stage">
@@ -2823,6 +2868,7 @@ function renderForgotPassword(){
 // ---------- EMPLOYEE LOGIN ----------
 async function renderEmployeeLogin(){
   setHeader('כניסת עובד', '');
+  try{ document.body.classList.toggle('v2pre', !!localStorage.getItem('uiV2')); }catch(e){}
   app.innerHTML = '<div class="empty-state">טוען...</div>';
   // רק שמות לבחירה - הקודים האישיים נשארים בשרת
   const res = await bridge('emp-list');
