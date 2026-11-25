@@ -1107,6 +1107,31 @@ body.wa-dark .wa-rate, body.wa-dark .wa-ack-who{ background:rgba(255,255,255,.1)
 .hu-form{ display:flex; gap:6px; margin-top:6px; } .hu-form[hidden]{ display:none; }
 .hu-form input{ flex:1; border:1px solid #D1D7DB; border-radius:16px; padding:6px 12px; font:inherit; font-size:14px; min-width:0; }
 .hu-form button{ border:none; background:#00A884; color:#fff; border-radius:16px; padding:6px 14px; font:inherit; font-weight:600; cursor:pointer; }
+.wa-tabs{ display:flex; background:#008069; flex:0 0 auto; }
+.wa-tabs button{ flex:1; border:none; background:none; color:rgba(255,255,255,.75); font:inherit; font-size:15px; font-weight:600; padding:11px 4px 9px; cursor:pointer; border-bottom:3px solid transparent; position:relative; }
+.wa-tabs button.on{ color:#fff; border-bottom-color:#fff; }
+.wa-tab-n{ display:inline-block; margin-inline-start:6px; background:#fff; color:#008069; font-size:11.5px; min-width:18px; height:18px; line-height:18px; border-radius:9px; padding:0 5px; }
+.wa-tab-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:#fff; margin-inline-start:6px; vertical-align:middle; }
+.wa-tab-n[hidden], .wa-tab-dot[hidden], [data-hp][hidden], .wa-fab[hidden]{ display:none !important; }
+.st-list{ flex-direction:column; gap:2px; overflow:visible; padding:6px 0; }
+.st-list .st-item{ flex-direction:row; width:100%; gap:14px; padding:8px 14px; border-radius:10px; text-align:right; }
+.st-list .st-item:hover{ background:#F5F6F6; }
+.st-list .st-ring{ width:56px; height:56px; flex:0 0 56px; }
+.st-meta{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; min-width:0; }
+.st-list .st-name{ font-size:15.5px; font-weight:600; color:#111B21; max-width:none; }
+.st-time{ display:none; font-size:13px; color:#667781; }
+.st-list .st-time{ display:block; }
+.st-sec{ display:none; }
+.st-list .st-sec{ display:block; font-size:13px; font-weight:600; color:#008069; padding:14px 14px 4px; }
+.wa-call-row{ cursor:default; }
+.cl-ok{ color:#00A884; font-weight:700; } .cl-miss{ color:#E53935; font-weight:700; }
+.cl-btn{ color:#008069 !important; flex:0 0 auto; }
+body.wa-themed:not(.wa-dark) .wa-tabs{ background:var(--wa-head); }
+body.wa-themed:not(.wa-dark) .wa-tab-n{ color:var(--wa-head); }
+body.wa-dark .wa-tabs{ background:#111B21; border-bottom:1px solid #1F2C33; }
+body.wa-dark .wa-tabs button{ color:#8696A0; } body.wa-dark .wa-tabs button.on{ color:#00A884; border-bottom-color:#00A884; }
+body.wa-dark .wa-tab-n{ background:#00A884; color:#111B21; } body.wa-dark .wa-tab-dot{ background:#00A884; }
+body.wa-dark .st-list .st-name{ color:#E9EDEF; } body.wa-dark .st-list .st-item:hover{ background:#182229; } body.wa-dark .st-list .st-sec{ color:#00A884; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -8332,10 +8357,13 @@ async function renderChatHome(role){
       <button type="button" class="wa-back" id="msgSoundBtn" title="${state._msgSoundMuted ? 'הפעלת צליל הודעות' : 'השתקת צליל הודעות'}" aria-label="צליל הודעות" style="color:#fff; font-size:19px;">${state._msgSoundMuted ? '🔕' : '🔔'}</button>
       ${coUser ? `<button type="button" class="logout-link" id="waFullLogout" style="margin-inline-start:auto;">התנתקות</button>` : ''}
     </div>
+    <div class="wa-tabs" id="waTabs"><button type="button" data-ht="chats">צ׳אטים<span class="wa-tab-n" id="waTabChatsN" hidden></span></button><button type="button" data-ht="status">סטטוס<span class="wa-tab-dot" id="waTabStDot" hidden></span></button><button type="button" data-ht="calls">שיחות</button></div>
     <div class="wa-full-body">
+    <div data-hp="status" hidden><div class="st-strip st-list" id="statusStrip"></div><p class="hint" style="text-align:center; font-size:12.5px;">סטטוסים נמחקים אוטומטית אחרי 24 שעות</p></div>
+    <div data-hp="calls" hidden id="waCallsPane"></div>
+    <div data-hp="chats">
     ${!('Notification' in window) ? '' : Notification.permission !== 'granted' ? `<div class="card wa-notif"><span>🔔 רוצים הודעה קופצת בשולחן העבודה כשמגיעה הודעה?</span><button type="button" class="btn brass small" id="chatNotifOn">${Notification.permission === 'denied' ? 'ההתראות חסומות בדפדפן' : 'הפעלת התראות'}</button></div>` : `<div class="wa-notif-ok">🔔 ההתראות פעילות · <button type="button" class="linklike" id="chatNotifTest">שליחת התראת ניסיון</button></div>`}
     ${role === 'mgr' ? '' : '<div class="wa-notice">💼 הצ׳אט הוא כלי עבודה. השיחות והקבוצות גלויות גם למנהל.</div>'}
-    <div class="st-strip" id="statusStrip"></div>
     <div class="wa-home-search"><input type="search" id="chatHomeSearch" placeholder="🔍 חיפוש שיחה או הודעה..." /></div>
     <div id="chatSearchResults"></div>
     <div class="card wa-list" id="chatListCard">
@@ -8350,10 +8378,23 @@ async function renderChatHome(role){
     </div>
     <div id="waMonitorSlot"></div>
     </div>
+    </div>
     <button type="button" class="wa-fab" id="chatNewGroup" title="קבוצה חדשה" aria-label="קבוצה חדשה">${WAI.newgroup}</button>
     </div>`;
   renderStatusStrip(role);
   fillAvatars(target);
+  // לשוניות: צ׳אטים / סטטוס / שיחות (נזכר בכרטיסייה)
+  const showTab = t => {
+    state._chatTab = t;
+    target.querySelectorAll('[data-ht]').forEach(b => b.classList.toggle('on', b.dataset.ht === t));
+    target.querySelectorAll('[data-hp]').forEach(p2 => p2.hidden = p2.dataset.hp !== t);
+    const fab = document.getElementById('chatNewGroup'); if(fab) fab.hidden = t !== 'chats';
+    if(t === 'calls') renderCallLog(role, rows, chats, contacts);
+    if(t === 'status'){ renderStatusStrip(role); }
+  };
+  target.querySelectorAll('[data-ht]').forEach(b => b.onclick = () => showTab(b.dataset.ht));
+  { const totalUn = rows.reduce((a, r) => a + (r.un || 0), 0), n = document.getElementById('waTabChatsN'); if(totalUn){ n.hidden = false; n.textContent = totalUn; } }
+  showTab(state._chatTab || 'chats');
   document.getElementById('myProfileBtn').onclick = () => editChatPhoto(role);
   document.getElementById('chatLookBtn').onclick = () => openChatLook(role);
   document.getElementById('chatDarkBtn').onclick = e => { const on = document.body.classList.toggle('wa-dark'); try{ localStorage.setItem('waDark', on ? '1' : ''); }catch(x){} e.currentTarget.textContent = on ? '☀️' : '🌙'; };
@@ -10259,9 +10300,10 @@ async function renderStatusStrip(role){
     const items = all[id] || [], last = items[items.length - 1];
     const unseen = !isMe && items.some(z => !seen[z.id]);
     const inner = last ? (last.type === 'image' ? `<img data-st-thumb="${last.fileId}" alt="" />` : (last.type === 'anim' ? `<span class="st-txt" style="background:linear-gradient(160deg,#1F3A5F,#3B2F5C)">💭</span>` : `<span class="st-txt" style="background:${last.bg}">${escapeHtml((last.text || '').slice(0, 14))}</span>`)) : `<span class="st-init">${escapeHtml((label || '?').charAt(0))}</span>`;
-    return `<button type="button" class="st-item" data-st-open="${id}"><span class="st-ring${unseen ? ' unseen' : items.length ? ' seen' : ''}">${inner}${isMe ? '<span class="st-plus">＋</span>' : ''}</span><span class="st-name">${escapeHtml(isMe ? 'הסטטוס שלי' : label)}</span></button>`;
+    return `<button type="button" class="st-item" data-st-open="${id}"><span class="st-ring${unseen ? ' unseen' : items.length ? ' seen' : ''}">${inner}${isMe ? '<span class="st-plus">＋</span>' : ''}</span><span class="st-meta"><span class="st-name">${escapeHtml(isMe ? 'הסטטוס שלי' : label)}</span><span class="st-time">${last ? stAgo(last.at) : (isMe ? 'לחצו להוספת עדכון' : '')}</span></span></button>`;
   };
-  strip.innerHTML = circle(me, 'אני', true) + others.map(id => circle(id, state._chatNames[id] || '', false)).join('');
+  strip.innerHTML = circle(me, 'אני', true) + (others.length ? '<div class="st-sec">עדכונים אחרונים</div>' : '<div class="st-sec">אין עדכונים מאחרים כרגע</div>') + others.map(id => circle(id, state._chatNames[id] || '', false)).join('');
+  { const dot = document.getElementById('waTabStDot'); if(dot) dot.hidden = !others.some(x => (all[x] || []).some(z => !seen[z.id])); }
   strip.querySelectorAll('[data-st-thumb]').forEach(async img => { const f = await loadTaskFile(img.dataset.stThumb); if(f) img.src = f.data; });
   strip.querySelectorAll('[data-st-open]').forEach(b => b.onclick = e => {
     const id = b.dataset.stOpen;
@@ -10275,6 +10317,33 @@ function stAnimHtml(it){
   const lines = (it.lines || ST_LONGING).map((l, i) => `<div class="st-al" style="animation-delay:${0.6 + i * 1.6}s">${escapeHtml(l)}</div>`).join('');
   return `<div class="st-anim"><div class="st-aglow"></div><div class="st-aparts">${parts}</div><div class="st-alines">${lines}</div></div>`;
 }
+function stAgo(at){
+  const ms = trueNow().getTime() - Date.parse(String(at).replace(' ', 'T')); if(isNaN(ms)) return '';
+  const m = Math.round(ms / 60000); if(m < 1) return 'ממש עכשיו'; if(m < 60) return 'לפני ' + m + ' דקות';
+  const h = Math.round(m / 60); return h === 1 ? 'לפני שעה' : 'לפני ' + h + ' שעות';
+}
+// יומן שיחות: נבנה מרישומי השיחות שבתוך כל שיחה אחד על אחד (📞/🎥)
+function renderCallLog(role, rows, chats, contacts){
+  const pane = document.getElementById('waCallsPane'); if(!pane) return;
+  const me = chatMe(role), list = [];
+  contacts.forEach((c, i) => {
+    if(c.group || c.self || c.id === 'team') return;
+    ((chats[i] || {}).msgs || []).forEach(m => { if(m.call) list.push({ other: c.id, name: c.name, m }); });
+  });
+  list.sort((a, b) => String(b.m.at).localeCompare(String(a.m.at)));
+  const fmt = t => { const d = String(t).slice(0, 10); return (d === todayStr() ? 'היום' : d.split('-').reverse().slice(0, 2).join('/')) + ' ' + String(t).slice(11, 16); };
+  pane.innerHTML = `<div class="card wa-list">${list.length ? list.slice(0, 100).map(x => {
+    const out = x.m.from === me, missed = /לא נענתה/.test(x.m.text || ''), video = /🎥|וידאו/.test(x.m.text || '');
+    const dur = (String(x.m.text || '').match(/·\s*([\d:]+)/) || [])[1] || '';
+    return `<div class="wa-contact wa-call-row"><span class="wa-avatar" data-av="${x.other}">${escapeHtml((x.name || '?').charAt(0))}</span>
+      <span class="wa-c-main"><b${missed && !out ? ' style="color:#E53935;"' : ''}>${escapeHtml(x.name || '')}</b>
+      <span class="wa-c-prev"><span class="${missed ? 'cl-miss' : 'cl-ok'}">${out ? '↗' : '↙'}</span> ${missed ? (out ? 'לא נענתה' : 'שיחה שלא נענתה') : (out ? 'יוצאת' : 'נכנסת')}${dur ? ' · ' + dur : ''} · ${fmt(x.m.at)}</span></span>
+      <button type="button" class="wa-back cl-btn" data-cl-call="${x.other}" data-cl-video="${video ? 1 : 0}" title="${video ? 'שיחת וידאו' : 'שיחה קולית'}" aria-label="התקשרות">${video ? WAI.video : WAI.phone}</button></div>`;
+  }).join('') : '<p class="hint" style="text-align:center; padding:30px 10px;">עוד אין שיחות קוליות או וידאו.<br>מתקשרים מתוך שיחה, בכפתור 📞 או 🎥 שבראש השיחה.</p>'}</div>`;
+  fillAvatars(pane);
+  pane.querySelectorAll('[data-cl-call]').forEach(b => b.onclick = () => startCall(role, b.dataset.clCall, chatIdWith(me, b.dataset.clCall), b.dataset.clVideo === '1'));
+}
+
 function statusCompose(role){
   const me = chatMe(role);
   const ov = document.createElement('div'); ov.className = 'confirm-overlay';
