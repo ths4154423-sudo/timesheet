@@ -1174,6 +1174,13 @@ body.wa-dark .wa-filters button{ background:#202C33; color:#AEBAC1; } body.wa-da
 @keyframes ssIn{ from{ opacity:0; transform:scale(1.04); } to{ opacity:1; transform:none; } }
 .ss-load{ position:absolute; font-size:14px; opacity:.7; } .ss-load[hidden]{ display:none; }
 .ss-prog{ height:3px; background:rgba(255,255,255,.2); } .ss-prog i{ display:block; height:100%; width:0; background:#00A884; }
+.wa-hsrc{ display:none !important; }
+.wa-kmenu{ min-width:220px; }
+.wa-kmenu button{ color:#111B21; }
+.wa-kmenu button.danger{ color:#D93025; }
+.wa-k-ic{ width:24px; display:inline-flex; align-items:center; justify-content:center; color:#54656F; font-size:17px; }
+.wa-k-ic svg{ width:20px; height:20px; }
+body.wa-dark .wa-kmenu button{ color:#E9EDEF; } body.wa-dark .wa-k-ic{ color:#AEBAC1; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -9382,6 +9389,31 @@ async function renderChatRoom(role, otherId){
     };
   };
   applyRoomWall(roomEl, id);
+  // כל כפתורי הכותרת עוברים לתפריט ☰ (הכפתורים המקוריים נשארים מוסתרים, והתפריט לוחץ עליהם)
+  { const head = roomEl.querySelector('.wa-room-head');
+    const keep = ['chatRoomBack'];
+    const src = document.createElement('div'); src.className = 'wa-hsrc'; src.hidden = true;
+    [...head.children].filter(el => el.classList.contains('wa-back') && !keep.includes(el.id)).forEach(el => src.appendChild(el));
+    head.appendChild(src);
+    const kb = document.createElement('button'); kb.type = 'button'; kb.className = 'wa-back'; kb.id = 'chatKebab'; kb.title = 'תפריט'; kb.setAttribute('aria-label', 'תפריט');
+    kb.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>';
+    head.appendChild(kb);
+    const ORDER = ['chatCall', 'chatVideo', 'chatTel', 'chatSearchBtn', 'chatMediaBtn', 'chatMuteBtn', 'chatWallBtn', 'chatGroupInfo', 'chatAddMembers', 'chatClear'];
+    const LABEL = { chatCall: 'שיחה קולית', chatVideo: 'שיחת וידאו', chatTel: 'התקשרות לטלפון', chatSearchBtn: 'חיפוש בשיחה', chatMediaBtn: 'מדיה, קבצים וקישורים', chatWallBtn: 'תמונת רקע לשיחה', chatGroupInfo: 'פרטי הקבוצה', chatAddMembers: 'הוספת משתתפים', chatClear: 'ניקוי הצ׳אט' };
+    kb.onclick = ev => {
+      ev.stopPropagation();
+      const old = document.querySelector('.wa-kmenu'); if(old){ old.remove(); return; }
+      const items = ORDER.map(k => src.querySelector('#' + k)).filter(el => el && !el.hidden);
+      const mm = document.createElement('div'); mm.className = 'att-menu wa-kmenu';
+      mm.innerHTML = items.map(el => { const lb = el.id === 'chatMuteBtn' ? (chatMuted(id) ? 'ביטול השתקה' : 'השתקת השיחה') : LABEL[el.id] || el.title; return `<button type="button" data-k="${el.id}"${el.id === 'chatClear' ? ' class="danger"' : ''}><span class="wa-k-ic">${el.innerHTML}</span>${escapeHtml(lb)}</button>`; }).join('');
+      document.body.appendChild(mm);
+      const r0 = kb.getBoundingClientRect();
+      mm.style.top = (r0.bottom + 6) + 'px'; mm.style.left = Math.max(8, Math.min(window.innerWidth - mm.offsetWidth - 8, r0.left)) + 'px';
+      const close = e => { if(!mm.contains(e.target) && e.target !== kb){ mm.remove(); document.removeEventListener('click', close, true); } };
+      setTimeout(() => document.addEventListener('click', close, true), 0);
+      mm.querySelectorAll('[data-k]').forEach(b => b.onclick = e2 => { e2.stopPropagation(); mm.remove(); document.removeEventListener('click', close, true); const el = src.querySelector('#' + b.dataset.k); if(el) el.click(); });
+    };
+  }
   if((state._chatUnreadMarks || []).includes(id)) setMsgSoundPref(role, { chatUnreadMarks: state._chatUnreadMarks.filter(x => x !== id) });
   document.getElementById('chatWallBtn').onclick = () => openChatLook(role, id);
   // ---- ייצוא השיחה (טקסט או הדפסה ל-PDF)
@@ -9453,7 +9485,7 @@ async function renderChatRoom(role, otherId){
     const btn = ev.currentTarget, mm = document.createElement('div'); mm.className = 'att-menu';
     mm.innerHTML = chatMuted(id) ? `<button type="button" data-mu="0">🔔&nbsp; ביטול ההשתקה</button>` : `<button type="button" data-mu="8">🔕&nbsp; ל-8 שעות</button><button type="button" data-mu="168">🔕&nbsp; לשבוע</button><button type="button" data-mu="-1">🔕&nbsp; תמיד</button>`;
     document.body.appendChild(mm);
-    const r0 = btn.getBoundingClientRect();
+    const r0 = (btn.offsetParent ? btn : (document.getElementById('chatKebab') || btn)).getBoundingClientRect();
     mm.style.left = Math.max(8, Math.min(window.innerWidth - mm.offsetWidth - 8, r0.left)) + 'px'; mm.style.top = (r0.bottom + 6) + 'px';
     const close = e => { if(!mm.contains(e.target)){ mm.remove(); document.removeEventListener('click', close, true); } };
     setTimeout(() => document.addEventListener('click', close, true), 0);
